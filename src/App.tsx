@@ -13,10 +13,10 @@ import { UserPlus, LogIn, Phone, MessageCircle, Mail, ArrowRight, Search, Refres
 class PageErrorBoundary extends Component<{ children: ReactNode; name: string }, { hasError: boolean; error: Error | null }> {
   state = { hasError: false, error: null };
   static getDerivedStateFromError(error: Error) { return { hasError: true, error }; }
-  componentDidCatch(error: Error, info: ErrorInfo) { console.error(`PageErrorBoundary [${this.props.name}]:`, error, info.componentStack); }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error(`[PageErrorBoundary] ${this.props.name}:`, error.message, '\n', info.componentStack); }
   render() {
     if (this.state.hasError) {
-      return <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground"><div className="text-3xl">⚠️</div><div className="text-sm font-medium">{this.props.name} 页面加载出错</div><div className="text-xs">{this.state.error?.message || ''}</div><button onClick={() => { this.setState({ hasError: false, error: null }); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-muted"><RefreshCw size={14} /> 重试</button></div>;
+      return <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground p-6"><div className="text-3xl">⚠️</div><div className="text-sm font-medium">{this.props.name} 页面加载出错</div><div className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 max-w-lg text-center break-all">{this.state.error?.message || '未知错误'}</div><button onClick={() => { this.setState({ hasError: false, error: null }); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-muted"><RefreshCw size={14} /> 重试</button></div>;
     }
     return this.props.children;
   }

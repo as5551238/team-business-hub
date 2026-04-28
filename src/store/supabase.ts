@@ -17,7 +17,7 @@ export function loadLocalState(): AppState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      return ensureAppStateDefaults(parsed);
+      if (parsed && typeof parsed === 'object') return ensureAppStateDefaults(parsed);
     }
   } catch {
   }

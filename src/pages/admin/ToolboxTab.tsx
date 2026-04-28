@@ -6,7 +6,9 @@ import { inputCls, btnCls, primaryBtnCls, typeLabels, typeColors, emptyForm, for
 import type { TForm } from './constants';
 
 export function ToolboxTab() {
-  const { members, currentUser } = useStore().state;
+  const { state } = useStore();
+  const members = state.members || [];
+  const currentUser = state.currentUser;
   const { templates, addTemplate, updateTemplate, deleteTemplate } = useTemplates();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('all');

@@ -5,6 +5,7 @@ import type { ConnectionMode, SupabaseConfig, Action } from './types';
 import { SUPABASE_CONFIG_KEY } from './types';
 import { reducer } from './reducer';
 import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert } from './supabase';
+import { generateAllData } from '@/data/dataGenerator';
 
 // --- Split Context Pattern ---
 // StateContext: only changes when state changes (consumed by components needing data)

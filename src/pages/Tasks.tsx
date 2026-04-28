@@ -483,10 +483,6 @@ export default function Tasks() {
       setCanvasPositions(prev => ({ ...prev, [d.id]: { x: Math.round(nl), y: Math.round(nt) } }));
       d.el.style.zIndex = '';
       canvasDragRef.current = null;
-      document.removeEventListener('mousemove', mmH);
-      document.removeEventListener('mouseup', muH);
-      document.removeEventListener('touchmove', tmH);
-      document.removeEventListener('touchend', teH);
     };
     const mmH = (e: MouseEvent) => onMove(e);
     const muH = () => onUp();

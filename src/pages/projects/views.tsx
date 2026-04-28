@@ -561,7 +561,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
     document.addEventListener('touchmove', onTouchMove, { passive: true });
     document.addEventListener('touchend', onTouchEnd);
     return () => { document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); document.removeEventListener('touchmove', onTouchMove); document.removeEventListener('touchend', onTouchEnd); };
-  }, []);
+  }, [dispatch]);
 
   return (
     <div ref={containerRef} className="grid grid-cols-1 md:grid-cols-2 gap-3 select-none">
@@ -571,7 +571,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
         return (
           <div key={qKey} data-quadrant={qKey} ref={el => { boxRefs.current[qKey] = el; }} className={`rounded-xl border p-3 min-h-[200px] ${q.accent}`}>
             <div className="text-xs font-bold mb-3 text-foreground/70">{q.title} ({items.length})</div>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[calc(100vh-420px)] overflow-y-auto">
               {items.map(p => <MatrixQuadrantCard key={p.id} project={p} members={members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} dispatch={dispatch} dragRef={dragRef} />)}
               {items.length === 0 && <div className="text-xs text-muted-foreground/50 py-4 text-center">拖拽项目到此处</div>}
             </div>
@@ -676,10 +676,6 @@ export function ProjectCanvasView({ projects, members, setDetailItem, batchProps
         setCanvasPanX(panRef.current.x);
         setCanvasPanY(panRef.current.y);
       }
-      document.removeEventListener('mousemove', mmHandler);
-      document.removeEventListener('mouseup', muHandler);
-      document.removeEventListener('touchmove', tmHandler);
-      document.removeEventListener('touchend', teHandler);
     }
     const mmHandler = (e: MouseEvent) => onMove(e.clientX, e.clientY, e.movementX, e.movementY);
     const muHandler = () => onUp();

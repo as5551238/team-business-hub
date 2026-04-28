@@ -14,8 +14,9 @@ import { inputCls, loadEmailConfig, saveEmailConfig, loadWechatGroupConfig, save
 import type { EmailConfig } from './constants';
 
 function SupabaseSection() {
-  const { connectionMode, connectSupabase, disconnectSupabase, initializeSupabaseData, connectionError } = useStore();
-  const { goals, projects, tasks, members } = useStore().state;
+  const store = useStore();
+  const { connectionMode, connectSupabase: doConnect, disconnectSupabase, initializeSupabaseData, connectionError } = store;
+  const { goals = [], projects = [], tasks = [], members = [] } = store.state || {};
   const [url, setUrl] = useState('');
   const [anonKey, setAnonKey] = useState('');
   const [connecting, setConnecting] = useState(false);
@@ -26,7 +27,7 @@ function SupabaseSection() {
   const statusConfig: Record<string, { color: string; label: string }> = { local: { color: 'text-gray-500', label: '本地模式（数据仅存本机）' }, supabase: { color: 'text-green-600', label: '云端同步中（团队成员实时共享）' }, loading: { color: 'text-amber-500', label: '连接中...' } };
   const st = statusConfig[connectionMode];
 
-  async function handleConnect() { if (!url.trim() || !anonKey.trim()) return; setConnecting(true); try { const success = await connectSupabase(url.trim(), anonKey.trim()); if (success) setStep(2); } catch (e: any) { console.error('连接失败:', e); } setConnecting(false); }
+  async function handleConnect() { if (!url.trim() || !anonKey.trim()) return; setConnecting(true); try { const success = await doConnect(url.trim(), anonKey.trim()); if (success) setStep(2); } catch (e: any) { console.error('连接失败:', e); } setConnecting(false); }
   async function handleInitData() { setInitializing(true); try { await initializeSupabaseData(); setStep(3); } catch (e: any) { console.error('初始化失败:', e); } setInitializing(false); }
   function handleDisconnect() { disconnectSupabase(); setStep(1); setUrl(''); setAnonKey(''); }
   function handleCopy() { const el = document.getElementById('admin-schema-text'); if (el) { navigator.clipboard.writeText(el.textContent || ''); setCopied(true); setTimeout(() => setCopied(false), 2000); } }
@@ -101,7 +102,7 @@ alter publication supabase_realtime add table activities;`}</pre>
 }
 
 function WeChatSection() {
-  const { tasks, members } = useStore().state;
+  const { tasks = [], members = [] } = useStore().state;
   const [config, setConfig] = useState<WeChatConfig>(loadWeChatConfig());
   const [wechatGroup, setWechatGroup] = useState(loadWechatGroupConfig());
   const [testResult, setTestResult] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
@@ -233,8 +234,11 @@ function EmailSection() {
 }
 
 function DataStatsSection() {
-  const { goals, projects, tasks, members } = useStore().state;
-  const dispatch = useStore().dispatch;
+  const { state, dispatch } = useStore();
+  const goals = state.goals || [];
+  const projects = state.projects || [];
+  const tasks = state.tasks || [];
+  const members = state.members || [];
   const activeGoals = goals.filter(g => g.status === 'in_progress').length;
   const completedGoals = goals.filter(g => g.status === 'completed').length;
   const activeProjects = projects.filter(p => p.status === 'in_progress').length;
@@ -259,7 +263,7 @@ function DataStatsSection() {
 
 function BackupSection() {
   const backupData = useBackupExport();
-  const dispatch = useStore().dispatch;
+  const { dispatch } = useStore();
   const [importStatus, setImportStatus] = useState<'idle' | 'confirming' | 'importing' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -335,8 +339,9 @@ function BackupSection() {
 }
 
 function TagsCategoriesSection() {
-  const { tags, categories } = useStore().state;
-  const dispatch = useStore().dispatch;
+  const { state, dispatch } = useStore();
+  const tags = state.tags || [];
+  const categories = state.categories || [];
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
   const [newCatName, setNewCatName] = useState('');

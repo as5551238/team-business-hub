@@ -39,6 +39,14 @@ function needMutate(state: AppState): AppState {
 }
 function tsNow() { return new Date().toISOString(); }
 
+// Track recently-deleted IDs to prevent Realtime MERGE_STATE from re-adding them
+// before the async supabaseDelete completes. Items expire after 60 seconds
+// (covers multiple Realtime debounce cycles at 2s each + network latency).
+const pendingDeletes = new Map<string, number>();
+function markPendingDelete(id: string) { pendingDeletes.set(id, Date.now()); }
+function cleanPendingDeletes() { const now = Date.now(); for (const [id, t] of pendingDeletes) { if (now - t > 60000) pendingDeletes.delete(id); } }
+function isPendingDelete(id: string) { return pendingDeletes.has(id); }
+
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'SET_STATE':
@@ -47,19 +55,25 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'MERGE_STATE': {
       // Deep merge: for array fields, only update items that exist in remote but not locally modified recently
       // This prevents Realtime from overwriting local edits made within the debounce window
+      // For core business tables (goals/projects/tasks), only UPDATE existing items, never ADD new ones.
+      // This prevents deleted items from being re-added by Realtime before supabaseDelete completes.
       const s = needMutate(state);
       const payload = action.payload;
+      cleanPendingDeletes();
+      // Core tables: only update existing items, never add from remote (prevents delete-revive race)
+      const CORE_ARRAYS = new Set(['goals', 'projects', 'tasks']);
       for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
         const newVal = payload[key];
         if (Array.isArray(newVal) && Array.isArray(s[key])) {
-          // Smart array merge: keep local items, add new remote items, update unchanged items
           const localArr = s[key] as any[];
           const remoteArr = newVal as any[];
           const localIds = new Map(localArr.map((item: any) => [item.id, item]));
           const merged = [...localArr];
+          const isCoreTable = CORE_ARRAYS.has(key as string);
           for (const remoteItem of remoteArr) {
+            if (isPendingDelete(remoteItem.id)) continue; // Skip recently-deleted items
             if (localIds.has(remoteItem.id)) {
-              // Remote item exists locally — only update if timestamps match or remote is newer
+              // Remote item exists locally — only update if remote is newer
               const localItem = localIds.get(remoteItem.id);
               const localUpdated = new Date(localItem.updatedAt || localItem.updated_at || 0);
               const remoteUpdated = new Date(remoteItem.updatedAt || remoteItem.updated_at || 0);
@@ -67,8 +81,8 @@ export function reducer(state: AppState, action: Action): AppState {
                 const idx = merged.findIndex((m: any) => m.id === remoteItem.id);
                 if (idx !== -1) merged[idx] = remoteItem;
               }
-            } else {
-              // New item from remote
+            } else if (!isCoreTable) {
+              // Non-core tables: allow adding new items from remote
               merged.push(remoteItem);
             }
           }
@@ -136,6 +150,7 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'DELETE_GOAL': {
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.goals = s.goals.filter(g => g.id !== action.payload);
       s.goals.forEach(g => { if (g.parentId === action.payload) g.parentId = null; });
       s.projects.forEach(p => { if (p.goalId === action.payload) p.goalId = null; });
@@ -219,6 +234,7 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'DELETE_PROJECT': {
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.projects = s.projects.filter(p => p.id !== action.payload);
       s.tasks.forEach(t => { if (t.projectId === action.payload) t.projectId = null; });
       supabaseDelete('projects', action.payload);
@@ -281,6 +297,7 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'DELETE_TASK': {
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       const t = s.tasks.find(t => t.id === action.payload);
       s.tasks = s.tasks.filter(t => t.id !== action.payload);
       s.tasks.forEach(tk => { if (tk.parentId === action.payload) tk.parentId = null; });
@@ -364,6 +381,9 @@ export function reducer(state: AppState, action: Action): AppState {
         notes: backup.notes || [],
         savedViews: (backup as any).savedViews || [],
         reviews: backup.reviews || [],
+        comments: (backup as any).comments || [],
+        bookmarks: (backup as any).bookmarks || [],
+        batchOperations: (backup as any).batchOperations || [],
         currentUser: backup.members[0] || state.currentUser,
         viewingMemberId: state.viewingMemberId,
       };

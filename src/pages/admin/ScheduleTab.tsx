@@ -9,7 +9,12 @@ import { inputCls, emptyEvtForm, getCalendarDays, NOTE_COLORS, FOLDERS, repeatLa
 import type { EvtForm, CalendarDay } from './constants';
 
 export function ScheduleTab() {
-  const { members, goals, projects, tasks, currentUser } = useStore().state;
+  const { state } = useStore();
+  const members = state.members || [];
+  const goals = state.goals || [];
+  const projects = state.projects || [];
+  const tasks = state.tasks || [];
+  const currentUser = state.currentUser;
   const { viewingMemberId } = useViewingMember();
   const { events, addEvent, updateEvent, deleteEvent } = useScheduleEvents(viewingMemberId || undefined);
   const { notes, addNote, updateNote, deleteNote } = useNotes(undefined);
