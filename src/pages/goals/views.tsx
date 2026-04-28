@@ -211,7 +211,8 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
     goals.forEach(g => {
       if (g.parentId && goalMap.has(g.parentId)) {
         if (!childMap.has(g.parentId)) childMap.set(g.parentId, []);
-        childMap.get(g.parentId)!.push(g);
+        const arr = childMap.get(g.parentId);
+        if (arr) arr.push(g);
       } else {
         roots.push(g);
       }
@@ -336,7 +337,8 @@ export function GoalTableView({ goals, members, onOpenDetail, commentCounts, bat
     goals.forEach(g => {
       if (g.parentId && goalMap.has(g.parentId)) {
         if (!childMap.has(g.parentId)) childMap.set(g.parentId, []);
-        childMap.get(g.parentId)!.push(g);
+        const arr = childMap.get(g.parentId);
+        if (arr) arr.push(g);
       } else {
         roots.push(g);
       }

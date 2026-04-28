@@ -6,8 +6,7 @@ import { cn } from '@/lib/utils';
 import { Plus, Search, LayoutGrid, ListTodo, Table2, ChevronDown, ChevronRight, Calendar, User, X, Clock, AlertCircle, CheckCircle2, Circle, Ban, GripVertical, FileText, Copy, MessageSquare, Trash2, Check, UserPlus, Filter } from 'lucide-react';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 
-const TODAY = new Date();
-const TODAY_STR = TODAY.toISOString().split('T')[0];
+function getTodayStr() { return new Date().toISOString().split('T')[0]; }
 
 type ViewMode = 'board' | 'list' | 'table' | 'matrix' | 'canvas' | 'timeline';
 type BusinessPriority = 'S' | 'A' | 'B' | 'C';
@@ -54,7 +53,7 @@ function priorityToBP(p: TaskPriority): BusinessPriority { if (p === 'urgent') r
 
 function getQuadrantForPriority(p: TaskPriority): string { if (p === 'urgent') return '紧急重要'; if (p === 'high') return '重要不紧急'; if (p === 'medium') return '紧急不重要'; return '不紧急不重要'; }
 
-function isOverdue(task: Task): boolean { return task.status !== 'done' && task.status !== 'cancelled' && !!task.dueDate && task.dueDate < TODAY_STR; }
+function isOverdue(task: Task): boolean { return task.status !== 'done' && task.status !== 'cancelled' && !!task.dueDate && task.dueDate < getTodayStr(); }
 
 const StatusBadge = React.memo(function StatusBadge({ status }: { status: TaskStatus }) { const c = STATUS_CONFIG[status]; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', c.color)}>{c.label}</span>; });
 
@@ -602,9 +601,9 @@ export default function Tasks() {
         <div className="space-y-3">
           <div className="flex items-center gap-2 flex-wrap">{groupByBtns}</div>
           {renderKanbanColumns(timeCols, col => filteredTasks.filter(t => {
-            if (col === 'overdue') return t.dueDate && t.dueDate < TODAY_STR && t.status !== 'done' && t.status !== 'cancelled';
-            if (col === 'today') return t.dueDate === TODAY_STR;
-            if (col === 'week') return t.dueDate > TODAY_STR && t.dueDate <= weekEndStr;
+            if (col === 'overdue') return t.dueDate && t.dueDate < getTodayStr() && t.status !== 'done' && t.status !== 'cancelled';
+            if (col === 'today') return t.dueDate === getTodayStr();
+            if (col === 'week') return t.dueDate > getTodayStr() && t.dueDate <= weekEndStr;
             if (col === 'later') return t.dueDate > weekEndStr;
             if (col === 'none') return !t.dueDate;
             return false;
@@ -665,7 +664,7 @@ export default function Tasks() {
         {listGroups.length === 0 && <div className="px-5 py-12 text-center"><FileText className="w-9 h-9 mx-auto text-muted-foreground/30 mb-3" /><p className="text-sm text-muted-foreground">暂无匹配任务</p></div>}
         {listGroups.map(group => (
           <div key={group.key}>
-            {group.label && <div className="px-4 py-2 bg-muted/50 border-b border-border/50 flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-xs font-semibold text-muted-foreground">{group.label === TODAY_STR ? '今天' : group.label}</span><span className="text-xs text-muted-foreground">({group.tasks.length})</span></div>}
+            {group.label && <div className="px-4 py-2 bg-muted/50 border-b border-border/50 flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-xs font-semibold text-muted-foreground">{group.label === getTodayStr() ? '今天' : group.label}</span><span className="text-xs text-muted-foreground">({group.tasks.length})</span></div>}
             {topTasks.map(task => {
               if (shownIds && !shownIds.has(task.id)) return null;
               if (shownIds) { const desc = [task, ...getAllDescendants(task.id)]; if (!desc.every(d => shownIds.has(d.id))) return null; }
@@ -762,8 +761,8 @@ export default function Tasks() {
       <div className="space-y-4">
         {timelineBuckets.length === 0 && <div className="bg-white rounded-xl border border-border px-5 py-12 text-center"><Calendar className="w-9 h-9 mx-auto text-muted-foreground/30 mb-3" /><p className="text-sm text-muted-foreground">暂无匹配任务</p></div>}
         {timelineBuckets.map(([dateKey, tasks]) => {
-          const isOverdue = dateKey !== '无截止日期' && dateKey < TODAY_STR;
-          const isToday = dateKey === TODAY_STR;
+          const isOverdue = dateKey !== '无截止日期' && dateKey < getTodayStr();
+          const isToday = dateKey === getTodayStr();
           return (
             <div key={dateKey}>
               <div className={cn('flex items-center gap-2 px-3 py-2 rounded-lg mb-2', isToday && 'bg-primary/10', isOverdue && 'bg-red-50')}>

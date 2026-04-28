@@ -248,8 +248,13 @@ export function useDashboardStats() {
 
 export function useGoalTree() {
   const goals = useStore().state.goals;
-  function buildTree(parentId: string | null): (Goal & { children: Goal[] })[] {
-    return goals.filter(g => g.parentId === parentId).map(g => ({ ...g, children: buildTree(g.id) }));
+  function buildTree(parentId: string | null, visited?: Set<string>): (Goal & { children: Goal[] })[] {
+    const visitedSet = visited || new Set<string>();
+    return goals.filter(g => g.parentId === parentId).map(g => {
+      if (visitedSet.has(g.id)) return { ...g, children: [] }; // cycle detection
+      visitedSet.add(g.id);
+      return { ...g, children: buildTree(g.id, visitedSet) };
+    });
   }
   return buildTree(null);
 }

@@ -15,7 +15,10 @@ function calcGoalLevel(goals: Goal[], goalId: string, parentId: string | null, v
   return calcGoalLevel(goals, parent.id, parent.parentId, visitedSet) + 1;
 }
 
-function calcGoalProgress(goals: Goal[], goalId: string): number {
+function calcGoalProgress(goals: Goal[], goalId: string, visited?: Set<string>): number {
+  const visitedSet = visited || new Set<string>();
+  if (visitedSet.has(goalId)) return 0; // cycle detection
+  visitedSet.add(goalId);
   const goal = goals.find(g => g.id === goalId);
   if (!goal) return 0;
   if (goal.keyResults.length > 0) {
@@ -23,7 +26,7 @@ function calcGoalProgress(goals: Goal[], goalId: string): number {
       sum + (kr.targetValue > 0 ? Math.min(100, (kr.currentValue / kr.targetValue) * 100) : 0), 0) / goal.keyResults.length);
   }
   const children = goals.filter(g => g.parentId === goalId);
-  if (children.length > 0) return Math.round(children.reduce((s, c) => s + calcGoalProgress(goals, c.id), 0) / children.length);
+  if (children.length > 0) return Math.round(children.reduce((s, c) => s + calcGoalProgress(goals, c.id, visitedSet), 0) / children.length);
   return 0;
 }
 
