@@ -477,7 +477,11 @@ export function reducer(state: AppState, action: Action): AppState {
       if (!reducerCanDelete(state, 'manage_team')) return state;
       const s = needMutate(state);
       markPendingDelete(action.payload);
+      // Soft-delete: set status='inactive' immediately (prevents re-appearance)
       s.members = s.members.filter(m => m.id !== action.payload);
+      // Set inactive in Supabase first (resilient to race conditions)
+      supabaseUpdate('members', action.payload, { status: 'inactive' });
+      // Hard delete from Supabase in background (best-effort cleanup)
       supabaseDelete('members', action.payload);
       return s;
     }

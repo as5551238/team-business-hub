@@ -50,7 +50,7 @@ export async function fetchAllFromSupabase(): Promise<AppState | null> {
   if (!sb) return null;
   try {
     const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes] = await Promise.all([
-      sb.from('members').select('*').order('join_date'),
+      sb.from('members').select('*').eq('status', 'active').order('join_date'),
       sb.from('goals').select('*').order('level'),
       sb.from('projects').select('*').order('created_at', { ascending: false }),
       sb.from('tasks').select('*').order('created_at', { ascending: false }),

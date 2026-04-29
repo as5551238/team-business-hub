@@ -165,12 +165,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const poll = async () => {
       if (document.visibilityState === 'hidden') return;
       try {
-        const results = await Promise.all(tables.map(table =>
-          sb.from(table).select('*').then(({ data }) => {
+        const results = await Promise.all(tables.map(table => {
+          const query = table === 'members' ? sb.from(table).select('*').eq('status', 'active') : sb.from(table).select('*');
+          return query.then(({ data }) => {
             const key = table === 'item_links' ? 'itemLinks' : table === 'schedule_events' ? 'scheduleEvents' : table;
             return { key, data: (data || []).map(toCamel) };
-          })
-        ));
+          });
+        }));
         const payload: Record<string, any> = {};
         results.forEach(({ key, data }) => { payload[key] = data; });
         dispatch({ type: 'MERGE_STATE', payload });

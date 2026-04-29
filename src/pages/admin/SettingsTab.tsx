@@ -127,11 +127,17 @@ function WeChatSection() {
 
   async function sendDigest() {
     setDigestResult('sending');
-    const today = new Date().toISOString().split('T')[0];
-    const overdueTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today).map(t => ({ title: t.title, assignee: members.find(m => m.id === t.leaderId)?.name || '未知', dueDate: t.dueDate!, priority: t.priority }));
-    const todayDueTasks = tasks.filter(t => t.status !== 'done' && t.dueDate === today).map(t => ({ title: t.title, assignee: members.find(m => m.id === t.leaderId)?.name || '未知' }));
-    const ok = await sendWeChatMessage(formatDailyDigest({ overdueTasks, todayDueTasks, todayCompleted: tasks.filter(t => t.completedAt && t.completedAt.startsWith(today)).length, totalActive: tasks.filter(t => t.status === 'in_progress').length }));
-    setDigestResult(ok ? 'success' : 'error'); setTimeout(() => setDigestResult('idle'), 3000);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const overdueTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today).map(t => ({ title: t.title, assignee: members.find(m => m.id === t.leaderId)?.name || '未知', dueDate: t.dueDate!, priority: t.priority }));
+      const todayDueTasks = tasks.filter(t => t.status !== 'done' && t.dueDate === today).map(t => ({ title: t.title, assignee: members.find(m => m.id === t.leaderId)?.name || '未知' }));
+      const ok = await sendWeChatMessage(formatDailyDigest({ overdueTasks, todayDueTasks, todayCompleted: tasks.filter(t => t.completedAt && t.completedAt.startsWith(today)).length, totalActive: tasks.filter(t => t.status === 'in_progress').length }));
+      setDigestResult(ok ? 'success' : 'error');
+    } catch (e: any) {
+      setDigestResult('error');
+      setLastTestError(e.message || '发送失败');
+    }
+    setTimeout(() => setDigestResult('idle'), 3000);
   }
 
   return (
