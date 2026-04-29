@@ -31,13 +31,7 @@ export default function Projects() {
   const [batchStatus, setBatchStatus] = useState('');
   const [batchLeader, setBatchLeader] = useState('');
 
-  const initRef = useRef(false);
-  useEffect(() => {
-    if (!initRef.current && currentUser && currentUser.role !== 'admin' && !viewingMemberId) {
-      initRef.current = true;
-      setViewingMember(currentUser.id);
-    }
-  }, [currentUser, viewingMemberId, setViewingMember]);
+  // All users default to team view — no auto-switch to personal view
 
   const toggleExpand = useCallback((id: string) => { setExpandedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }, []);
 
