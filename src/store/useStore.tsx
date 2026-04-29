@@ -123,7 +123,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await supabaseUpsert('notifications', data.notifications);
       await supabaseUpsert('activities', data.activities);
       const fresh = await fetchAllFromSupabase();
-      if (fresh) dispatch({ type: 'MERGE_STATE', payload: fresh });
+      if (fresh) {
+        const curUser = stateRef.current?.currentUser || null;
+        const curView = stateRef.current?.viewingMemberId || null;
+        const localTags = stateRef.current?.tags || [];
+        const localBookmarks = stateRef.current?.bookmarks || [];
+        const localSavedViews = stateRef.current?.savedViews || [];
+        dispatch({ type: 'SET_STATE', payload: { ...fresh, currentUser: curUser, viewingMemberId: curView, tags: localTags, bookmarks: localBookmarks, savedViews: localSavedViews } });
+      }
       setConnectionMode('supabase');
       return true;
     } catch (e: any) {

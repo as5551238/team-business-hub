@@ -284,7 +284,7 @@ export function reducer(state: AppState, action: Action): AppState {
             if (pIdx !== -1) s.projects[pIdx].progress = calcProjectProgress(s.tasks, oldTask.projectId);
           }
         }
-        supabaseUpdate('tasks', action.payload.id, action.payload.updates);
+        supabaseUpdate('tasks', action.payload.id, { ...action.payload.updates, updated_at: now });
       }
       return s;
     }
