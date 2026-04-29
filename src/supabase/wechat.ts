@@ -49,20 +49,29 @@ export function isWeChatEnabled(): boolean {
 
 // ==================== 发送逻辑 ====================
 
-// CORS 代理列表（按优先级尝试，用于浏览器跨域场景）
-const CORS_PROXIES = [
-  'https://api.allorigins.win/raw?url=',
-  'https://corsproxy.io/?',
-];
-
-// 企业微信群机器人（直接POST失败时尝试CORS代理）
+// 企业微信群机器人（通过 Supabase Edge RPC pg_net 服务端代理，无 CORS 问题）
 async function sendToWorkWechat(content: string): Promise<boolean> {
   const config = loadWeChatConfig();
   const webhookUrl = config.workWechat.webhookUrl;
   if (!webhookUrl) return false;
   const body = JSON.stringify({ msgtype: 'markdown', markdown: { content } });
 
-  // 方法1: 直接 POST（同源或服务端配置了 CORS 时可用）
+  // 方法1: 通过 Supabase RPC 调用数据库 pg_net 函数（服务端发送，无 CORS）
+  try {
+    const sb = getSupabaseClient();
+    if (sb) {
+      const { error } = await sb.rpc('send_webhook', {
+        p_url: webhookUrl,
+        p_body: body,
+      });
+      if (!error) return true;
+      console.error('RPC send_webhook failed:', error);
+    }
+  } catch (e: any) {
+    console.error('RPC 调用失败:', e);
+  }
+
+  // 方法2: 直接 POST（仅在同源环境或 CORS 允许时可用）
   try {
     const res = await fetch(webhookUrl, {
       method: 'POST',
@@ -74,22 +83,8 @@ async function sendToWorkWechat(content: string): Promise<boolean> {
       if (data.errcode === 0) return true;
       if (data.errcode) throw new Error(`企业微信错误: ${data.errcode} ${data.errmsg || ''}`);
     }
-  } catch {
-    // 方法2: 通过 CORS 代理 POST
-    for (const proxy of CORS_PROXIES) {
-      try {
-        const res = await fetch(proxy + encodeURIComponent(webhookUrl), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.errcode === 0) return true;
-        }
-      } catch { /* try next proxy */ }
-    }
-    throw new Error('所有发送方式均失败，请检查网络或webhook地址');
+  } catch (e: any) {
+    throw new Error('发送失败：需要服务端代理(CORS限制)。请确保 Supabase 中已创建 send_webhook 函数。');
   }
   return false;
 }

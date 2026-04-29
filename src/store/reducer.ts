@@ -83,8 +83,11 @@ export function reducer(state: AppState, action: Action): AppState {
       const s = needMutate(state);
       const payload = action.payload;
       cleanPendingDeletes();
-      // Fields that are purely local (not synced from Supabase) — never prune local-only items
-      const localOnlyFields = new Set(['bookmarks', 'savedViews', 'currentUser', 'viewingMemberId', 'connectionMode', 'connectionError', 'batchOperations']);
+      // Fields that are never pruned — local items are always kept.
+      // members: network failures could cause partial fetch, never trim local members
+      // tags: upsert may fail, keep local tags until confirmed synced
+      // bookmarks/savedViews: purely local data
+      const localOnlyFields = new Set(['bookmarks', 'savedViews', 'currentUser', 'viewingMemberId', 'connectionMode', 'connectionError', 'batchOperations', 'members', 'tags']);
       for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
         const newVal = payload[key];
         if (!Array.isArray(newVal)) { (s as any)[key] = newVal; continue; }
