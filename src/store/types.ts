@@ -113,7 +113,7 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: any[
     ...g, tags: g.tags || [], keyResults: g.keyResults || [],
     attachments: g.attachments || [], trackingRecords: g.trackingRecords || [],
     supporterIds: g.supporterIds || [], priority: g.priority || 'medium',
-    status: g.status || 'todo', repeatCycle: g.repeatCycle || 'none',
+    status: g.status || 'planning', repeatCycle: g.repeatCycle || 'none',
     selectedKRIds: g.selectedKRIds || [], discussionThreadId: g.discussionThreadId ?? null,
     summary: g.summary || '', progress: g.progress || 0,
   }));

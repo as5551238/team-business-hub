@@ -106,10 +106,42 @@ async function withRetry(fn: () => Promise<any>, retries = 1): Promise<void> {
   }
 }
 
+/** Whitelist of DB columns per table — prevents sending unknown columns that cause 400 errors */
+const TABLE_COLUMNS: Record<string, Set<string> | null> = {
+  goals: new Set(['id','title','description','type','status','parent_id','level','start_date','end_date','owner_id','key_results','progress','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary']),
+  projects: new Set(['id','title','description','goal_id','status','start_date','end_date','owner_id','member_ids','task_count','progress','created_at','updated_at','leader_id','supporter_ids','parent_id','canvas_x','canvas_y','priority','category','repeat_cycle','discussion_thread_id','summary']),
+  tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary']),
+  members: new Set(['id','name','role','department','avatar','email','status','join_date','created_at','nickname','phone','wechat_id','permissions']),
+  notifications: new Set(['id','type','title','message','related_id','related_type','member_id','read','created_at']),
+  activities: new Set(['id','member_id','action','target_type','target_id','target_title','details','created_at']),
+  item_links: new Set(['id','source_id','source_type','target_id','target_type','label','created_at']),
+  reviews: new Set(['id','period','period_start','period_end','member_id','content','improvements','metrics','created_at','updated_at']),
+  categories: new Set(['id','name','color','icon','applies_to','created_at']),
+  tags: new Set(['id','name','color','created_at','updated_at']),
+  templates: new Set(['id','title','description','type','content','created_by','updated_by','is_public','category','created_at','updated_at']),
+  schedule_events: new Set(['id','title','description','start_date','end_date','all_day','color','linked_item_id','linked_item_type','member_id','repeat_cycle','created_at','updated_at']),
+  notes: new Set(['id','title','content','folder','color','is_pinned','linked_item_id','linked_item_type','created_by','updated_by','created_at','updated_at']),
+  comments: new Set(['id','item_id','item_type','member_id','member_name','content','created_at']),
+};
+
+/** Remove keys not present in DB table schema to avoid PostgREST 400 errors.
+ *  Also converts empty strings to null so FK checks don't treat '' as a valid member ID. */
+function filterColumns(table: string, snakeData: Record<string, any>): Record<string, any> {
+  const allowed = TABLE_COLUMNS[table];
+  if (!allowed) return snakeData; // unknown table — pass through (e.g. bookmarks/saved_views)
+  const filtered: Record<string, any> = {};
+  for (const [k, v] of Object.entries(snakeData)) {
+    if (!allowed.has(k)) continue;
+    // Convert empty string to null (Postgres FK treats '' as a non-null value)
+    filtered[k] = v === '' ? null : v;
+  }
+  return filtered;
+}
+
 export async function supabaseUpsert(table: string, data: Record<string, any>[]) {
   const sb = getSupabaseClient();
   if (!sb) return;
-  const snakeData = data.map(d => toSnake(d));
+  const snakeData = data.map(d => filterColumns(table, toSnake(d)));
   await withRetry(async () => {
     for (let i = 0; i < snakeData.length; i += 100) {
       const res = await sb.from(table).upsert(snakeData.slice(i, i + 100), { onConflict: 'id' });
@@ -122,7 +154,7 @@ export async function supabaseUpdate(table: string, id: string, data: Record<str
   const sb = getSupabaseClient();
   if (!sb) return;
   await withRetry(async () => {
-    const res = await sb.from(table).update(toSnake(data)).eq('id', id);
+    const res = await sb.from(table).update(filterColumns(table, toSnake(data))).eq('id', id);
     if (res.error) throw res.error;
   });
 }
@@ -131,7 +163,7 @@ export async function supabaseInsert(table: string, data: Record<string, any>) {
   const sb = getSupabaseClient();
   if (!sb) return;
   await withRetry(async () => {
-    const res = await sb.from(table).upsert(toSnake(data));
+    const res = await sb.from(table).upsert(filterColumns(table, toSnake(data)));
     if (res.error) throw res.error;
   });
 }
