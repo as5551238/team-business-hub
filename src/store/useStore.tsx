@@ -76,7 +76,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (data && data.members.length > 0) {
         const curUser = stateRef.current?.currentUser || null;
         const curView = stateRef.current?.viewingMemberId || null;
-        dispatch({ type: 'SET_STATE', payload: { ...data, currentUser: curUser, viewingMemberId: curView } });
+        const localTags = stateRef.current?.tags || [];
+        const localBookmarks = stateRef.current?.bookmarks || [];
+        const localSavedViews = stateRef.current?.savedViews || [];
+        dispatch({ type: 'SET_STATE', payload: { ...data, currentUser: curUser, viewingMemberId: curView, tags: localTags, bookmarks: localBookmarks, savedViews: localSavedViews } });
         localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey }));
         setConnectionMode('supabase');
         setupRealtime();
@@ -137,6 +140,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // Supabase Realtime postgres_changes is broken — use REST polling instead
     const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments'];
     const poll = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const results = await Promise.all(tables.map(table =>
           sb.from(table).select('*').then(({ data }) => {
@@ -152,12 +156,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
     poll();
     const timerId = window.setInterval(poll, 30000);
-    realtimeChannels.current = [timerId];
+    const onVisible = () => { if (document.visibilityState === 'visible') poll(); };
+    document.addEventListener('visibilitychange', onVisible);
+    realtimeChannels.current = [timerId, onVisible];
   }
 
   function cleanupRealtime() {
-    const id = realtimeChannels.current[0];
-    if (typeof id === 'number') window.clearInterval(id);
+    realtimeChannels.current.forEach(item => {
+      if (typeof item === 'number') window.clearInterval(item);
+      else if (typeof item === 'function') document.removeEventListener('visibilitychange', item);
+    });
     realtimeChannels.current = [];
   }
 
@@ -281,7 +289,7 @@ function hasPermission(state: AppState, memberId: string, permission: Permission
     if (member.permissions.includes(permission)) return true;
     return false;
   }
-  if (member.role === 'manager') {
+  if (member.role === 'manager' || member.role === 'leader') {
     return !['manage_team', 'manage_settings'].includes(permission);
   }
   return ['view_goals', 'view_projects', 'view_tasks'].includes(permission);

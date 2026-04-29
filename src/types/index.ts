@@ -1,6 +1,6 @@
 // ==================== 团队业务中台 - 类型定义 V3 ====================
 
-export type MemberRole = 'admin' | 'manager' | 'member';
+export type MemberRole = 'admin' | 'manager' | 'leader' | 'member';
 export type MemberStatus = 'active' | 'inactive';
 export type GoalStatus = 'planning' | 'in_progress' | 'completed' | 'paused' | 'cancelled';
 export type GoalType = 'okr' | 'kpi' | 'milestone';

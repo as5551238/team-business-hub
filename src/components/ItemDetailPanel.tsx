@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useStore, useMemberLookup, useActiveMembers } from '@/store/useStore';
+import { useStore, useMemberLookup, useActiveMembers, usePermissions } from '@/store/useStore';
 import { uploadFile, deleteFile, BUCKET_NAMES } from '@/supabase/storage';
 import type { Goal, Project, Task, Comment, TrackingRecord, ItemLink, KeyResult, ItemType, RepeatCycle } from '@/types';
 import { cn } from '@/lib/utils';
@@ -70,6 +70,8 @@ const QUADRANT_COLORS: Record<string, string> = {
 
 export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetailPanelProps) {
   const { state, dispatch } = useStore();
+  const { can } = usePermissions();
+  const canDelete = (itemType === 'goal' ? can('delete_goals') : itemType === 'project' ? can('delete_projects') : can('delete_tasks'));
   const panelRef = useRef<HTMLDivElement>(null);
   const commentsEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -458,7 +460,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
             </div>
           </div>
           <div className="px-4 sm:px-5 py-1.5 border-b border-border/50 flex items-center gap-2">
-            <button className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs text-destructive hover:bg-destructive/10 transition-colors cursor-pointer" onClick={() => { if (confirm(itemType === 'goal' ? '确认删除该目标？' : itemType === 'project' ? '确认删除该项目？关联任务将解除项目关联。' : '确认删除该任务？')) { const action = itemType === 'goal' ? 'DELETE_GOAL' : itemType === 'project' ? 'DELETE_PROJECT' : 'DELETE_TASK'; dispatch({ type: action as any, payload: itemId }); onClose(); } }}><Trash2 size={13} /> 删除{itemType === 'goal' ? '目标' : itemType === 'project' ? '项目' : '任务'}</button>
+            {canDelete && <button className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs text-destructive hover:bg-destructive/10 transition-colors cursor-pointer" onClick={() => { if (confirm(itemType === 'goal' ? '确认删除该目标？' : itemType === 'project' ? '确认删除该项目？关联任务将解除项目关联。' : '确认删除该任务？')) { const action = itemType === 'goal' ? 'DELETE_GOAL' : itemType === 'project' ? 'DELETE_PROJECT' : 'DELETE_TASK'; dispatch({ type: action as any, payload: itemId }); onClose(); } }}><Trash2 size={13} /> 删除{itemType === 'goal' ? '目标' : itemType === 'project' ? '项目' : '任务'}</button>}
           </div>
 
           <Section title="背景信息">

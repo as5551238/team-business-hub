@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useStore, useTags, useViewingMember } from '@/store/useStore';
+import { useStore, useTags, useViewingMember, usePermissions } from '@/store/useStore';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
 import { Trash2, Edit2, Plus, Target, Filter, ChevronDown, X, FileText, Search } from 'lucide-react';
@@ -11,6 +11,7 @@ import { viewTabs, statusLabels, statusColors, bizLabels, bizColors, type ViewMo
 
 export default function Goals() {
   const { state, dispatch } = useStore();
+  const { can } = usePermissions();
   const { tags } = useTags();
   const { isTeamView, viewingMember, viewingMemberId, setViewingMember } = useViewingMember();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -124,6 +125,7 @@ export default function Goals() {
   };
 
   const handleBatchDelete = useCallback(() => {
+    if (!confirm(`确认删除选中的 ${selectedIds.size} 个目标？`)) return;
     selectedIds.forEach(id => { dispatch({ type: 'DELETE_GOAL', payload: id }); });
     setSelectedIds(new Set());
     setBatchMode(false);
@@ -202,9 +204,9 @@ export default function Goals() {
           {batchMode && selectedIds.size > 0 && (
             <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 mr-2">
               <span className="text-xs font-medium">已选 {selectedIds.size} 项</span>
-              <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleBatchDelete}>
-                <Trash2 size={12} /> 删除
-              </button>
+               <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (!can('delete_goals')) return; handleBatchDelete(); }}>
+                 <Trash2 size={12} /> 删除
+               </button>
               <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
                 <option value="">改状态</option>
                 <option value="planning">规划中</option>

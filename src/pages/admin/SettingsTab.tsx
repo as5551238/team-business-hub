@@ -332,7 +332,7 @@ function BackupSection() {
         {importStatus === 'importing' && <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground"><Loader2 size={14} className="animate-spin" /> 正在导入...</div>}
         {importStatus === 'success' && <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700 font-medium">导入成功！数据已恢复。</div>}
         {importStatus === 'error' && errorMsg && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{errorMsg}</div>}
-        <div className="pt-2 border-t border-border"><button onClick={() => { const data = generateAllData(); dispatch({ type: 'RESET_DATA', payload: { ...data, currentUser: data.members[0] } }); }} className="text-xs text-destructive hover:underline flex items-center gap-1"><Trash2 size={12} /> 清空所有数据</button></div>
+         <div className="pt-2 border-t border-border"><button onClick={() => { if (!confirm('确认清空所有数据？此操作不可撤销！')) return; try { const data = generateAllData(); dispatch({ type: 'RESET_DATA', payload: { ...data, currentUser: data.members[0] } }); } catch (e) { console.error('Reset data failed:', e); } }} className="text-xs text-destructive hover:underline flex items-center gap-1"><Trash2 size={12} /> 清空所有数据</button></div>
       </div>
     </div>
   );

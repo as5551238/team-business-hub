@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useStore, useDashboardStats, useViewingMember, useMemberLookup, useBookmarks } from '@/store/useStore';
+import { useStore, useDashboardStats, useViewingMember, useMemberLookup, useBookmarks, usePermissions } from '@/store/useStore';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import {
   Target, FolderKanban, CheckCircle2, AlertTriangle,
@@ -284,6 +284,7 @@ function BookmarksWidget() {
 
 export default function Dashboard({ onPageChange }: DashboardProps) {
   const { state, dispatch } = useStore();
+  const { can } = usePermissions();
   const stats = useDashboardStats();
   const { isTeamView, viewingMember, viewingMemberId } = useViewingMember();
   const { nameMap: memberNameMap } = useMemberLookup();
@@ -355,6 +356,8 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
   }, [onPageChange]);
 
   const handleBatchDelete = useCallback(() => {
+    if (!can('delete_tasks')) return;
+    if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return;
     selectedIds.forEach(id => { dispatch({ type: 'DELETE_TASK', payload: id }); });
     setSelectedIds(new Set());
     setShowBatchOps(false);
@@ -623,7 +626,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
             <span className="text-sm font-medium">已选 {selectedIds.size} 项</span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors" onClick={handleBatchDelete}>
+            <button className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors" onClick={() => { if (!can('delete_tasks')) return; handleBatchDelete(); }}>
               <Trash2 size={14} /> 批量删除
             </button>
             <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary/20">

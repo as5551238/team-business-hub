@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { useStore, useViewingMember, useReviewList } from '@/store/useStore';
+import { useStore, useViewingMember, useReviewList, usePermissions } from '@/store/useStore';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { BarChart3, Target, CheckCircle2, Clock, TrendingUp, Users, FolderKanban, FileText, Lightbulb, Save, Calendar } from 'lucide-react';
 import type { ReviewPeriod, ReviewMetrics } from '@/types';
@@ -87,6 +87,7 @@ function getWeekKey(dateStr: string): string {
 
 export default function Insight() {
   const { state, dispatch } = useStore();
+  const { can } = usePermissions();
   const { viewingMemberId, setViewingMember, viewingMember, isTeamView } = useViewingMember();
   const [tab, setTab] = useState<InsightTab>('dashboard');
   const [period, setPeriod] = useState<string>('week');
@@ -384,7 +385,7 @@ export default function Insight() {
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <button onClick={() => handleEdit(review)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors"><FileText size={14} /></button>
-                          <button onClick={() => handleDelete(review.id)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Clock size={14} /></button>
+                          {can('manage_team') && <button onClick={() => handleDelete(review.id)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Clock size={14} /></button>}
                         </div>
                       </div>
                       {review.content && <p className="text-sm text-gray-700 whitespace-pre-wrap mb-2">{review.content}</p>}

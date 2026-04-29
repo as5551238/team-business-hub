@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { useStore, useTags, useViewingMember, useMemberLookup, useItemLookupMaps } from '@/store/useStore';
+import { useStore, useTags, useViewingMember, useMemberLookup, useItemLookupMaps, usePermissions } from '@/store/useStore';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { Task, TaskStatus, TaskPriority, Comment } from '@/types';
 import { cn } from '@/lib/utils';
@@ -276,6 +276,7 @@ function TaskMatrixView({ filteredTasks, setDetailItem, getMemberName, getQuadra
 
 export default function Tasks() {
   const { state, dispatch } = useStore();
+  const { can } = usePermissions();
   const { tags } = useTags();
   const { isTeamView, viewingMember, setViewingMember, viewingMemberId } = useViewingMember();
   const currentUser = state.currentUser;
@@ -796,7 +797,7 @@ export default function Tasks() {
     else setSelectedIds(new Set(filteredTasks.map(t => t.id)));
   }, [selectedIds.size, filteredTasks]);
 
-  const batchDelete = useCallback(() => { selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
+  const batchDelete = useCallback(() => { if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
   const batchUpdateStatus = useCallback((status: string) => { if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); }, [selectedIds, dispatch]);
   const batchAssign = useCallback((leaderId: string) => { if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
 
@@ -822,7 +823,7 @@ export default function Tasks() {
               {batchMode && selectedIds.size > 0 && (
                 <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 mr-1">
                   <span className="text-xs font-medium">已选 {selectedIds.size} 项</span>
-                  <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={batchDelete}><Trash2 size={12} /> 删除</button>
+                    <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (!can('delete_tasks')) return; batchDelete(); }}><Trash2 size={12} /> 删除</button>
                   <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none"><option value="">改状态</option><option value="todo">待处理</option><option value="in_progress">进行中</option><option value="done">已完成</option><option value="blocked">已阻塞</option><option value="cancelled">已取消</option></select>
                   {batchStatus && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={() => { batchUpdateStatus(batchStatus); }}>确认</button>}
                   <select value={batchLeader} onChange={e => setBatchLeader(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none"><option value="">分配给</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>

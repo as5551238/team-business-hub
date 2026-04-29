@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useStore, useTags, useViewingMember } from '@/store/useStore';
+import { useStore, useTags, useViewingMember, usePermissions } from '@/store/useStore';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { Project, ProjectStatus, TaskPriority, Comment } from '@/types';
 import { Plus, FolderKanban, Search, Check, Users, Trash2, X, Filter, ChevronDown } from 'lucide-react';
@@ -10,6 +10,7 @@ import { ProjectTreeNode, ProjectListView, ProjectTableView, ProjectKanbanView, 
 
 export default function Projects() {
   const { state, dispatch } = useStore();
+  const { can } = usePermissions();
   const { tags } = useTags();
   const { isTeamView, viewingMember, setViewingMember, viewingMemberId } = useViewingMember();
   const currentUser = state.currentUser;
@@ -101,7 +102,7 @@ export default function Projects() {
     else setSelectedIds(new Set(filteredProjects.map(p => p.id)));
   }, [selectedIds.size, filteredProjects]);
 
-  const batchDelete = useCallback(() => { selectedIds.forEach(id => dispatch({ type: 'DELETE_PROJECT', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
+  const batchDelete = useCallback(() => { if (!confirm(`确认删除选中的 ${selectedIds.size} 个项目？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_PROJECT', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
   const batchUpdateStatus = useCallback((status: string) => { if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { status: status as ProjectStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); }, [selectedIds, dispatch]);
   const batchAssign = useCallback((leaderId: string) => { if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
 
@@ -134,9 +135,9 @@ export default function Projects() {
           {batchMode && selectedIds.size > 0 && (
             <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 mr-2">
               <span className="text-xs font-medium">已选 {selectedIds.size} 项</span>
-              <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={batchDelete}>
-                <Trash2 size={12} /> 删除
-              </button>
+               <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (!can('delete_projects')) return; batchDelete(); }}>
+                 <Trash2 size={12} /> 删除
+               </button>
               <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
                 <option value="">改状态</option><option value="planning">规划中</option><option value="in_progress">进行中</option><option value="completed">已完成</option><option value="paused">已暂停</option><option value="cancelled">已取消</option>
               </select>

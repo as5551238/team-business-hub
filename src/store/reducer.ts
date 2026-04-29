@@ -433,6 +433,7 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'DELETE_MEMBER': {
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.members = s.members.filter(m => m.id !== action.payload);
       supabaseDelete('members', action.payload);
       return s;
