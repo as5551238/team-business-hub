@@ -445,7 +445,7 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
 function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, batchProps, dispatch, dragRef }: { project: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; dispatch: React.Dispatch<any>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
   const leader = (members || []).find(m => m.id === project.leaderId);
   return (
-    <div className="bg-white rounded-lg border border-border p-3 hover:shadow-sm transition-shadow group cursor-pointer select-none" onMouseDown={e => { if (e.button !== 0) return; e.preventDefault(); dragRef.current = { id: project.id, el: e.currentTarget }; e.currentTarget.classList.add('opacity-30', 'scale-95'); }} onTouchStart={e => { const t = e.touches[0]; if (!t) return; dragRef.current = { id: project.id, el: e.currentTarget as HTMLElement }; (e.currentTarget as HTMLElement).classList.add('opacity-30', 'scale-95'); }} onClick={() => { if (!dragRef.current) setDetailItem({ type: 'project', id: project.id }); }}>
+    <div className="bg-white rounded-lg border border-border p-3 hover:shadow-sm transition-shadow group cursor-pointer select-none" onMouseDown={e => { if (e.button !== 0) return; e.preventDefault(); dragMovedRef.current = false; dragRef.current = { id: project.id, el: e.currentTarget }; e.currentTarget.classList.add('opacity-30', 'scale-95'); }} onTouchStart={e => { const t = e.touches[0]; if (!t) return; dragMovedRef.current = false; dragRef.current = { id: project.id, el: e.currentTarget as HTMLElement }; (e.currentTarget as HTMLElement).classList.add('opacity-30', 'scale-95'); }} onClick={() => { if (!dragMovedRef.current) setDetailItem({ type: 'project', id: project.id }); }}>
       <div className="flex items-center gap-1 mb-1">
         {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(project.id)} className="rounded" onChange={() => batchProps.onToggleSelect(project.id)} /></span>}
         <span className="text-xs font-medium truncate flex-1">{project.title}</span>
@@ -479,6 +479,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
   const MS_DAY = 86400000;
   const URGENT_DAYS = 14;
   const dragRef = useRef<{ id: string; el: HTMLElement } | null>(null);
+  const dragMovedRef = useRef(false);
   const hoverQRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const boxRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -517,6 +518,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
 
   function handlePointerMove(cx: number, cy: number) {
     if (!dragRef.current) return;
+    dragMovedRef.current = true;
     let found = false;
     for (const key of qKeys) {
       const el = boxRefs.current[key];
@@ -542,10 +544,19 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
   function handlePointerUp() {
     if (dragRef.current) {
       if (dragRef.current.el) dragRef.current.el.classList.remove('opacity-30', 'scale-95');
-      if (hoverQRef.current && quadrants[hoverQRef.current]) {
-        dispatch({ type: 'UPDATE_PROJECT', payload: { id: dragRef.current.id, updates: { priority: quadrants[hoverQRef.current].dropPriority } } });
+      const targetQ = hoverQRef.current;
+      if (targetQ && quadrants[targetQ]) {
+        dispatch({ type: 'UPDATE_PROJECT', payload: { id: dragRef.current.id, updates: { priority: quadrants[targetQ].dropPriority } } });
       }
-      resetHover();
+      // Delay reset so onClick can check dragMovedRef before hoverQ is cleared
+      const prevHover = targetQ;
+      setTimeout(() => {
+        if (prevHover && boxRefs.current[prevHover]) {
+          const box = boxRefs.current[prevHover];
+          if (box) box.className = box.className.replace(quadrants[prevHover].hoverAccent, quadrants[prevHover].accent);
+        }
+        hoverQRef.current = null;
+      }, 50);
       dragRef.current = null;
     }
   }

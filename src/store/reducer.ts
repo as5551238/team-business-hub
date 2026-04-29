@@ -57,13 +57,11 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'MERGE_STATE': {
       // Deep merge: for array fields, only update items that exist in remote but not locally modified recently
-      // This prevents Realtime from overwriting local edits made within the debounce window
-      // For core business tables (goals/projects/tasks), only UPDATE existing items, never ADD new ones.
-      // This prevents deleted items from being re-added by Realtime before supabaseDelete completes.
+      // This prevents Realtime from overwriting local edits made within the debounce window.
+      // pendingDeletes guards against deleted items being re-added before supabaseDelete completes.
       const s = needMutate(state);
       const payload = action.payload;
       cleanPendingDeletes();
-      const CORE_ARRAYS = new Set(['goals', 'projects', 'tasks']);
       for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
         const newVal = payload[key];
         if (!Array.isArray(newVal)) { (s as any)[key] = newVal; continue; }
@@ -72,7 +70,6 @@ export function reducer(state: AppState, action: Action): AppState {
         const remoteArr = newVal as any[];
         const localIds = new Map(localArr.map((item: any) => [item.id, item]));
         const merged = [...localArr];
-        const isCoreTable = CORE_ARRAYS.has(key as string);
         for (const remoteItem of remoteArr) {
           if (isPendingDelete(remoteItem.id)) continue;
           if (localIds.has(remoteItem.id)) {
@@ -83,7 +80,7 @@ export function reducer(state: AppState, action: Action): AppState {
               const idx = merged.findIndex((m: any) => m.id === remoteItem.id);
               if (idx !== -1) merged[idx] = remoteItem;
             }
-          } else if (!isCoreTable) {
+          } else {
             merged.push(remoteItem);
           }
         }

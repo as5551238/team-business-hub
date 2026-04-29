@@ -3,6 +3,7 @@ import type { AppState, Goal, Project, BackupData, Tag, Permission, Category, Te
 import { getSupabaseClient, isSupabaseConfigured, initSupabase, resetSupabase } from '@/supabase/client';
 import type { ConnectionMode, SupabaseConfig, Action } from './types';
 import { SUPABASE_CONFIG_KEY } from './types';
+import { toCamel } from './types';
 import { reducer } from './reducer';
 import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert } from './supabase';
 import { generateAllData } from '@/data/dataGenerator';
@@ -73,7 +74,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const data = await fetchAllFromSupabase();
       if (connectAbortRef.current) return false;
       if (data && data.members.length > 0) {
-        dispatch({ type: 'MERGE_STATE', payload: data });
+        const { currentUser: curUser, viewingMemberId: curView } = useStore().state;
+        dispatch({ type: 'SET_STATE', payload: { ...data, currentUser: curUser, viewingMemberId: curView } });
         localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey }));
         setConnectionMode('supabase');
         setupRealtime();
@@ -143,7 +145,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             try {
               const { data } = await sb.from(table).select('*');
               const key = table === 'item_links' ? 'itemLinks' : table === 'schedule_events' ? 'scheduleEvents' : table;
-              dispatch({ type: 'MERGE_STATE', payload: { [key]: data || [] } });
+              const camelData = (data || []).map(toCamel);
+              dispatch({ type: 'MERGE_STATE', payload: { [key]: camelData } });
             } catch {
             }
           }, 2000));
