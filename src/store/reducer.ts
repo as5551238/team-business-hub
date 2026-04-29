@@ -169,10 +169,15 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_GOAL': {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
+      const now = tsNow();
       markPendingDelete(action.payload);
       s.goals = s.goals.filter(g => g.id !== action.payload);
+      const affectedGoals = s.goals.filter(g => g.parentId === action.payload);
       s.goals.forEach(g => { if (g.parentId === action.payload) g.parentId = null; });
+      for (const g of affectedGoals) { supabaseUpdate('goals', g.id, { parent_id: null, updated_at: now }); }
+      const affectedProjects = s.projects.filter(p => p.goalId === action.payload);
       s.projects.forEach(p => { if (p.goalId === action.payload) p.goalId = null; });
+      for (const p of affectedProjects) { supabaseUpdate('projects', p.id, { goal_id: null, updated_at: now }); }
       supabaseDelete('goals', action.payload);
       return s;
     }
@@ -254,9 +259,12 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_PROJECT': {
       if (!reducerCanDelete(state, 'delete_projects')) return state;
       const s = needMutate(state);
+      const now = tsNow();
       markPendingDelete(action.payload);
       s.projects = s.projects.filter(p => p.id !== action.payload);
+      const affectedTasks = s.tasks.filter(t => t.projectId === action.payload);
       s.tasks.forEach(t => { if (t.projectId === action.payload) t.projectId = null; });
+      for (const t of affectedTasks) { supabaseUpdate('tasks', t.id, { project_id: null, updated_at: now }); }
       supabaseDelete('projects', action.payload);
       return s;
     }
@@ -291,7 +299,7 @@ export function reducer(state: AppState, action: Action): AppState {
       s.tasks.push(t);
       if (t.projectId) {
         const pIdx = s.projects.findIndex(p => p.id === t.projectId);
-        if (pIdx !== -1) { s.projects[pIdx].taskCount++; s.projects[pIdx].progress = calcProjectProgress(s.tasks, t.projectId); }
+        if (pIdx !== -1) { s.projects[pIdx].taskCount = (s.projects[pIdx].taskCount || 0) + 1; s.projects[pIdx].progress = calcProjectProgress(s.tasks, t.projectId); }
       }
       supabaseInsert('tasks', t);
       return s;
@@ -318,13 +326,16 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_TASK': {
       if (!reducerCanDelete(state, 'delete_tasks')) return state;
       const s = needMutate(state);
+      const now = tsNow();
       markPendingDelete(action.payload);
       const t = s.tasks.find(t => t.id === action.payload);
       s.tasks = s.tasks.filter(t => t.id !== action.payload);
+      const affectedTasks = s.tasks.filter(t => t.parentId === action.payload);
       s.tasks.forEach(tk => { if (tk.parentId === action.payload) tk.parentId = null; });
+      for (const t2 of affectedTasks) { supabaseUpdate('tasks', t2.id, { parent_id: null, updated_at: now }); }
       if (t?.projectId) {
         const pIdx = s.projects.findIndex(p => p.id === t.projectId);
-        if (pIdx !== -1) { s.projects[pIdx].taskCount = Math.max(0, s.projects[pIdx].taskCount - 1); s.projects[pIdx].progress = calcProjectProgress(s.tasks, t.projectId); }
+        if (pIdx !== -1) { s.projects[pIdx].taskCount = Math.max(0, (s.projects[pIdx].taskCount || 0) - 1); s.projects[pIdx].progress = calcProjectProgress(s.tasks, t.projectId); }
       }
       supabaseDelete('tasks', action.payload);
       return s;
@@ -381,6 +392,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_ITEM_LINK': {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.itemLinks = s.itemLinks.filter(l => l.id !== action.payload);
       supabaseDelete('item_links', action.payload);
       return s;
@@ -406,7 +418,7 @@ export function reducer(state: AppState, action: Action): AppState {
         comments: (backup as any).comments || [],
         bookmarks: (backup as any).bookmarks || [],
         batchOperations: (backup as any).batchOperations || [],
-        currentUser: backup.members[0] || state.currentUser,
+        currentUser: state.currentUser,
         viewingMemberId: state.viewingMemberId,
       };
       if (isSupabaseConfigured()) {
@@ -424,7 +436,7 @@ export function reducer(state: AppState, action: Action): AppState {
         if (imported.notes.length > 0) supabaseUpsert('notes', imported.notes);
         if (imported.reviews.length > 0) supabaseUpsert('reviews', imported.reviews);
       }
-      return imported;
+      return ensureAppStateDefaults(imported);
     }
 
     case 'MARK_NOTIFICATION_READ': {
@@ -497,6 +509,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_TAG': {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.tags = s.tags.filter(t => t.id !== action.payload);
       supabaseDelete('tags', action.payload);
       return s;
@@ -514,6 +527,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_SAVED_VIEW': {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.savedViews = s.savedViews.filter(v => v.id !== action.payload);
       supabaseDelete('saved_views', action.payload);
       return s;
@@ -532,13 +546,14 @@ export function reducer(state: AppState, action: Action): AppState {
       const s = needMutate(state);
       const now = tsNow();
       const idx = s.reviews.findIndex(r => r.id === action.payload.id);
-      if (idx !== -1) { s.reviews[idx] = { ...s.reviews[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('reviews', action.payload.id, action.payload.updates); }
+      if (idx !== -1) { s.reviews[idx] = { ...s.reviews[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('reviews', action.payload.id, { ...action.payload.updates, updated_at: now }); }
       return s;
     }
 
     case 'DELETE_REVIEW': {
       if (!reducerCanDelete(state, 'manage_team')) return state;
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.reviews = s.reviews.filter(r => r.id !== action.payload);
       supabaseDelete('reviews', action.payload);
       return s;
@@ -563,6 +578,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_CATEGORY': {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.categories = s.categories.filter(c => c.id !== action.payload);
       supabaseDelete('categories', action.payload);
       return s;
@@ -594,6 +610,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_TEMPLATE': {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.templates = s.templates.filter(t => t.id !== action.payload);
       supabaseDelete('templates', action.payload);
       return s;
@@ -619,6 +636,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_SCHEDULE_EVENT': {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.scheduleEvents = s.scheduleEvents.filter(e => e.id !== action.payload);
       supabaseDelete('schedule_events', action.payload);
       return s;
@@ -644,6 +662,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_NOTE': {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.notes = s.notes.filter(n => n.id !== action.payload);
       supabaseDelete('notes', action.payload);
       return s;
@@ -658,6 +677,7 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'DELETE_COMMENT': {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
+      markPendingDelete(action.payload);
       const comments = state.comments || [];
       supabaseDelete('comments', action.payload);
       return { ...state, comments: comments.filter(c => c.id !== action.payload) };
@@ -687,6 +707,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_BOOKMARK': {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
+      markPendingDelete(action.payload);
       s.bookmarks = s.bookmarks.filter(b => b.id !== action.payload);
       supabaseDelete('bookmarks', action.payload);
       return s;

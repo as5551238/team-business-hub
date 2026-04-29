@@ -59,7 +59,7 @@ export default function Projects() {
     if (personFilter.length > 0) result = result.filter(p => personFilter.some(pid => p.leaderId === pid || (p.supporterIds || []).includes(pid)));
     if (searchQuery.trim()) { const q = searchQuery.trim().toLowerCase(); result = result.filter(p => p.title.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)); }
     if (timeFilter === 'today') {
-      result = result.filter(p => p.endDate === todayStr || p.startDate === todayStr);
+      result = result.filter(p => p.startDate <= todayStr && p.endDate >= todayStr);
     } else if (timeFilter === 'this_week') {
       const dow = now.getDay() || 7;
       const ws = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow + 1).toISOString().split('T')[0];
@@ -103,8 +103,8 @@ export default function Projects() {
   }, [selectedIds.size, filteredProjects]);
 
   const batchDelete = useCallback(() => { if (!confirm(`确认删除选中的 ${selectedIds.size} 个项目？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_PROJECT', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
-  const batchUpdateStatus = useCallback((status: string) => { if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { status: status as ProjectStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); }, [selectedIds, dispatch]);
-  const batchAssign = useCallback((leaderId: string) => { if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
+  const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_projects')) return; if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { status: status as ProjectStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); }, [selectedIds, dispatch]);
+  const batchAssign = useCallback((leaderId: string) => { if (!can('edit_projects')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
 
   function handleCreate() {
     if (!formData.title.trim()) return;

@@ -1,11 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useStore, useViewingMember, useMemberLookup, useActiveMembers } from '@/store/useStore';
+import { hasPermission } from '@/store/reducer';
+import type { Permission } from '@/types';
 import {
   LayoutDashboard, Target, FolderKanban, CheckSquare,
   BarChart3, Users, Bell, Search, Menu, X, ChevronDown,
   Settings, Cloud, CloudOff, Loader2, FileText, Eye, Users2,
-  Wrench, Calendar, StickyNote, LogOut
+  LogOut
 } from 'lucide-react';
+import { CURRENT_USER_KEY } from '@/store/types';
 
 type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'admin';
 
@@ -16,7 +19,7 @@ interface LayoutProps {
   currentUser?: { id: string; role: string; name: string; avatar: string; department: string } | undefined;
 }
 
-const navItems: { page: Page; label: string; icon: React.ReactNode; requirePermission?: string }[] = [
+const navItems: { page: Page; label: string; icon: React.ReactNode; requirePermission?: Permission }[] = [
   { page: 'dashboard', label: '工作台', icon: <LayoutDashboard size={20} /> },
   { page: 'goals', label: '目标管理', icon: <Target size={20} /> },
   { page: 'projects', label: '项目中心', icon: <FolderKanban size={20} /> },
@@ -24,14 +27,6 @@ const navItems: { page: Page; label: string; icon: React.ReactNode; requirePermi
   { page: 'insight', label: '数据洞察', icon: <BarChart3 size={20} /> },
   { page: 'admin', label: '管理中心', icon: <Settings size={20} />, requirePermission: 'manage_team' },
 ];
-
-function hasPermission(userRole: string | undefined, permission: string): boolean {
-  if (userRole === 'admin') return true;
-  if (userRole === 'manager') return permission !== 'manage_settings';
-  if (userRole === 'leader') return permission !== 'manage_settings';
-  if (userRole === 'member') return permission !== 'manage_settings' && permission !== 'manage_team';
-  return false;
-}
 
 export default function Layout({ currentPage, onPageChange, children, currentUser }: LayoutProps) {
   const { state, dispatch, connectionMode } = useStore();
@@ -70,7 +65,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
         </div>
 
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {navItems.filter(item => !item.requirePermission || hasPermission(currentUser?.role, item.requirePermission)).map(item => (
+          {navItems.filter(item => !item.requirePermission || (user && hasPermission(state, user.id, item.requirePermission))).map(item => (
             <button key={item.page} onClick={() => handlePageClick(item.page)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 text-left ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'}`}>
               {item.icon}
@@ -103,7 +98,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium truncate">{user?.name}</div>
               <div className="text-xs text-sidebar-foreground/50 truncate">{user?.department}</div>
-              {user?.role && <div className="text-xs text-sidebar-foreground/40 truncate">{user.role === 'admin' ? '管理员' : user.role === 'leader' ? '负责人' : '成员'}</div>}
+              {user?.role && <div className="text-xs text-sidebar-foreground/40 truncate">{user.role === 'admin' ? '管理员' : user.role === 'manager' ? '经理' : user.role === 'leader' ? '负责人' : '成员'}</div>}
             </div>
           </div>
         </div>
@@ -193,13 +188,13 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
                       onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_CURRENT_USER', payload: m.id }); setShowUserMenu(false); }}
                       className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted transition-colors text-left ${m.id === user?.id ? 'bg-primary/5 text-primary' : ''}`}>
                       <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">{m.avatar}</div>
-                      <div className="flex flex-col"><span>{m.name}</span><span className="text-xs text-muted-foreground">{m.role === 'admin' ? '管理员' : m.role === 'leader' ? '负责人' : '成员'}</span></div>
+                      <div className="flex flex-col"><span>{m.name}</span><span className="text-xs text-muted-foreground">{m.role === 'admin' ? '管理员' : m.role === 'manager' ? '经理' : m.role === 'leader' ? '负责人' : '成员'}</span></div>
                       <span className="text-xs text-muted-foreground ml-auto">{m.department}</span>
                     </button>
                   ))}
                 </div>
                 <div className="border-t border-border px-4 py-2">
-                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.removeItem('tbh-current-user'); } catch {} dispatch({ type: 'SET_CURRENT_USER', payload: null }); setShowUserMenu(false); }}
+                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.removeItem(CURRENT_USER_KEY); } catch {} dispatch({ type: 'SET_CURRENT_USER', payload: null }); setShowUserMenu(false); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-destructive transition-colors">
                     <LogOut size={14} />
                     <span>退出登录</span>

@@ -72,6 +72,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   const { state, dispatch } = useStore();
   const { can } = usePermissions();
   const canDelete = (itemType === 'goal' ? can('delete_goals') : itemType === 'project' ? can('delete_projects') : can('delete_tasks'));
+  const canEdit = (itemType === 'goal' ? can('edit_goals') : itemType === 'project' ? can('edit_projects') : can('edit_tasks'));
   const panelRef = useRef<HTMLDivElement>(null);
   const commentsEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +173,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   }, [statusOpen, priorityOpen, mentionOpen]);
 
   function updateItem(updates: Record<string, any>) {
+    if (!canEdit) return;
     if (itemType === 'goal') dispatch({ type: 'UPDATE_GOAL', payload: { id: itemId, updates } });
     else if (itemType === 'project') dispatch({ type: 'UPDATE_PROJECT', payload: { id: itemId, updates } });
     else dispatch({ type: 'UPDATE_TASK', payload: { id: itemId, updates } });

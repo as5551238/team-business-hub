@@ -14,7 +14,7 @@ export interface SupabaseConfig {
 export type Action =
   | { type: 'SET_STATE'; payload: AppState }
   | { type: 'MERGE_STATE'; payload: Partial<AppState> }
-  | { type: 'SET_CURRENT_USER'; payload: string }
+  | { type: 'SET_CURRENT_USER'; payload: string | null }
   | { type: 'SET_VIEWING_MEMBER'; payload: string | null }
   | { type: 'ADD_GOAL'; payload: Omit<Goal, 'id' | 'createdAt' | 'updatedAt' | 'progress'> }
   | { type: 'UPDATE_GOAL'; payload: { id: string; updates: Partial<Goal> } }

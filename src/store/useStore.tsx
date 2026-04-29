@@ -80,21 +80,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       initSupabase(url, anonKey);
       const data = await fetchAllFromSupabase();
       if (connectAbortRef.current) return false;
-      if (data && data.members.length > 0) {
+      if (data) {
         const curUser = stateRef.current?.currentUser || null;
         const curView = stateRef.current?.viewingMemberId || null;
         const localTags = stateRef.current?.tags || [];
         const localBookmarks = stateRef.current?.bookmarks || [];
         const localSavedViews = stateRef.current?.savedViews || [];
-        // Migrate local-only tags to Supabase on first connect (one-time)
         const remoteTagIds = new Set((data.tags || []).map((t: any) => t.id));
         const unsyncedTags = localTags.filter(t => !remoteTagIds.has(t.id));
         if (unsyncedTags.length > 0) {
           for (const tag of unsyncedTags) { await supabaseUpsert('tags', tag); }
           data.tags = [...(data.tags || []), ...unsyncedTags];
         }
-        // Use MERGE_STATE instead of SET_STATE to protect local-only data
-        // from being wiped if Supabase fetch missed items (e.g. failed inserts)
         dispatch({ type: 'MERGE_STATE', payload: { ...data, currentUser: curUser, viewingMemberId: curView, tags: data.tags || [], bookmarks: localBookmarks, savedViews: localSavedViews } });
         localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey }));
         setConnectionMode('supabase');
@@ -165,7 +162,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const poll = async () => {
       if (document.visibilityState === 'hidden') return;
       try {
-        const results = await Promise.all(tables.map(table => {
+        const results = await Promise.allSettled(tables.map(table => {
           const query = table === 'members' ? sb.from(table).select('*').eq('status', 'active') : sb.from(table).select('*');
           return query.then(({ data }) => {
             const key = table === 'item_links' ? 'itemLinks' : table === 'schedule_events' ? 'scheduleEvents' : table;
@@ -173,7 +170,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           });
         }));
         const payload: Record<string, any> = {};
-        results.forEach(({ key, data }) => { payload[key] = data; });
+        results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; } else { console.warn('[poll] table fetch failed:', r.reason); } });
         dispatch({ type: 'MERGE_STATE', payload });
       } catch {
       }

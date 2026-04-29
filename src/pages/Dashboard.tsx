@@ -271,7 +271,7 @@ function BookmarksWidget() {
             </div>
             <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground flex-shrink-0">{bm.category}</span>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-              <button className="p-1 hover:bg-muted rounded" onClick={e => e.stopPropagation()}><Edit2 size={12} className="text-muted-foreground" /></button>
+              <button className="p-1 hover:bg-muted rounded" onClick={e => { e.stopPropagation(); handleEdit(bm); }}><Edit2 size={12} className="text-muted-foreground" /></button>
               <button className="p-1 hover:bg-red-50 rounded" onClick={e => { e.stopPropagation(); deleteBookmark(bm.id); }}><Trash2 size={12} className="text-red-400" /></button>
               <a href={bm.url} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-muted rounded" onClick={e => e.stopPropagation()}><ExternalLink size={12} className="text-muted-foreground" /></a>
             </div>

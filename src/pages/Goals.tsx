@@ -132,6 +132,7 @@ export default function Goals() {
   }, [selectedIds, dispatch]);
 
   const handleBatchStatus = useCallback(() => {
+    if (!can('edit_goals')) return;
     if (!batchStatus) return;
     selectedIds.forEach(id => {
       dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: batchStatus as GoalStatus } } });
@@ -141,6 +142,7 @@ export default function Goals() {
   }, [selectedIds, dispatch, batchStatus]);
 
   const handleBatchAssign = useCallback(() => {
+    if (!can('edit_goals')) return;
     if (!batchAssignee) return;
     selectedIds.forEach(id => {
       dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { leaderId: batchAssignee } } });
@@ -366,8 +368,9 @@ export default function Goals() {
                   { key: 'paused' as const, label: '已暂停', color: 'border-t-amber-400' },
                 ].map(col => {
                   const colGoals = filteredGoals.filter(g => g.status === col.key);
+                  const handleGoalDrop = (e: React.DragEvent) => { e.preventDefault(); e.currentTarget.classList.remove('bg-blue-50'); const goalId = e.dataTransfer.getData('text/plain'); if (!goalId || !can('edit_goals') || !col.key) return; dispatch({ type: 'UPDATE_GOAL', payload: { id: goalId, updates: { status: col.key as GoalStatus } } }); };
                   return (
-                    <div key={col.key} className={`w-[280px] sm:w-[320px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3 transition-colors`} onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('bg-blue-50'); }} onDragLeave={e => { e.currentTarget.classList.remove('bg-blue-50'); }} onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('bg-blue-50'); const goalId = e.dataTransfer.getData('text/plain'); if (goalId && col.key) { dispatch({ type: 'UPDATE_GOAL', payload: { id: goalId, updates: { status: col.key as GoalStatus } } }); } }}>
+                    <div key={col.key} className={`w-[280px] sm:w-[320px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={e => { e.preventDefault(); }} onDrop={handleGoalDrop}>
                       <div className={`flex items-center gap-2 px-4 pb-2 border-b-2 mx-3 mb-3 ${col.color}`}><span className="font-semibold text-sm">{col.label}</span><span className="text-xs text-muted-foreground ml-auto">{colGoals.length}</span></div>
                       <div className="px-3 pb-3 space-y-2 max-h-[60vh] overflow-y-auto">
                         {colGoals.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">拖入目标</p>}

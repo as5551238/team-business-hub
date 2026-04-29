@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { useStore, useMemberLookup } from '@/store/useStore';
+import { useStore, useMemberLookup, usePermissions } from '@/store/useStore';
 import type { Goal, TaskPriority } from '@/types';
 import {
   Target, TrendingUp, Calendar, MoreHorizontal, Edit2, Trash2,
@@ -26,6 +26,7 @@ export function GoalCard({ goal, members, projects, expanded, hasChildren, onTog
   onToggleSelect: () => void;
 }) {
   const { dispatch } = useStore();
+  const { can } = usePermissions();
   const [showMenu, setShowMenu] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const leader = members.find(m => m.id === goal.leaderId);
@@ -105,7 +106,7 @@ export function GoalCard({ goal, members, projects, expanded, hasChildren, onTog
                   {goal.status !== 'completed' && (
                     <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_GOAL', payload: { id: goal.id, updates: { status: 'completed' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 标记完成</button>
                   )}
-                  <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除目标</button>
+                  {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除目标</button>}
                 </div>
               </div>
             )}
@@ -172,23 +173,26 @@ export function GoalCard({ goal, members, projects, expanded, hasChildren, onTog
   );
 }
 
-export function GoalTreeNode({ goal, filteredGoals, members, projects, expandedGoals, toggleExpand, tags, depth, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect }: {
+export function GoalTreeNode({ goal, filteredGoals, members, projects, expandedGoals, toggleExpand, tags, depth, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect, visited }: {
   goal: Goal; filteredGoals: Goal[]; members: { id: string; name: string; avatar: string }[];
   projects: { id: string; title: string; goalId: string | null }[];
   expandedGoals: Set<string>; toggleExpand: (id: string) => void;
-  tags: Array<{ id: string; name: string; color: string }>; depth: number; onOpenDetail: () => void;
+  tags: Array<{ id: string; name: string; color: string }>; depth: number; onOpenDetail: (id: string) => void;
   commentCounts: Map<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void;
+  visited?: Set<string>;
 }) {
+  if (depth > 10 || (visited && visited.has(goal.id))) return null;
   const children = filteredGoals.filter(g => g.parentId === goal.id);
   const hasChildren = children.length > 0;
   const isExpanded = expandedGoals.has(goal.id);
+  const nextVisited = new Set(visited); nextVisited.add(goal.id);
   return (
     <div>
-      <GoalCard goal={goal} members={members} projects={projects} expanded={isExpanded} hasChildren={hasChildren} onToggle={() => toggleExpand(goal.id)} tags={tags} onOpenDetail={onOpenDetail} commentCount={commentCounts.get(goal.id) || 0} batchMode={batchMode} selected={selectedIds.has(goal.id)} onToggleSelect={() => onToggleSelect(goal.id)} />
+      <GoalCard goal={goal} members={members} projects={projects} expanded={isExpanded} hasChildren={hasChildren} onToggle={() => toggleExpand(goal.id)} tags={tags} onOpenDetail={() => onOpenDetail(goal.id)} commentCount={commentCounts.get(goal.id) || 0} batchMode={batchMode} selected={selectedIds.has(goal.id)} onToggleSelect={() => onToggleSelect(goal.id)} />
       {hasChildren && isExpanded && (
         <div className="mt-3 space-y-3 border-l-2 border-primary/20 pl-4" style={{ marginLeft: Math.min(depth * 20 + 16, 80) + 'px' }}>
           {children.map(child => (
-            <GoalTreeNode key={child.id} goal={child} filteredGoals={filteredGoals} members={members} projects={projects} expandedGoals={expandedGoals} toggleExpand={toggleExpand} tags={tags} depth={depth + 1} onOpenDetail={() => onOpenDetail()} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={onToggleSelect} />
+            <GoalTreeNode key={child.id} goal={child} filteredGoals={filteredGoals} members={members} projects={projects} expandedGoals={expandedGoals} toggleExpand={toggleExpand} tags={tags} depth={depth + 1} onOpenDetail={onOpenDetail} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={onToggleSelect} visited={nextVisited} />
           ))}
         </div>
       )}
@@ -198,11 +202,11 @@ export function GoalTreeNode({ goal, filteredGoals, members, projects, expandedG
 
 export function GoalListView({ goals, members, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect }: { goals: Goal[]; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }) {
   const { dispatch } = useStore();
+  const { can } = usePermissions();
   const [showMenuId, setShowMenuId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   type TreeItem = { goal: Goal; depth: number; connector: string; parentTitle: string };
-
   const treeItems = useMemo(() => {
     const goalMap = new Map<string, Goal>();
     goals.forEach(g => goalMap.set(g.id, g));
@@ -303,7 +307,7 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
                   <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
                   <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border z-50 py-1">
                     <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); }}><Edit2 size={12} /> 编辑</button>
-                    <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>
+                    {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
                   </div>
                 </div>
               )}
@@ -317,6 +321,7 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
 
 export function GoalTableView({ goals, members, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect }: { goals: Goal[]; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }) {
   const { dispatch } = useStore();
+  const { can } = usePermissions();
   const [showMenuId, setShowMenuId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string>('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -442,7 +447,7 @@ export function GoalTableView({ goals, members, onOpenDetail, commentCounts, bat
                           <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
                           <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border z-50 py-1">
                             <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); }}><Edit2 size={12} /> 编辑</button>
-                            <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>
+                            {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
                           </div>
                         </div>
                       )}

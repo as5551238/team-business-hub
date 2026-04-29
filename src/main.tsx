@@ -31,10 +31,15 @@ class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError:
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <GlobalErrorBoundary>
-      <App />
-    </GlobalErrorBoundary>
-  </StrictMode>,
-)
+const root = document.getElementById('root');
+if (!root) {
+  document.body.innerHTML = '<div style="padding:2rem;text-align:center"><h1>加载失败</h1><p>请刷新页面重试</p></div>';
+} else {
+  createRoot(root).render(
+    <StrictMode>
+      <GlobalErrorBoundary>
+        <App />
+      </GlobalErrorBoundary>
+    </StrictMode>,
+  );
+}

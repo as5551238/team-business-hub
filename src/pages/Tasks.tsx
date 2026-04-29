@@ -417,10 +417,12 @@ export default function Tasks() {
     dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { priority: np } } });
   }, [dispatch]);
 
-  function getAllDescendants(parentId: string): Task[] {
+  function getAllDescendants(parentId: string, visited = new Set<string>()): Task[] {
+    if (visited.has(parentId)) return [];
+    visited.add(parentId);
     const ch = childMap[parentId] || [];
     let res: Task[] = [];
-    ch.forEach(c => { res.push(c); res = res.concat(getAllDescendants(c.id)); });
+    ch.forEach(c => { res.push(c); res = res.concat(getAllDescendants(c.id, visited)); });
     return res;
   }
 
@@ -511,7 +513,7 @@ export default function Tasks() {
           {cols.map(col => {
             const items = getItems(col.key);
             return (
-              <div key={col.key} className={`w-[260px] sm:w-[300px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={(e: React.DragEvent) => e.preventDefault()} onDrop={(e: React.DragEvent) => { e.preventDefault(); const taskId = e.dataTransfer.getData('text/plain'); if (!taskId) return; if (onDropCustom) { onDropCustom(taskId, col.key); return; } if (enableDrag) { const validStatuses: Record<string, TaskStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done', blocked: 'blocked', cancelled: 'cancelled' }; const newStatus = validStatuses[col.key]; if (newStatus) dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status: newStatus } } }); } }}>
+              <div key={col.key} className={`w-[260px] sm:w-[300px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={(e: React.DragEvent) => e.preventDefault()} onDrop={(e: React.DragEvent) => { e.preventDefault(); const taskId = e.dataTransfer.getData('text/plain'); if (!taskId || !can('edit_tasks')) return; if (onDropCustom) { onDropCustom(taskId, col.key); return; } if (enableDrag) { const validStatuses: Record<string, TaskStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done', blocked: 'blocked', cancelled: 'cancelled' }; const newStatus = validStatuses[col.key]; if (newStatus) dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status: newStatus } } }); } }}>
                 <div className={`flex items-center gap-2 px-4 pb-2 border-b-2 mx-3 mb-3 ${col.color || 'border-t-gray-400'}`}><span className="font-semibold text-sm">{col.label}</span><span className="text-xs text-muted-foreground ml-auto">{items.length}</span></div>
                 <div className="px-3 pb-3 space-y-2 max-h-[calc(100vh-320px)] overflow-y-auto">{items.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">暂无任务</p>}{items.map(task => <TaskCard key={task.id} task={task} compact tags={tags} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={onOpenDetail} getName={getName} getAvatar={getAvatar} enableDrag={!!enableDrag || !!onDropCustom} />)}</div>
               </div>
@@ -797,8 +799,8 @@ export default function Tasks() {
   }, [selectedIds.size, filteredTasks]);
 
   const batchDelete = useCallback(() => { if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
-  const batchUpdateStatus = useCallback((status: string) => { if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); }, [selectedIds, dispatch]);
-  const batchAssign = useCallback((leaderId: string) => { if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
+  const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_tasks')) return; if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); }, [selectedIds, dispatch]);
+  const batchAssign = useCallback((leaderId: string) => { if (!can('edit_tasks')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
 
   function closeCreateDialog() { setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate(''); }
 
