@@ -105,7 +105,7 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: any[
     reviews: (data as any).reviews || [],
     comments: (data as any).comments || [],
     bookmarks: (data as any).bookmarks || [],
-    currentUser: data.currentUser || data.members?.[0] || null,
+    currentUser: data.currentUser ?? null,
     viewingMemberId: (data as any).viewingMemberId || null,
     batchOperations: (data as any).batchOperations || [],
   };

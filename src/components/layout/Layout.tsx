@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Target, FolderKanban, CheckSquare,
   BarChart3, Users, Bell, Search, Menu, X, ChevronDown,
   Settings, Cloud, CloudOff, Loader2, FileText, Eye, Users2,
-  Wrench, Calendar, StickyNote
+  Wrench, Calendar, StickyNote, LogOut
 } from 'lucide-react';
 
 type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'admin';
@@ -187,8 +187,8 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
                   <div className="font-medium text-sm">{user?.name}</div>
                   <div className="text-xs text-muted-foreground">{user?.email}</div>
                 </div>
-                <div className="py-1 max-h-64 overflow-y-auto">
-                {visibleMembers.map(m => (
+              <div className="py-1 max-h-64 overflow-y-auto">
+                 {visibleMembers.map(m => (
                     <button key={m.id}
                       onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_CURRENT_USER', payload: m.id }); setShowUserMenu(false); }}
                       className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted transition-colors text-left ${m.id === user?.id ? 'bg-primary/5 text-primary' : ''}`}>
@@ -197,6 +197,13 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
                       <span className="text-xs text-muted-foreground ml-auto">{m.department}</span>
                     </button>
                   ))}
+                </div>
+                <div className="border-t border-border px-4 py-2">
+                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.removeItem('tbh-current-user'); } catch {} dispatch({ type: 'SET_CURRENT_USER', payload: null }); setShowUserMenu(false); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-destructive transition-colors">
+                    <LogOut size={14} />
+                    <span>退出登录</span>
+                  </button>
                 </div>
               </div>
             )}

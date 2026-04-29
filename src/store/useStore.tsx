@@ -74,7 +74,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const data = await fetchAllFromSupabase();
       if (connectAbortRef.current) return false;
       if (data && data.members.length > 0) {
-        const { currentUser: curUser, viewingMemberId: curView } = useStore().state;
+        const curUser = stateRef.current?.currentUser || null;
+        const curView = stateRef.current?.viewingMemberId || null;
         dispatch({ type: 'SET_STATE', payload: { ...data, currentUser: curUser, viewingMemberId: curView } });
         localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey }));
         setConnectionMode('supabase');

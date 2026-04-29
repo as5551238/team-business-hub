@@ -206,6 +206,18 @@ function App() {
   }, []);
 
   const [loggedIn, setLoggedIn] = useState<string | null>(() => { try { return localStorage.getItem(LOGIN_KEY); } catch { return null; } });
+
+  // Sync loggedIn with store: when currentUser changes (e.g. logout, or switching users), update localStorage + loggedIn
+  const { state: appState } = useStore();
+  useEffect(() => {
+    const currentId = appState.currentUser?.id || null;
+    if (currentId) {
+      try { localStorage.setItem(LOGIN_KEY, currentId); } catch {}
+    } else {
+      try { localStorage.removeItem(LOGIN_KEY); } catch {}
+    }
+    setLoggedIn(currentId);
+  }, [appState.currentUser?.id]);
   return (
     <StoreProvider>
         {loggedIn ? <AppInner loggedIn={loggedIn} /> : <LoginScreen onLogin={(id) => setLoggedIn(id)} />}

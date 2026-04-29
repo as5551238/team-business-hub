@@ -89,7 +89,7 @@ export async function fetchAllFromSupabase(): Promise<AppState | null> {
       scheduleEvents: (scheduleRes.data || []).map(toCamel) as ScheduleEvent[],
       notes: (notesRes.data || []).map(toCamel) as Note[],
       comments: (commentsRes.data || []).map(toCamel) as Comment[],
-      currentUser: savedUser || (allMembers[0] ? allMembers[0] : null),
+      currentUser: savedUser || null,
       tags: [],
       savedViews: [],
     });
