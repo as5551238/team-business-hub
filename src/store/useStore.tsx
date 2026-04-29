@@ -201,8 +201,6 @@ export function useStore() {
   return { state, ...actions };
 }
 
-/**
-
 export function useDashboardStats() {
   const { goals, projects, tasks, notifications, currentUser } = useStore().state;
   const todayStr = new Date().toISOString().split('T')[0];
@@ -289,7 +287,8 @@ function hasPermission(state: AppState, memberId: string, permission: Permission
 }
 
 export function usePermissions() {
-  const { state, dispatch } = useStore();
+  const store = useStore();
+  const { state, dispatch } = store;
   const user = state.currentUser;
   return {
     can: (permission: Permission) => user ? hasPermission(state, user.id, permission) : false,
