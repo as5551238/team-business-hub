@@ -128,7 +128,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
                     团队整体视图
                   </button>
                 </div>
-                {activeMembers.map(m => (
+                {visibleMembers.map(m => (
                   <button key={m.id} onClick={() => { setViewingMember(m.id); setShowMemberFilter(false); }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left ${viewingMemberId === m.id ? 'bg-primary/10 text-primary' : ''}`}>
                     <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary">{m.avatar}</div>
