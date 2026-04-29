@@ -396,7 +396,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
           ) : stats.todayTodos.map(task => {
             const doneSubs = (task.subtasks || []).filter(s => s.completed).length;
             const totalSubs = (task.subtasks || []).length;
-            const taskComments = state.comments.filter(c => c.itemId === task.id).length;
+            const taskComments = (state.comments || []).filter(c => c.itemId === task.id).length;
             return (
               <div key={task.id} className="px-4 md:px-5 py-3.5 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => openDetail(task.id, 'task')}>
                 <div className="flex items-start gap-3">
@@ -436,7 +436,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
         </div>
         <div className="divide-y divide-border">
           {activeGoals.slice(0, 5).map(goal => {
-            const goalComments = state.comments.filter(c => c.itemId === goal.id).length;
+            const goalComments = (state.comments || []).filter(c => c.itemId === goal.id).length;
             return (
               <div key={goal.id} className="px-4 md:px-5 py-3.5 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => openDetail(goal.id, 'goal')}>
                 <div className="flex items-center justify-between mb-2">

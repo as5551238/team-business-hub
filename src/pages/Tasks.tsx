@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useStore, useTags, useViewingMember, useMemberLookup, useItemLookupMaps } from '@/store/useStore';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
-import type { Task, TaskStatus, TaskPriority, Comment, SubTask, ItemType } from '@/types';
+import type { Task, TaskStatus, TaskPriority, Comment } from '@/types';
 import { cn } from '@/lib/utils';
-import { Plus, Search, LayoutGrid, ListTodo, Table2, ChevronDown, ChevronRight, Calendar, User, X, Clock, AlertCircle, CheckCircle2, Circle, Ban, GripVertical, FileText, Copy, MessageSquare, Trash2, Check, UserPlus, Filter } from 'lucide-react';
+import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, Ban, GripVertical, FileText, Copy, MessageSquare, Trash2, Check, Filter } from 'lucide-react';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 
+const TODAY = new Date();
 function getTodayStr() { return new Date().toISOString().split('T')[0]; }
 
 type ViewMode = 'board' | 'list' | 'table' | 'matrix' | 'canvas' | 'timeline';

@@ -41,10 +41,12 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const saved = localStorage.getItem(LOGIN_KEY);
-    if (saved && state.members.find(m => m.id === saved)) {
-      onLogin(saved);
-    }
+    try {
+      const saved = localStorage.getItem(LOGIN_KEY);
+      if (saved && state.members.find(m => m.id === saved)) {
+        onLogin(saved);
+      }
+    } catch {}
   }, []);
 
   function handleLogin() {

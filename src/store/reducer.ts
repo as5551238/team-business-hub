@@ -1,4 +1,4 @@
-import type { AppState, Goal, Project, Task, Member, SubTask, ItemLink, Goal as _, BackupData, Bookmark } from '@/types';
+import type { AppState, Goal, Project, Task, Member, SubTask, ItemLink, BackupData, Bookmark } from '@/types';
 import { isSupabaseConfigured } from '@/supabase/client';
 import type { Action } from './types';
 import { ensureAppStateDefaults } from './types';
@@ -89,7 +89,7 @@ export function reducer(state: AppState, action: Action): AppState {
         }
         (s as any)[key] = merged;
       }
-      return s; // Skip ensureAppStateDefaults — state is already normalized
+      return ensureAppStateDefaults(s as any);
     }
 
     case 'SET_CONNECTION_MODE':
@@ -609,19 +609,22 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'ADD_COMMENT': {
+      const comments = state.comments || [];
       const comment = { ...action.payload, id: `c_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, createdAt: new Date().toISOString() };
       supabaseInsert('comments', comment);
-      return { ...state, comments: [...state.comments, comment] };
+      return { ...state, comments: [...comments, comment] };
     }
 
     case 'DELETE_COMMENT': {
+      const comments = state.comments || [];
       supabaseDelete('comments', action.payload);
-      return { ...state, comments: state.comments.filter(c => c.id !== action.payload) };
+      return { ...state, comments: comments.filter(c => c.id !== action.payload) };
     }
 
     case 'UPDATE_COMMENT': {
+      const comments = state.comments || [];
       supabaseUpdate('comments', action.payload.id, action.payload.updates);
-      return { ...state, comments: state.comments.map(c => c.id === action.payload.id ? { ...c, ...action.payload.updates } : c) };
+      return { ...state, comments: comments.map(c => c.id === action.payload.id ? { ...c, ...action.payload.updates } : c) };
     }
 
     case 'ADD_BOOKMARK': {

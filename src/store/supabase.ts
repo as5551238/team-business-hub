@@ -72,7 +72,8 @@ export async function fetchAllFromSupabase(): Promise<AppState | null> {
     }
     if (membersRes.error) { return null; }
     const allMembers = (membersRes.data || []).map(toCamel) as Member[];
-    const savedUserId = localStorage.getItem(CURRENT_USER_KEY);
+    let savedUserId: string | null = null;
+    try { savedUserId = localStorage.getItem(CURRENT_USER_KEY); } catch {}
     const savedUser = savedUserId ? allMembers.find(m => m.id === savedUserId) : null;
     return ensureAppStateDefaults({
       members: allMembers,

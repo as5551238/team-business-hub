@@ -59,15 +59,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     } catch {
     }
-    return () => { cleanupRealtime(); };
+    return () => { connectAbortRef.current = true; cleanupRealtime(); };
   }, []);
 
+  const connectAbortRef = useRef(false);
   const doConnect = useCallback(async (url: string, anonKey: string): Promise<boolean> => {
+    connectAbortRef.current = false;
     setConnectionMode('loading');
     setConnectionError(null);
     try {
+      cleanupRealtime();
       initSupabase(url, anonKey);
       const data = await fetchAllFromSupabase();
+      if (connectAbortRef.current) return false;
       if (data && data.members.length > 0) {
         dispatch({ type: 'MERGE_STATE', payload: data });
         localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey }));
@@ -159,7 +163,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const disconnect = useCallback(() => {
     cleanupRealtime();
     resetSupabase();
-    localStorage.removeItem(SUPABASE_CONFIG_KEY);
+    try { localStorage.removeItem(SUPABASE_CONFIG_KEY); } catch {}
     setConnectionMode('local');
     setConnectionError(null);
   }, []);
@@ -197,35 +201,7 @@ export function useStore() {
   return { state, ...actions };
 }
 
-/** Selector-based store hook: only re-renders when selected state slice changes.
- *  Uses shallow comparison for arrays/objects (length + ref check), Object.is for primitives.
- *  For filtered arrays (e.g. .filter()), the ref will change on every render —
- *  consumers should memoize their selector result or use useStore() for full access.
- */
-export function useStoreSelector<T>(selector: (state: AppState) => T): T {
-  const state = useContext(StateContext);
-  const actions = useContext(ActionsContext);
-  if (!state || !actions) throw new Error('useStoreSelector must be used within StoreProvider');
-  const [, forceUpdate] = useState(0);
-  const selectedRef = useRef<T>(selector(state));
-
-  const next = selector(state);
-  // For primitives: Object.is. For objects/arrays: reference equality.
-  const changed = !Object.is(next, selectedRef.current);
-  if (changed) {
-    selectedRef.current = next;
-  }
-
-  const changedRef = useRef(false);
-  changedRef.current = changed;
-  React.useLayoutEffect(() => {
-    if (changedRef.current) {
-      forceUpdate(v => v + 1);
-    }
-  });
-
-  return selectedRef.current;
-}
+/**
 
 export function useDashboardStats() {
   const { goals, projects, tasks, notifications, currentUser } = useStore().state;
