@@ -134,33 +134,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     cleanupRealtime();
     const sb = getSupabaseClient();
     if (!sb) return;
-    const rtDebounce = new Map<string, ReturnType<typeof setTimeout>>();
+    // Supabase Realtime postgres_changes is broken — use REST polling instead
     const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments'];
-    const channels = tables.map(table => {
-      const ch = sb!.channel(`realtime-${table}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
-          const pending = rtDebounce.get(table);
-          if (pending) clearTimeout(pending);
-          rtDebounce.set(table, setTimeout(async () => {
-            rtDebounce.delete(table);
-            try {
-              const { data } = await sb.from(table).select('*');
-              const key = table === 'item_links' ? 'itemLinks' : table === 'schedule_events' ? 'scheduleEvents' : table;
-              const camelData = (data || []).map(toCamel);
-              dispatch({ type: 'MERGE_STATE', payload: { [key]: camelData } });
-            } catch {
-            }
-          }, 2000));
-        })
-        .subscribe();
-      return ch;
-    });
-    realtimeChannels.current = channels;
+    const poll = async () => {
+      try {
+        const results = await Promise.all(tables.map(table =>
+          sb.from(table).select('*').then(({ data }) => {
+            const key = table === 'item_links' ? 'itemLinks' : table === 'schedule_events' ? 'scheduleEvents' : table;
+            return { key, data: (data || []).map(toCamel) };
+          })
+        ));
+        const payload: Record<string, any> = {};
+        results.forEach(({ key, data }) => { payload[key] = data; });
+        dispatch({ type: 'MERGE_STATE', payload });
+      } catch {
+      }
+    };
+    poll();
+    const timerId = window.setInterval(poll, 30000);
+    realtimeChannels.current = [timerId];
   }
 
   function cleanupRealtime() {
-    realtimeChannels.current.forEach(ch => { try { ch.unsubscribe(); } catch {
-    } });
+    const id = realtimeChannels.current[0];
+    if (typeof id === 'number') window.clearInterval(id);
     realtimeChannels.current = [];
   }
 

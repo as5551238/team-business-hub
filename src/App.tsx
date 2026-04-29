@@ -194,6 +194,15 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
 }
 
 function App() {
+  return (
+    <StoreProvider>
+      <AppShell />
+    </StoreProvider>
+  );
+}
+
+/** Wrapper inside StoreProvider: handles login state + localStorage migration + store sync */
+function AppShell() {
   // Migrate old localStorage key
   useEffect(() => {
     try {
@@ -205,24 +214,21 @@ function App() {
     } catch {}
   }, []);
 
+  const { state: appState } = useStore();
+  const currentUserId = appState.currentUser?.id || null;
   const [loggedIn, setLoggedIn] = useState<string | null>(() => { try { return localStorage.getItem(LOGIN_KEY); } catch { return null; } });
 
   // Sync loggedIn with store: when currentUser changes (e.g. logout, or switching users), update localStorage + loggedIn
-  const { state: appState } = useStore();
   useEffect(() => {
-    const currentId = appState.currentUser?.id || null;
-    if (currentId) {
-      try { localStorage.setItem(LOGIN_KEY, currentId); } catch {}
+    if (currentUserId) {
+      try { localStorage.setItem(LOGIN_KEY, currentUserId); } catch {}
     } else {
       try { localStorage.removeItem(LOGIN_KEY); } catch {}
     }
-    setLoggedIn(currentId);
-  }, [appState.currentUser?.id]);
-  return (
-    <StoreProvider>
-        {loggedIn ? <AppInner loggedIn={loggedIn} /> : <LoginScreen onLogin={(id) => setLoggedIn(id)} />}
-      </StoreProvider>
-  );
+    setLoggedIn(currentUserId);
+  }, [currentUserId]);
+
+  return loggedIn ? <AppInner loggedIn={loggedIn} /> : <LoginScreen onLogin={(id) => setLoggedIn(id)} />;
 }
 
 export default App;
