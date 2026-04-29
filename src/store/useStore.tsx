@@ -44,6 +44,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state]);
 
+  // Ensure localStorage is saved before page unload/refresh
+  useEffect(() => {
+    const handler = () => { saveLocalStateImmediate(stateRef.current); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
   // No separate immediate-save effect: the 2s debounce above already handles persistence.
   // The old per-render localStorage write was removed — it caused I/O blocking on every render.
 
