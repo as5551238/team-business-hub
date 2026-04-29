@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils';
 import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, Ban, GripVertical, FileText, Copy, MessageSquare, Trash2, Check, Filter } from 'lucide-react';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 
-const TODAY = new Date();
 function getTodayStr() { return new Date().toISOString().split('T')[0]; }
 
 type ViewMode = 'board' | 'list' | 'table' | 'matrix' | 'canvas' | 'timeline';
@@ -153,10 +152,10 @@ const TaskRow = React.memo(function TaskRow({ task, depth, childMap, expandedTas
 function isInTimeRange(dateStr: string | null, range: string): boolean {
   if (!dateStr) return false;
   const d = new Date(dateStr);
-  if (range === 'today') return d.toDateString() === TODAY.toDateString();
-  if (range === 'week') { const ws = new Date(TODAY); ws.setDate(TODAY.getDate() - TODAY.getDay()); ws.setHours(0, 0, 0, 0); return d >= ws; }
-  if (range === 'month') return d.getMonth() === TODAY.getMonth() && d.getFullYear() === TODAY.getFullYear();
-  if (range === 'quarter') { const q = Math.floor(TODAY.getMonth() / 3); return d.getMonth() >= q * 3 && d.getMonth() < (q + 1) * 3 && d.getFullYear() === TODAY.getFullYear(); }
+  if (range === 'today') return d.toDateString() === new Date().toDateString();
+  if (range === 'week') { const today = new Date(); const ws = new Date(today); ws.setDate(today.getDate() - today.getDay()); ws.setHours(0, 0, 0, 0); return d >= ws; }
+  if (range === 'month') { const today = new Date(); return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear(); }
+  if (range === 'quarter') { const today = new Date(); const q = Math.floor(today.getMonth() / 3); return d.getMonth() >= q * 3 && d.getMonth() < (q + 1) * 3 && d.getFullYear() === today.getFullYear(); }
   return true;
 }
 

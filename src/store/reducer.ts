@@ -379,6 +379,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_ITEM_LINK': {
+      if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
       s.itemLinks = s.itemLinks.filter(l => l.id !== action.payload);
       supabaseDelete('item_links', action.payload);
@@ -494,6 +495,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_TAG': {
+      if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
       s.tags = s.tags.filter(t => t.id !== action.payload);
       supabaseDelete('tags', action.payload);
@@ -510,6 +512,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_SAVED_VIEW': {
+      if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
       s.savedViews = s.savedViews.filter(v => v.id !== action.payload);
       supabaseDelete('saved_views', action.payload);
@@ -558,6 +561,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_CATEGORY': {
+      if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
       s.categories = s.categories.filter(c => c.id !== action.payload);
       supabaseDelete('categories', action.payload);
@@ -588,6 +592,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_TEMPLATE': {
+      if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
       s.templates = s.templates.filter(t => t.id !== action.payload);
       supabaseDelete('templates', action.payload);
@@ -612,6 +617,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_SCHEDULE_EVENT': {
+      if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
       s.scheduleEvents = s.scheduleEvents.filter(e => e.id !== action.payload);
       supabaseDelete('schedule_events', action.payload);
@@ -636,6 +642,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_NOTE': {
+      if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
       s.notes = s.notes.filter(n => n.id !== action.payload);
       supabaseDelete('notes', action.payload);
@@ -650,6 +657,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_COMMENT': {
+      if (!reducerCanDelete(state, 'delete_goals')) return state;
       const comments = state.comments || [];
       supabaseDelete('comments', action.payload);
       return { ...state, comments: comments.filter(c => c.id !== action.payload) };
@@ -677,6 +685,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_BOOKMARK': {
+      if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
       s.bookmarks = s.bookmarks.filter(b => b.id !== action.payload);
       supabaseDelete('bookmarks', action.payload);

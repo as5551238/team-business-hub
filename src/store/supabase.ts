@@ -124,16 +124,18 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   comments: new Set(['id','item_id','item_type','member_id','member_name','content','created_at']),
 };
 
+/** Columns that reference other tables via FK — empty strings must become null */
+const FK_COLUMNS = new Set(['owner_id','leader_id','supporter_ids','assignee_id','parent_id','goal_id','project_id','member_id','linked_item_id','source_id','target_id','related_id','item_id','created_by','updated_by']);
+
 /** Remove keys not present in DB table schema to avoid PostgREST 400 errors.
- *  Also converts empty strings to null so FK checks don't treat '' as a valid member ID. */
+ *  Converts empty strings to null only for FK columns (Postgres treats '' as non-null). */
 function filterColumns(table: string, snakeData: Record<string, any>): Record<string, any> {
   const allowed = TABLE_COLUMNS[table];
   if (!allowed) return snakeData; // unknown table — pass through (e.g. bookmarks/saved_views)
   const filtered: Record<string, any> = {};
   for (const [k, v] of Object.entries(snakeData)) {
     if (!allowed.has(k)) continue;
-    // Convert empty string to null (Postgres FK treats '' as a non-null value)
-    filtered[k] = v === '' ? null : v;
+    filtered[k] = (v === '' && FK_COLUMNS.has(k)) ? null : v;
   }
   return filtered;
 }
