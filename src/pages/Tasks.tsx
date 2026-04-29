@@ -317,13 +317,7 @@ export default function Tasks() {
   const [newColName, setNewColName] = useState('');
   useEffect(() => { try { localStorage.setItem(KANBAN_LS_KEY, JSON.stringify({ customMode: kanbanCustomMode, columns: customColumns, groupBy: kanbanGroupBy })); } catch {} }, [kanbanCustomMode, customColumns, kanbanGroupBy]);
 
-  const initRef = useRef(false);
-  useEffect(() => {
-    if (!initRef.current && currentUser && currentUser.role !== 'admin' && !viewingMemberId) {
-      initRef.current = true;
-      setViewingMember(currentUser.id);
-    }
-  }, [currentUser, viewingMemberId, setViewingMember]);
+  // All users default to team view — no auto-switch to personal view
 
   const { getName, getAvatar } = useMemberLookup();
   const { getProjectTitle: getProjectTitleFn, getTaskTitle } = useItemLookupMaps();
