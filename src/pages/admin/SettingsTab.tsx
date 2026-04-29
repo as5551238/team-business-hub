@@ -10,7 +10,7 @@ import {
   Database, Download, Upload, Copy, Mail, Trash2, ChevronDown,
   Tag as TagIcon,
 } from 'lucide-react';
-import { inputCls, loadEmailConfig, saveEmailConfig, loadWechatGroupConfig, saveWechatGroupConfig } from './constants';
+import { inputCls, loadEmailConfig, saveEmailConfig } from './constants';
 import type { EmailConfig } from './constants';
 
 function SupabaseSection() {
@@ -104,11 +104,9 @@ alter publication supabase_realtime add table activities;`}</pre>
 function WeChatSection() {
   const { tasks = [], members = [] } = useStore().state || {};
   const [config, setConfig] = useState<WeChatConfig>(loadWeChatConfig());
-  const [wechatGroup, setWechatGroup] = useState(loadWechatGroupConfig());
   const [testResult, setTestResult] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
   const [digestResult, setDigestResult] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
   const [testError, setTestError] = useState(getLastTestError());
-  const [groupSaveOk, setGroupSaveOk] = useState(false);
 
   function updateConfig(partial: Partial<WeChatConfig>) {
     setConfig(prev => {
@@ -117,21 +115,8 @@ function WeChatSection() {
       return newConfig;
     });
   }
-  function updateEvents(key: keyof WeChatConfig['notifyEvents'], val: boolean) {
-    setConfig(prev => {
-      const newConfig = { ...prev, notifyEvents: { ...prev.notifyEvents, [key]: val } };
-      saveWeChatConfig(newConfig);
-      return newConfig;
-    });
-  }
   function updateChannel(ch: NotifyChannel) { updateConfig({ channel: ch }); }
-  function saveGroupConfig() {
-    setWechatGroup(prev => { saveWechatGroupConfig(prev); return prev; });
-    setGroupSaveOk(true);
-    setTimeout(() => setGroupSaveOk(false), 2000);
-  }
 
-  const currentKey = config.channel === 'server_chan' ? config.serverChan.sendKey : config.workWechat.webhookUrl;
   const isReady = config.channel === 'server_chan' ? !!config.serverChan.sendKey : !!config.workWechat.webhookUrl;
 
   async function handleTest() {
@@ -177,30 +162,6 @@ function WeChatSection() {
           <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3 text-[10px] text-amber-800 space-y-1"><p className="font-medium">找不到群机器人？</p><ol className="list-decimal ml-4 space-y-0.5"><li>群机器人功能需由企业管理员在企业微信管理后台开启</li><li>路径：管理后台 - 应用管理 - 群机器人 - 开启</li><li>开启后在群聊右上角... - 群设置 - 群机器人 - 添加</li></ol><p className="mt-1">如果用个人微信群，请切换为 Server酱 通道。</p></div>
         </div>
       )}
-      <div>
-        <label className="block text-xs font-medium mb-1">企业微信群机器人独立配置（备用）</label>
-        <div className="flex items-center gap-2">
-          <input className="flex-1 border border-border rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx" value={wechatGroup.webhookUrl} onChange={e => setWechatGroup({ webhookUrl: e.target.value })} />
-          <button onClick={saveGroupConfig} className="px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">保存</button>
-          {groupSaveOk && <span className="text-xs text-green-600">已保存</span>}
-        </div>
-      </div>
-      <div><label className="block text-xs font-medium mb-2">通知事件</label>
-        <div className="space-y-2">
-          {([
-            { key: 'taskOverdue' as const, label: '任务逾期', desc: '超过截止日期时推送' },
-            { key: 'taskDue' as const, label: '任务到期提醒', desc: '即将到期时推送' },
-            { key: 'taskCreated' as const, label: '新任务分配', desc: '分配给成员时推送' },
-            { key: 'taskCompleted' as const, label: '任务完成', desc: '标记完成时推送' },
-            { key: 'goalUpdated' as const, label: '目标进度', desc: '进度变化时推送' },
-          ] as const).map(ev => (
-            <label key={ev.key} className="flex items-center justify-between py-1 cursor-pointer">
-              <div><span className="text-xs font-medium">{ev.label}</span><span className="text-[10px] text-muted-foreground ml-1">{ev.desc}</span></div>
-              <button onClick={() => updateEvents(ev.key, !config.notifyEvents[ev.key])} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${config.notifyEvents[ev.key] ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${config.notifyEvents[ev.key] ? 'translate-x-4' : 'translate-x-0.5'}`} /></button>
-            </label>
-          ))}
-        </div>
-      </div>
       <div className="flex items-center gap-2 pt-2 border-t border-border">
         <button onClick={handleTest} disabled={!isReady || testResult === 'sending'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50 transition-colors">{testResult === 'sending' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}{testResult === 'success' ? '发送成功!' : testResult === 'error' ? '发送失败' : '发送测试消息'}</button>
         {testResult === 'error' && testError && <div className="text-[10px] text-red-500 mt-1 max-w-[200px] truncate" title={testError}>{testError}</div>}

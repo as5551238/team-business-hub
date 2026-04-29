@@ -77,9 +77,3 @@ export function loadEmailConfig(): EmailConfig {
   return { enabled: false, smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', fromEmail: '' };
 }
 export function saveEmailConfig(c: EmailConfig) { try { localStorage.setItem('tbh-email-config', JSON.stringify(c)); } catch {} }
-
-export function loadWechatGroupConfig(): { webhookUrl: string } {
-  try { const s = localStorage.getItem('tbh-wechat-group-config'); if (s) return JSON.parse(s); } catch {}
-  return { webhookUrl: '' };
-}
-export function saveWechatGroupConfig(c: { webhookUrl: string }) { try { localStorage.setItem('tbh-wechat-group-config', JSON.stringify(c)); } catch {} }
