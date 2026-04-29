@@ -4,7 +4,7 @@ import { getSupabaseClient, isSupabaseConfigured, initSupabase, resetSupabase } 
 import type { ConnectionMode, SupabaseConfig, Action } from './types';
 import { SUPABASE_CONFIG_KEY } from './types';
 import { toCamel } from './types';
-import { reducer } from './reducer';
+import { reducer, hasPermission } from './reducer';
 import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert } from './supabase';
 import { generateAllData } from '@/data/dataGenerator';
 
@@ -285,21 +285,6 @@ export function useBackupExport(): BackupData {
     members, goals, projects, tasks, notifications, activities, itemLinks,
     tags, categories, templates, scheduleEvents, notes, reviews,
   };
-}
-
-function hasPermission(state: AppState, memberId: string, permission: Permission): boolean {
-  const member = state.members.find(m => m.id === memberId);
-  if (!member) return false;
-  if (member.role === 'admin') return true;
-  if (member.permissions && member.permissions.length > 0) {
-    if (member.permissions.includes('deny_all')) return false;
-    if (member.permissions.includes(permission)) return true;
-    return false;
-  }
-  if (member.role === 'manager' || member.role === 'leader') {
-    return !['manage_team', 'manage_settings'].includes(permission);
-  }
-  return ['view_goals', 'view_projects', 'view_tasks'].includes(permission);
 }
 
 export function usePermissions() {

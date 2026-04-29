@@ -1,9 +1,29 @@
-import type { AppState, Goal, Project, Task, Member, SubTask, ItemLink, BackupData, Bookmark } from '@/types';
+import type { AppState, Goal, Project, Task, Member, SubTask, ItemLink, BackupData, Bookmark, Permission } from '@/types';
 import { isSupabaseConfigured } from '@/supabase/client';
 import type { Action } from './types';
 import { ensureAppStateDefaults } from './types';
 import { supabaseUpsert, supabaseUpdate, supabaseInsert, supabaseDelete } from './supabase';
 import { genId } from './utils';
+
+export function hasPermission(state: AppState, memberId: string, permission: Permission): boolean {
+  const member = state.members.find(m => m.id === memberId);
+  if (!member) return false;
+  if (member.role === 'admin') return true;
+  if (member.permissions && member.permissions.length > 0) {
+    if (member.permissions.includes('deny_all')) return false;
+    if (member.permissions.includes(permission)) return true;
+    return false;
+  }
+  if (member.role === 'manager' || member.role === 'leader') {
+    return !['manage_team', 'manage_settings'].includes(permission);
+  }
+  return ['view_goals', 'view_projects', 'view_tasks'].includes(permission);
+}
+
+function reducerCanDelete(state: AppState, permission: Permission): boolean {
+  if (!state.currentUser) return false;
+  return hasPermission(state, state.currentUser.id, permission);
+}
 
 function calcGoalLevel(goals: Goal[], goalId: string, parentId: string | null, visited?: Set<string>): number {
   if (!parentId) return 0;
@@ -143,6 +163,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_GOAL': {
+      if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
       markPendingDelete(action.payload);
       s.goals = s.goals.filter(g => g.id !== action.payload);
@@ -227,6 +248,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_PROJECT': {
+      if (!reducerCanDelete(state, 'delete_projects')) return state;
       const s = needMutate(state);
       markPendingDelete(action.payload);
       s.projects = s.projects.filter(p => p.id !== action.payload);
@@ -290,6 +312,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_TASK': {
+      if (!reducerCanDelete(state, 'delete_tasks')) return state;
       const s = needMutate(state);
       markPendingDelete(action.payload);
       const t = s.tasks.find(t => t.id === action.payload);
@@ -432,6 +455,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_MEMBER': {
+      if (!reducerCanDelete(state, 'manage_team')) return state;
       const s = needMutate(state);
       markPendingDelete(action.payload);
       s.members = s.members.filter(m => m.id !== action.payload);
@@ -439,8 +463,10 @@ export function reducer(state: AppState, action: Action): AppState {
       return s;
     }
 
-    case 'RESET_DATA':
+    case 'RESET_DATA': {
+      if (!state.currentUser || state.currentUser.role !== 'admin') return state;
       return ensureAppStateDefaults(action.payload);
+    }
 
     case 'ADD_TAG': {
       const s = needMutate(state);
@@ -499,6 +525,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_REVIEW': {
+      if (!reducerCanDelete(state, 'manage_team')) return state;
       const s = needMutate(state);
       s.reviews = s.reviews.filter(r => r.id !== action.payload);
       supabaseDelete('reviews', action.payload);
