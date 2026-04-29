@@ -162,11 +162,8 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
   const { state, dispatch } = useStore();
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
 
-  useEffect(() => {
-    if (state.currentUser && state.currentUser.role !== 'admin') {
-      dispatch({ type: 'SET_VIEWING_MEMBER', payload: state.currentUser.id });
-    }
-  }, [state.currentUser?.id]);
+  // All users default to team view (viewingMemberId = null)
+  // No auto-switch to personal view for non-admins
 
   function renderPage() {
     switch (currentPage) {
