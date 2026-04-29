@@ -42,11 +42,7 @@ export default function Goals() {
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
-  useEffect(() => {
-    if (state.currentUser && state.currentUser.role !== 'admin' && viewingMemberId === null) {
-      setViewingMember(state.currentUser.id);
-    }
-  }, [state.currentUser, state.currentUser?.role, viewingMemberId, setViewingMember]);
+  // All users default to team view — no auto-switch to personal view
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedGoals(prev => {
