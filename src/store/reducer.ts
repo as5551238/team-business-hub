@@ -63,37 +63,31 @@ export function reducer(state: AppState, action: Action): AppState {
       const s = needMutate(state);
       const payload = action.payload;
       cleanPendingDeletes();
-      // Core tables: only update existing items, never add from remote (prevents delete-revive race)
       const CORE_ARRAYS = new Set(['goals', 'projects', 'tasks']);
       for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
         const newVal = payload[key];
-        if (Array.isArray(newVal) && Array.isArray(s[key])) {
-          const localArr = s[key] as any[];
-          const remoteArr = newVal as any[];
-          const localIds = new Map(localArr.map((item: any) => [item.id, item]));
-          const merged = [...localArr];
-          const isCoreTable = CORE_ARRAYS.has(key as string);
-          for (const remoteItem of remoteArr) {
-            if (isPendingDelete(remoteItem.id)) continue; // Skip recently-deleted items
-            if (localIds.has(remoteItem.id)) {
-              // Remote item exists locally — only update if remote is newer
-              const localItem = localIds.get(remoteItem.id);
-              const localUpdated = new Date(localItem.updatedAt || localItem.updated_at || 0);
-              const remoteUpdated = new Date(remoteItem.updatedAt || remoteItem.updated_at || 0);
-              if (remoteUpdated > localUpdated) {
-                const idx = merged.findIndex((m: any) => m.id === remoteItem.id);
-                if (idx !== -1) merged[idx] = remoteItem;
-              }
-            } else if (!isCoreTable) {
-              // Non-core tables: allow adding new items from remote
-              merged.push(remoteItem);
+        if (!Array.isArray(newVal)) { (s as any)[key] = newVal; continue; }
+        if (!Array.isArray(s[key])) continue;
+        const localArr = s[key] as any[];
+        const remoteArr = newVal as any[];
+        const localIds = new Map(localArr.map((item: any) => [item.id, item]));
+        const merged = [...localArr];
+        const isCoreTable = CORE_ARRAYS.has(key as string);
+        for (const remoteItem of remoteArr) {
+          if (isPendingDelete(remoteItem.id)) continue;
+          if (localIds.has(remoteItem.id)) {
+            const localItem = localIds.get(remoteItem.id);
+            const localUpdated = new Date(localItem.updatedAt || localItem.updated_at || 0);
+            const remoteUpdated = new Date(remoteItem.updatedAt || remoteItem.updated_at || 0);
+            if (remoteUpdated > localUpdated) {
+              const idx = merged.findIndex((m: any) => m.id === remoteItem.id);
+              if (idx !== -1) merged[idx] = remoteItem;
             }
+          } else if (!isCoreTable) {
+            merged.push(remoteItem);
           }
-          (s as any)[key] = merged;
-        } else {
-          // Non-array fields: just overwrite
-          (s as any)[key] = newVal;
         }
+        (s as any)[key] = merged;
       }
       return s; // Skip ensureAppStateDefaults — state is already normalized
     }

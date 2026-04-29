@@ -189,6 +189,11 @@ export function useStore() {
   const state = useContext(StateContext);
   const actions = useContext(ActionsContext);
   if (!state || !actions) throw new Error('useStore must be used within StoreProvider');
+  // Runtime safety: ensure critical array fields are always arrays even if corrupted
+  if (!Array.isArray(state.members)) (state as any).members = [];
+  if (!Array.isArray(state.goals)) (state as any).goals = [];
+  if (!Array.isArray(state.projects)) (state as any).projects = [];
+  if (!Array.isArray(state.tasks)) (state as any).tasks = [];
   return { state, ...actions };
 }
 

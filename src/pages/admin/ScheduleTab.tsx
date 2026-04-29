@@ -88,7 +88,7 @@ export function ScheduleTab() {
   function handleNewNote() { const folder = folderFilter === '全部' ? '工作' : folderFilter; const memberId = currentUser?.id || ''; addNote({ title: '新建笔记', content: '', folder, color: NOTE_COLORS[0], isPinned: false, linkedItemId: null, linkedItemType: null, createdBy: memberId, updatedBy: memberId }); }
   function handleDeleteNote(id: string, title: string) { if (!confirm(`确定要删除笔记「${title}」吗？`)) return; deleteNote(id); if (selectedNoteId === id) setSelectedNoteId(null); }
   function togglePin(id: string, current: boolean) { updateNote(id, { isPinned: !current }); }
-  function handleFolderSelect(val: string) { if (val === '__new__') { const name = prompt('输入新文件夹名称：'); if (name && name.trim()) { FOLDERS.push(name.trim()); setFolderFilter(name.trim()); } return; } setFolderFilter(val); setSelectedNoteId(null); }
+  function handleFolderSelect(val: string) { if (val === '__new__') { const name = prompt('输入新文件夹名称：'); if (name && name.trim()) { setFolderFilter(name.trim()); } return; } setFolderFilter(val); setSelectedNoteId(null); }
   function formatTime(iso: string) { const d = new Date(iso); const now = new Date(); const diff = now.getTime() - d.getTime(); if (diff < 60000) return '刚刚'; if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`; if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`; return `${d.getMonth() + 1}/${d.getDate()}`; }
   const selectedEvt = selectedEvent ? events.find(e => e.id === selectedEvent) : null;
 

@@ -137,7 +137,24 @@ export default function Projects() {
           <p className="text-sm text-muted-foreground mt-0.5">管理团队项目，推进目标落地执行</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setBatchMode(!batchMode)} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted'}`}><Check size={14} />{batchMode ? '退出批量' : '批量选择'}</button>
+          {batchMode && selectedIds.size > 0 && (
+            <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 mr-2">
+              <span className="text-xs font-medium">已选 {selectedIds.size} 项</span>
+              <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={batchDelete}>
+                <Trash2 size={12} /> 删除
+              </button>
+              <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
+                <option value="">改状态</option><option value="planning">规划中</option><option value="in_progress">进行中</option><option value="completed">已完成</option><option value="paused">已暂停</option><option value="cancelled">已取消</option>
+              </select>
+              {batchStatus && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={() => { batchUpdateStatus(batchStatus); }}>确认</button>}
+              <select value={batchLeader} onChange={e => setBatchLeader(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
+                <option value="">分配给</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+              {batchLeader && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={() => { batchAssign(batchLeader); }}>确认</button>}
+              <button className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground" onClick={() => setSelectedIds(new Set())}>清空</button>
+            </div>
+          )}
+          <button onClick={() => { setBatchMode(!batchMode); setSelectedIds(new Set()); setBatchStatus(''); setBatchLeader(''); }} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
           <button onClick={() => setShowCreateDialog(true)} className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"><Plus size={16} /> 新建项目</button>
         </div>
       </div>
@@ -182,17 +199,6 @@ export default function Projects() {
       {viewMode === 'matrix' && (filteredProjects.length > 0 ? <ProjectMatrixView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-white rounded-xl border border-border p-12 text-center"><FolderKanban size={40} className="mx-auto text-muted-foreground/30 mb-3" /><p className="text-muted-foreground">{emptyMessage}</p></div>)}
       {viewMode === 'timeline' && (filteredProjects.length > 0 ? <ProjectTimelineView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-white rounded-xl border border-border p-12 text-center"><FolderKanban size={40} className="mx-auto text-muted-foreground/30 mb-3" /><p className="text-muted-foreground">{emptyMessage}</p></div>)}
 
-      {batchMode && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border shadow-lg z-40 px-4 py-3 flex items-center gap-3 flex-wrap">
-          <button onClick={toggleSelectAll} className="text-sm px-3 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors">{selectedIds.size === filteredProjects.length ? '取消全选' : '全选'}</button>
-          <span className="text-sm text-muted-foreground">已选 {selectedIds.size} 项</span>
-          <div className="w-px h-5 bg-border" />
-          <button onClick={batchDelete} disabled={selectedIds.size === 0} className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"><Trash2 size={14} /> 删除</button>
-          <select className="text-sm border border-border rounded-lg px-2 py-1.5 bg-white" value={batchStatus} onChange={e => batchUpdateStatus(e.target.value)}><option value="">修改状态</option><option value="planning">规划中</option><option value="in_progress">进行中</option><option value="completed">已完成</option><option value="paused">已暂停</option><option value="cancelled">已取消</option></select>
-          <select className="text-sm border border-border rounded-lg px-2 py-1.5 bg-white" value={batchLeader} onChange={e => batchAssign(e.target.value)}><option value="">分配人员</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
-          <button onClick={() => { setBatchMode(false); setSelectedIds(new Set()); }} className="text-sm px-3 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors ml-auto">退出批量</button>
-        </div>
-      )}
 
       {showCreateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
