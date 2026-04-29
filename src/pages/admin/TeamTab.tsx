@@ -7,7 +7,7 @@ import { inputCls, roleLabels, roleColors, permissionDesc, allPermissions, permL
 
 export function TeamTab() {
   const { state, dispatch } = useStore();
-  const { members, tasks, projects, currentUser } = state;
+  const { members = [], tasks = [], projects = [], currentUser } = state;
   const { isAdmin, can: hasPermission } = usePermissions();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedMember, setSelectedMember] = useState<string | null>(null);

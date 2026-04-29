@@ -102,7 +102,7 @@ alter publication supabase_realtime add table activities;`}</pre>
 }
 
 function WeChatSection() {
-  const { tasks = [], members = [] } = useStore().state;
+  const { tasks = [], members = [] } = useStore().state || {};
   const [config, setConfig] = useState<WeChatConfig>(loadWeChatConfig());
   const [wechatGroup, setWechatGroup] = useState(loadWechatGroupConfig());
   const [testResult, setTestResult] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');

@@ -289,11 +289,10 @@ function hasPermission(state: AppState, memberId: string, permission: Permission
 }
 
 export function usePermissions() {
-  const { members, currentUser } = useStore().state;
-  const dispatch = useStore().dispatch;
-  const user = currentUser;
+  const { state, dispatch } = useStore();
+  const user = state.currentUser;
   return {
-    can: (permission: Permission) => user ? hasPermission(members, user.id, permission) : false,
+    can: (permission: Permission) => user ? hasPermission(state, user.id, permission) : false,
     isAdmin: user?.role === 'admin',
     isManager: user?.role === 'manager' || user?.role === 'admin',
     setMemberPermissions: (memberId: string, permissions: Permission[]) => {
