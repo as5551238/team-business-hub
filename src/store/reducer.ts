@@ -76,23 +76,17 @@ export function reducer(state: AppState, action: Action): AppState {
       return ensureAppStateDefaults(action.payload);
 
     case 'MERGE_STATE': {
-      // Deep merge: Supabase is source of truth for synced arrays.
-      // - Remote items not in local → add
-      // - Local items not in remote → remove (unless pendingDelete or local-only field)
-      // - Both exist → keep whichever has newer updatedAt
+      // Deep merge: Supabase is source of truth for adding/updating items.
+      // Local items are NEVER removed by MERGE_STATE — deletion sync relies on
+      // markPendingDelete (blocks re-add) + supabaseDelete (removes from server).
+      // This prevents network failures from wiping out local data.
       const s = needMutate(state);
       const payload = action.payload;
       cleanPendingDeletes();
-      // Fields that are never pruned — local items are always kept.
-      // members: network failures could cause partial fetch, never trim local members
-      // tags: upsert may fail, keep local tags until confirmed synced
-      // bookmarks/savedViews: purely local data
-      const localOnlyFields = new Set(['bookmarks', 'savedViews', 'currentUser', 'viewingMemberId', 'connectionMode', 'connectionError', 'batchOperations', 'members', 'tags']);
       for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
         const newVal = payload[key];
         if (!Array.isArray(newVal)) { (s as any)[key] = newVal; continue; }
         if (!Array.isArray(s[key])) continue;
-        const isLocalOnly = localOnlyFields.has(key);
         const localArr = s[key] as any[];
         const remoteArr = newVal as any[];
         const remoteIds = new Set(remoteArr.map((item: any) => item.id));
@@ -109,22 +103,10 @@ export function reducer(state: AppState, action: Action): AppState {
             merged.push(remoteItem);
           }
         }
-        // For Supabase-synced fields, only keep local items that exist in remote
-        // (items deleted on other clients are removed; local-only items for unsynced fields are kept)
-        if (!isLocalOnly) {
-          for (const localItem of localArr) {
-            if (remoteIds.has(localItem.id)) continue;
-            if (isPendingDelete(localItem.id)) continue;
-            // Keep local-only items that were just created and may not have synced yet
-            // (created within last 30 seconds and not in pendingDeletes)
-            const age = Date.now() - new Date(localItem.createdAt || localItem.created_at || 0).getTime();
-            if (age < 30000) merged.push(localItem);
-          }
-        } else {
-          // Local-only fields: keep all local items
-          for (const localItem of localArr) {
-            if (!remoteIds.has(localItem.id)) merged.push(localItem);
-          }
+        // Always keep ALL local items (never prune)
+        for (const localItem of localArr) {
+          if (remoteIds.has(localItem.id)) continue;
+          merged.push(localItem);
         }
         (s as any)[key] = merged;
       }
