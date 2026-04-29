@@ -79,7 +79,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const localTags = stateRef.current?.tags || [];
         const localBookmarks = stateRef.current?.bookmarks || [];
         const localSavedViews = stateRef.current?.savedViews || [];
-        dispatch({ type: 'SET_STATE', payload: { ...data, currentUser: curUser, viewingMemberId: curView, tags: localTags, bookmarks: localBookmarks, savedViews: localSavedViews } });
+        // Migrate local-only tags to Supabase on first connect (one-time)
+        const remoteTagIds = new Set((data.tags || []).map((t: any) => t.id));
+        const unsyncedTags = localTags.filter(t => !remoteTagIds.has(t.id));
+        if (unsyncedTags.length > 0) {
+          for (const tag of unsyncedTags) { await supabaseUpsert('tags', tag); }
+          data.tags = [...(data.tags || []), ...unsyncedTags];
+        }
+        // Use MERGE_STATE instead of SET_STATE to protect local-only data
+        // from being wiped if Supabase fetch missed items (e.g. failed inserts)
+        dispatch({ type: 'MERGE_STATE', payload: { ...data, currentUser: curUser, viewingMemberId: curView, tags: data.tags || [], bookmarks: localBookmarks, savedViews: localSavedViews } });
         localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey }));
         setConnectionMode('supabase');
         setupRealtime();
@@ -145,7 +154,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const sb = getSupabaseClient();
     if (!sb) return;
     // Supabase Realtime postgres_changes is broken — use REST polling instead
-    const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments'];
+    const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags'];
     const poll = async () => {
       if (document.visibilityState === 'hidden') return;
       try {

@@ -76,32 +76,51 @@ export function reducer(state: AppState, action: Action): AppState {
       return ensureAppStateDefaults(action.payload);
 
     case 'MERGE_STATE': {
-      // Deep merge: for array fields, only update items that exist in remote but not locally modified recently
-      // This prevents Realtime from overwriting local edits made within the debounce window.
-      // pendingDeletes guards against deleted items being re-added before supabaseDelete completes.
+      // Deep merge: Supabase is source of truth for synced arrays.
+      // - Remote items not in local → add
+      // - Local items not in remote → remove (unless pendingDelete or local-only field)
+      // - Both exist → keep whichever has newer updatedAt
       const s = needMutate(state);
       const payload = action.payload;
       cleanPendingDeletes();
+      // Fields that are purely local (not synced from Supabase) — never prune local-only items
+      const localOnlyFields = new Set(['bookmarks', 'savedViews', 'currentUser', 'viewingMemberId', 'connectionMode', 'connectionError', 'batchOperations']);
       for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
         const newVal = payload[key];
         if (!Array.isArray(newVal)) { (s as any)[key] = newVal; continue; }
         if (!Array.isArray(s[key])) continue;
+        const isLocalOnly = localOnlyFields.has(key);
         const localArr = s[key] as any[];
         const remoteArr = newVal as any[];
+        const remoteIds = new Set(remoteArr.map((item: any) => item.id));
         const localIds = new Map(localArr.map((item: any) => [item.id, item]));
-        const merged = [...localArr];
+        const merged: any[] = [];
         for (const remoteItem of remoteArr) {
           if (isPendingDelete(remoteItem.id)) continue;
           if (localIds.has(remoteItem.id)) {
             const localItem = localIds.get(remoteItem.id);
             const localUpdated = new Date(localItem.updatedAt || localItem.updated_at || 0);
             const remoteUpdated = new Date(remoteItem.updatedAt || remoteItem.updated_at || 0);
-            if (remoteUpdated > localUpdated) {
-              const idx = merged.findIndex((m: any) => m.id === remoteItem.id);
-              if (idx !== -1) merged[idx] = remoteItem;
-            }
+            merged.push(remoteUpdated > localUpdated ? remoteItem : localItem);
           } else {
             merged.push(remoteItem);
+          }
+        }
+        // For Supabase-synced fields, only keep local items that exist in remote
+        // (items deleted on other clients are removed; local-only items for unsynced fields are kept)
+        if (!isLocalOnly) {
+          for (const localItem of localArr) {
+            if (remoteIds.has(localItem.id)) continue;
+            if (isPendingDelete(localItem.id)) continue;
+            // Keep local-only items that were just created and may not have synced yet
+            // (created within last 30 seconds and not in pendingDeletes)
+            const age = Date.now() - new Date(localItem.createdAt || localItem.created_at || 0).getTime();
+            if (age < 30000) merged.push(localItem);
+          }
+        } else {
+          // Local-only fields: keep all local items
+          for (const localItem of localArr) {
+            if (!remoteIds.has(localItem.id)) merged.push(localItem);
           }
         }
         (s as any)[key] = merged;
@@ -471,7 +490,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'ADD_TAG': {
       const s = needMutate(state);
       const now = tsNow();
-      const tag = { ...action.payload, id: genId('tag'), createdAt: now };
+      const tag = { ...action.payload, id: genId('tag'), createdAt: now, updatedAt: now };
       s.tags.push(tag);
       supabaseInsert('tags', tag);
       return s;
@@ -479,8 +498,9 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'UPDATE_TAG': {
       const s = needMutate(state);
+      const now = tsNow();
       const idx = s.tags.findIndex(t => t.id === action.payload.id);
-      if (idx !== -1) { s.tags[idx] = { ...s.tags[idx], ...action.payload.updates }; supabaseUpdate('tags', action.payload.id, action.payload.updates); }
+      if (idx !== -1) { s.tags[idx] = { ...s.tags[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('tags', action.payload.id, { ...action.payload.updates, updated_at: now }); }
       return s;
     }
 

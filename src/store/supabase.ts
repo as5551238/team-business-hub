@@ -49,7 +49,7 @@ export async function fetchAllFromSupabase(): Promise<AppState | null> {
   const sb = getSupabaseClient();
   if (!sb) return null;
   try {
-    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes] = await Promise.all([
+    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes] = await Promise.all([
       sb.from('members').select('*').order('join_date'),
       sb.from('goals').select('*').order('level'),
       sb.from('projects').select('*').order('created_at', { ascending: false }),
@@ -63,10 +63,11 @@ export async function fetchAllFromSupabase(): Promise<AppState | null> {
       sb.from('schedule_events').select('*').order('start_date'),
       sb.from('notes').select('*').order('updated_at', { ascending: false }),
       sb.from('comments').select('*').order('created_at', { ascending: false }),
+      sb.from('tags').select('*').order('created_at'),
     ]);
     // Check all table responses for errors
-    const allResults = [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes];
-    const tableNames = ['members', 'goals', 'projects', 'tasks', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments'];
+    const allResults = [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes];
+    const tableNames = ['members', 'goals', 'projects', 'tasks', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags'];
     for (let i = 0; i < allResults.length; i++) {
       if (allResults[i].error) { console.error(`Supabase fetch error [${tableNames[i]}]:`, allResults[i].error); }
     }
@@ -90,7 +91,7 @@ export async function fetchAllFromSupabase(): Promise<AppState | null> {
       notes: (notesRes.data || []).map(toCamel) as Note[],
       comments: (commentsRes.data || []).map(toCamel) as Comment[],
       currentUser: savedUser || null,
-      tags: [],
+      tags: (tagsRes.data || []).map(toCamel),
       savedViews: [],
     });
   } catch (e) { console.error('Supabase fetch failed:', e); return null; }
@@ -130,7 +131,7 @@ export async function supabaseInsert(table: string, data: Record<string, any>) {
   const sb = getSupabaseClient();
   if (!sb) return;
   await withRetry(async () => {
-    const res = await sb.from(table).insert(toSnake(data));
+    const res = await sb.from(table).upsert(toSnake(data));
     if (res.error) throw res.error;
   });
 }
