@@ -2,7 +2,7 @@ import type { AppState, Goal, Project, Task, Member, SubTask, ItemLink, BackupDa
 import { isSupabaseConfigured } from '@/supabase/client';
 import type { Action } from './types';
 import { ensureAppStateDefaults } from './types';
-import { supabaseUpsert, supabaseUpdate, supabaseInsert, supabaseDelete } from './supabase';
+import { supabaseUpsert, supabaseUpdate, supabaseInsert, supabaseDelete, logActivity } from './supabase';
 import { genId } from './utils';
 
 export function hasPermission(state: AppState, memberId: string, permission: Permission): boolean {
@@ -171,6 +171,7 @@ export function reducer(state: AppState, action: Action): AppState {
       };
       s.goals.push(g);
       supabaseInsert('goals', g);
+      logActivity({ memberId: state.currentUser?.id, action: '创建', targetType: '目标', targetId: g.id, targetTitle: g.title });
       return s;
     }
 
@@ -179,9 +180,10 @@ export function reducer(state: AppState, action: Action): AppState {
       const now = tsNow();
       const idx = s.goals.findIndex(g => g.id === action.payload.id);
       if (idx !== -1) {
+        const oldUpdatedAt = s.goals[idx].updatedAt;
         s.goals[idx] = { ...s.goals[idx], ...action.payload.updates, updatedAt: now };
         s.goals[idx].progress = calcGoalProgress(s.goals, action.payload.id);
-        supabaseUpdate('goals', action.payload.id, { ...action.payload.updates, progress: s.goals[idx].progress, updated_at: now });
+        supabaseUpdate('goals', action.payload.id, { ...action.payload.updates, progress: s.goals[idx].progress, updated_at: now }, oldUpdatedAt);
       }
       return s;
     }
@@ -190,6 +192,7 @@ export function reducer(state: AppState, action: Action): AppState {
       if (!reducerCanDelete(state, 'delete_goals')) return state;
       const s = needMutate(state);
       const now = tsNow();
+      const deletedGoal = state.goals.find(g => g.id === action.payload);
       markPendingDelete(action.payload);
       s.goals = s.goals.filter(g => g.id !== action.payload);
       const affectedGoals = s.goals.filter(g => g.parentId === action.payload);
@@ -199,6 +202,7 @@ export function reducer(state: AppState, action: Action): AppState {
       s.projects.forEach(p => { if (p.goalId === action.payload) p.goalId = null; });
       for (const p of affectedProjects) { supabaseUpdate('projects', p.id, { goal_id: null, updated_at: now }); }
       supabaseDelete('goals', action.payload);
+      logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '目标', targetId: action.payload, targetTitle: deletedGoal?.title || '' });
       return s;
     }
 
@@ -261,6 +265,7 @@ export function reducer(state: AppState, action: Action): AppState {
       };
       s.projects.push(p);
       supabaseInsert('projects', p);
+      logActivity({ memberId: state.currentUser?.id, action: '创建', targetType: '项目', targetId: p.id, targetTitle: p.title });
       return s;
     }
 
@@ -269,9 +274,10 @@ export function reducer(state: AppState, action: Action): AppState {
       const now = tsNow();
       const idx = s.projects.findIndex(p => p.id === action.payload.id);
       if (idx !== -1) {
+        const oldUpdatedAt = s.projects[idx].updatedAt;
         s.projects[idx] = { ...s.projects[idx], ...action.payload.updates, updatedAt: now };
         s.projects[idx].progress = calcProjectProgress(s.tasks, action.payload.id);
-        supabaseUpdate('projects', action.payload.id, { ...action.payload.updates, progress: s.projects[idx].progress, updated_at: now });
+        supabaseUpdate('projects', action.payload.id, { ...action.payload.updates, progress: s.projects[idx].progress, updated_at: now }, oldUpdatedAt);
       }
       return s;
     }
@@ -280,12 +286,14 @@ export function reducer(state: AppState, action: Action): AppState {
       if (!reducerCanDelete(state, 'delete_projects')) return state;
       const s = needMutate(state);
       const now = tsNow();
+      const deletedProject = state.projects.find(p => p.id === action.payload);
       markPendingDelete(action.payload);
       s.projects = s.projects.filter(p => p.id !== action.payload);
       const affectedTasks = s.tasks.filter(t => t.projectId === action.payload);
       s.tasks.forEach(t => { if (t.projectId === action.payload) t.projectId = null; });
       for (const t of affectedTasks) { supabaseUpdate('tasks', t.id, { project_id: null, updated_at: now }); }
       supabaseDelete('projects', action.payload);
+      logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '项目', targetId: action.payload, targetTitle: deletedProject?.title || '' });
       return s;
     }
 
@@ -322,6 +330,7 @@ export function reducer(state: AppState, action: Action): AppState {
         if (pIdx !== -1) { s.projects[pIdx].taskCount = (s.projects[pIdx].taskCount || 0) + 1; s.projects[pIdx].progress = calcProjectProgress(s.tasks, t.projectId); }
       }
       supabaseInsert('tasks', t);
+      logActivity({ memberId: state.currentUser?.id, action: '创建', targetType: '任务', targetId: t.id, targetTitle: t.title });
       return s;
     }
 
@@ -338,7 +347,7 @@ export function reducer(state: AppState, action: Action): AppState {
             if (pIdx !== -1) s.projects[pIdx].progress = calcProjectProgress(s.tasks, oldTask.projectId);
           }
         }
-        supabaseUpdate('tasks', action.payload.id, { ...action.payload.updates, updated_at: now });
+        supabaseUpdate('tasks', action.payload.id, { ...action.payload.updates, updated_at: now }, oldTask.updatedAt);
       }
       return s;
     }
@@ -358,6 +367,7 @@ export function reducer(state: AppState, action: Action): AppState {
         if (pIdx !== -1) { s.projects[pIdx].taskCount = Math.max(0, (s.projects[pIdx].taskCount || 0) - 1); s.projects[pIdx].progress = calcProjectProgress(s.tasks, t.projectId); }
       }
       supabaseDelete('tasks', action.payload);
+      logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '任务', targetId: action.payload, targetTitle: t?.title || '' });
       return s;
     }
 

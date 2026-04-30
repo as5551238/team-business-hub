@@ -172,12 +172,20 @@ export async function supabaseUpsert(table: string, data: Record<string, any> | 
   });
 }
 
-export async function supabaseUpdate(table: string, id: string, data: Record<string, any>) {
+export async function supabaseUpdate(table: string, id: string, data: Record<string, any>, oldUpdatedAt?: string) {
   const sb = getSupabaseClient();
   if (!sb) return;
   await withRetry(async () => {
-    const res = await sb.from(table).update(filterColumns(table, toSnake(data))).eq('id', id);
+    let q = sb.from(table).update(filterColumns(table, toSnake(data))).eq('id', id);
+    // Optimistic locking (DAT-01): only apply if record hasn't changed since last read
+    if (oldUpdatedAt) q = q.eq('updated_at', oldUpdatedAt);
+    const res = await q;
     if (res.error) throw res.error;
+    // If optimistic lock was specified but no rows affected, data was modified elsewhere
+    if (oldUpdatedAt && res.count === 0) {
+      console.warn(`[supabaseUpdate] optimistic lock conflict: ${table}/${id}`);
+      _onWriteError?.('数据已被其他人修改，请刷新页面后重试。');
+    }
   });
 }
 
@@ -197,4 +205,22 @@ export async function supabaseDelete(table: string, id: string) {
     const res = await sb.from(table).delete().eq('id', id);
     if (res.error) throw res.error;
   });
+}
+
+/** Audit log: fire-and-forget write to activities table (SEC-06).
+ *  Skips if no Supabase client or no current user. Never throws. */
+export function logActivity(params: { memberId?: string; action: string; targetType: string; targetId: string; targetTitle: string; details?: string }) {
+  try {
+    const sb = getSupabaseClient();
+    if (!sb || !params.memberId) return;
+    // Fire-and-forget: don't await, don't block caller
+    sb.from('activities').insert({
+      member_id: params.memberId,
+      action: params.action,
+      target_type: params.targetType,
+      target_id: params.targetId,
+      target_title: params.targetTitle.slice(0, 200),
+      details: (params.details || '').slice(0, 500),
+    }).then();
+  } catch {}
 }
