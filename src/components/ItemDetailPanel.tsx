@@ -238,7 +238,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
 
   function addCustomTag() {
     const val = customTagInput.trim();
-    if (val && !tags.includes(val)) {
+    if (val && !tags.includes(val) && canEdit) {
       updateItem({ tags: [...tags, val] });
       if (!state.tags.find(t => t.name === val)) {
         dispatch({ type: 'ADD_TAG', payload: { name: val, color: `hsl(${Math.random() * 360}, 70%, 60%)`, createdAt: new Date().toISOString() } });
@@ -248,7 +248,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   }
 
   function handleAddLink() {
-    if (!addLinkTargetId) return;
+    if (!addLinkTargetId || !canEdit) return;
     dispatch({ type: 'ADD_ITEM_LINK', payload: { sourceId: itemId, sourceType: itemType, targetId: addLinkTargetId, targetType: addLinkType, label: addLinkLabel || undefined, createdAt: new Date().toISOString() } });
     setAddLinkTargetId('');
     setAddLinkLabel('');
@@ -256,6 +256,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   }
 
   function handleDeleteLink(linkId: string) {
+    if (!canEdit) return;
     dispatch({ type: 'DELETE_ITEM_LINK', payload: linkId });
   }
 
@@ -320,6 +321,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   }
 
   function handleToggleFollowUp(commentId: string) {
+    if (!canEdit) return;
     const comment = state.comments.find(c => c.id === commentId);
     if (!comment) return;
     const nextStatus: 'none' | 'pending' | 'completed' = comment.followUpStatus === 'none' ? 'pending' : comment.followUpStatus === 'pending' ? 'completed' : 'none';

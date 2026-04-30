@@ -17,7 +17,12 @@ export function hasPermission(state: AppState, memberId: string, permission: Per
   if (member.role === 'manager' || member.role === 'leader') {
     return !['manage_team', 'manage_settings'].includes(permission);
   }
-  return ['view_goals', 'view_projects', 'view_tasks'].includes(permission);
+  // member: view + edit, but NO delete/manage_team/manage_settings/export_data
+  if (member.role === 'member') {
+    const forbidden = new Set(['manage_team', 'manage_settings', 'delete_goals', 'delete_projects', 'delete_tasks', 'export_data']);
+    return !forbidden.has(permission);
+  }
+  return false;
 }
 
 function reducerCanDelete(state: AppState, permission: Permission): boolean {
@@ -56,9 +61,9 @@ function calcProjectProgress(tasks: Task[], projectId: string): number {
   return Math.round(pt.filter(t => t.status === 'done').length / pt.length * 100);
 }
 
-// Lazy clone: only when we actually mutate state (perf: avoids JSON.stringify/parse on read-only actions)
+// Lazy clone: only when we actually mutate state (perf: structuredClone ~3x faster than JSON round-trip)
 function needMutate(state: AppState): AppState {
-  return JSON.parse(JSON.stringify(state)) as AppState;
+  return structuredClone(state);
 }
 function tsNow() { return new Date().toISOString(); }
 
@@ -76,13 +81,16 @@ export function reducer(state: AppState, action: Action): AppState {
       return ensureAppStateDefaults(action.payload);
 
     case 'MERGE_STATE': {
-      // Deep merge: Supabase is source of truth for adding/updating items.
-      // Local items are NEVER removed by MERGE_STATE — deletion sync relies on
-      // markPendingDelete (blocks re-add) + supabaseDelete (removes from server).
-      // This prevents network failures from wiping out local data.
+      // Deep merge: Supabase is source of truth for adding/updating/deleting items.
+      // Core tables (goals/projects/tasks/members/tags) use "remote is authority" —
+      // local items missing from remote are pruned (deletion sync).
+      // Auxiliary tables keep all local items (append-only, no prune).
       const s = needMutate(state);
       const payload = action.payload;
       cleanPendingDeletes();
+      // Tables where remote deletion should propagate to local
+      const pruneTables = new Set(['goals', 'projects', 'tasks', 'members', 'tags']);
+      const now = Date.now();
       for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
         const newVal = payload[key];
         if (!Array.isArray(newVal)) { (s as any)[key] = newVal; continue; }
@@ -103,10 +111,22 @@ export function reducer(state: AppState, action: Action): AppState {
             merged.push(remoteItem);
           }
         }
-        // Always keep ALL local items (never prune)
-        for (const localItem of localArr) {
-          if (remoteIds.has(localItem.id)) continue;
-          merged.push(localItem);
+        // For core tables: prune local items not in remote (deleted elsewhere)
+        // Exception: keep items created in last 30s (may not have synced yet)
+        if (pruneTables.has(key)) {
+          for (const localItem of localArr) {
+            if (remoteIds.has(localItem.id)) continue;
+            if (isPendingDelete(localItem.id)) continue;
+            const age = now - new Date(localItem.createdAt || localItem.created_at || 0).getTime();
+            if (age < 30000) { merged.push(localItem); continue; }
+            // Prune: item deleted from remote
+          }
+        } else {
+          // Auxiliary tables: keep all local items
+          for (const localItem of localArr) {
+            if (remoteIds.has(localItem.id)) continue;
+            merged.push(localItem);
+          }
         }
         (s as any)[key] = merged;
       }
@@ -399,6 +419,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'IMPORT_BACKUP': {
+      if (!reducerCanDelete(state, 'manage_settings')) return state;
       const backup = action.payload;
       const imported: AppState = {
         members: backup.members,
@@ -452,7 +473,14 @@ export function reducer(state: AppState, action: Action): AppState {
       return s;
     }
 
+    case 'ADD_NOTIFICATION': {
+      const s = needMutate(state);
+      s.notifications.unshift({ ...action.payload, read: action.payload.read ?? false });
+      return s;
+    }
+
     case 'ADD_MEMBER': {
+      if (!reducerCanDelete(state, 'manage_team')) return state;
       const s = needMutate(state);
       const m: Member = { ...action.payload, id: (action.payload as any).id || genId('m'), joinDate: new Date().toISOString().split('T')[0] };
       s.members.push(m);
@@ -462,8 +490,16 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'UPDATE_MEMBER': {
       const s = needMutate(state);
+      const isSelf = state.currentUser?.id === action.payload.id;
+      const isAdmin = state.currentUser?.role === 'admin';
+      const canManageTeam = hasPermission(state, state.currentUser?.id || '', 'manage_team');
+      if (!isSelf && !isAdmin && !canManageTeam) return state;
       const idx = s.members.findIndex(m => m.id === action.payload.id);
       if (idx !== -1) {
+        // Non-admins cannot change role
+        if (!isAdmin && (action.payload.updates as any).role !== undefined) {
+          (action.payload.updates as any).role = s.members[idx].role;
+        }
         s.members[idx] = { ...s.members[idx], ...action.payload.updates };
         if (state.currentUser?.id === action.payload.id) s.currentUser = { ...state.currentUser, ...action.payload.updates } as Member;
         supabaseUpdate('members', action.payload.id, action.payload.updates);

@@ -47,7 +47,7 @@ function ProjectCard({ project, members, expanded, hasChildren, onToggle, onClic
                 <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
                 <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border border-border z-50 py-1">
                   <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); onClick(); setShowMenu(false); }}><Edit2 size={14} /> 编辑</button>
-                  {project.status !== 'completed' && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, updates: { status: 'completed' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 完成</button>}
+                  {can('edit_projects') && project.status !== 'completed' && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, updates: { status: 'completed' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 完成</button>}
                   {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除</button>}
                 </div>
               </div>
@@ -481,6 +481,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
   commentCounts: Record<string, number>;
 } & { batchProps: BatchProps }) {
   const { dispatch } = useStore();
+  const { can } = usePermissions();
   const todayStr = new Date().toISOString().split('T')[0];
   const MS_DAY = 86400000;
   const URGENT_DAYS = 14;
@@ -551,7 +552,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
     if (dragRef.current) {
       if (dragRef.current.el) dragRef.current.el.classList.remove('opacity-30', 'scale-95');
       const targetQ = hoverQRef.current;
-      if (targetQ && quadrants[targetQ]) {
+      if (targetQ && quadrants[targetQ] && can('edit_projects')) {
         dispatch({ type: 'UPDATE_PROJECT', payload: { id: dragRef.current.id, updates: { priority: quadrants[targetQ].dropPriority } } });
       }
       // Delay reset so onClick can check dragMovedRef before hoverQ is cleared
@@ -653,6 +654,7 @@ export function ProjectCanvasView({ projects, members, setDetailItem, batchProps
   setDetailItem: (item: { type: 'project'; id: string }) => void;
 } & { batchProps: BatchProps }) {
   const { dispatch } = useStore();
+  const { can } = usePermissions();
   const [canvasScale, setCanvasScale] = useState(0.8);
   const [canvasPanX, setCanvasPanX] = useState(0);
   const [canvasPanY, setCanvasPanY] = useState(0);
@@ -685,8 +687,9 @@ export function ProjectCanvasView({ projects, members, setDetailItem, batchProps
         const d = itemDragRef.current;
         const newLeft = d.origLeft + (lastCX - d.startX);
         const newTop = d.origTop + (lastCY - d.startY);
-        dispatch({ type: 'UPDATE_PROJECT', payload: { id: d.id, updates: { canvasX: newLeft, canvasY: newTop } as Partial<Project> } });
-        itemDragRef.current = null;
+        if (can('edit_projects')) {
+          dispatch({ type: 'UPDATE_PROJECT', payload: { id: d.id, updates: { canvasX: newLeft, canvasY: newTop } as Partial<Project> } });
+        }        itemDragRef.current = null;
       }
       if (isPanningRef.current) {
         isPanningRef.current = false;

@@ -1,10 +1,11 @@
 import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark } from '@/types';
 
-export const STORAGE_KEY = 'team-business-hub-data';
+export const STORAGE_KEY = 'tbh-data';
+const LEGACY_STORAGE_KEY = 'team-business-hub-data';
 export const SUPABASE_CONFIG_KEY = 'tbh-supabase-config';
 export const CURRENT_USER_KEY = 'tbh-current-user';
 
-export type ConnectionMode = 'local' | 'supabase' | 'loading';
+export type ConnectionMode = 'local' | 'supabase' | 'loading' | 'offline';
 
 export interface SupabaseConfig {
   url: string;
@@ -32,6 +33,7 @@ export type Action =
   | { type: 'ADD_ITEM_LINK'; payload: Omit<ItemLink, 'id' | 'createdAt'> }
   | { type: 'DELETE_ITEM_LINK'; payload: string }
   | { type: 'IMPORT_BACKUP'; payload: BackupData }
+  | { type: 'ADD_NOTIFICATION'; payload: Omit<Notification, 'read'> & { read?: boolean } }
   | { type: 'MARK_NOTIFICATION_READ'; payload: string }
   | { type: 'MARK_ALL_NOTIFICATIONS_READ' }
   | { type: 'ADD_MEMBER'; payload: Omit<Member, 'id' | 'joinDate'> & { id?: string } }
@@ -87,27 +89,29 @@ export function toSnake(obj: Record<string, any>): Record<string, any> {
   return result;
 }
 
+const arr = (v: any) => Array.isArray(v) ? v : [];
+
 export function ensureAppStateDefaults(data: Partial<AppState> & { members: any[] }): AppState {
   const result: AppState = {
-    members: data.members || [],
-    goals: data.goals || [],
-    projects: data.projects || [],
-    tasks: data.tasks || [],
-    notifications: data.notifications || [],
-    activities: data.activities || [],
-    itemLinks: data.itemLinks || [],
-    tags: data.tags || [],
-    categories: data.categories || [],
-    templates: data.templates || [],
-    scheduleEvents: data.scheduleEvents || [],
-    notes: data.notes || [],
-    savedViews: data.savedViews || [],
-    reviews: (data as any).reviews || [],
-    comments: (data as any).comments || [],
-    bookmarks: (data as any).bookmarks || [],
+    members: arr(data.members),
+    goals: arr(data.goals),
+    projects: arr(data.projects),
+    tasks: arr(data.tasks),
+    notifications: arr(data.notifications),
+    activities: arr(data.activities),
+    itemLinks: arr(data.itemLinks),
+    tags: arr(data.tags),
+    categories: arr(data.categories),
+    templates: arr(data.templates),
+    scheduleEvents: arr(data.scheduleEvents),
+    notes: arr(data.notes),
+    savedViews: arr(data.savedViews),
+    reviews: arr((data as any).reviews),
+    comments: arr((data as any).comments),
+    bookmarks: arr((data as any).bookmarks),
     currentUser: data.currentUser ?? null,
     viewingMemberId: (data as any).viewingMemberId || null,
-    batchOperations: (data as any).batchOperations || [],
+    batchOperations: arr((data as any).batchOperations),
   };
   result.goals = result.goals.map((g: any) => ({
     ...g, tags: g.tags || [], keyResults: g.keyResults || [],

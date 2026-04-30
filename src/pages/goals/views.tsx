@@ -102,8 +102,8 @@ export function GoalCard({ goal, members, projects, expanded, hasChildren, onTog
               <div className="relative">
                 <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
                 <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border z-50 py-1">
-                  <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setShowMenu(false); }}><Edit2 size={14} /> 编辑目标</button>
-                  {goal.status !== 'completed' && (
+                  {can('edit_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setShowMenu(false); }}><Edit2 size={14} /> 编辑目标</button>}
+                  {can('edit_goals') && goal.status !== 'completed' && (
                     <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_GOAL', payload: { id: goal.id, updates: { status: 'completed' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 标记完成</button>
                   )}
                   {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除目标</button>}
@@ -510,6 +510,7 @@ function GoalMatrixQuadrantBox({ qKey, quadrants, grouped, quadrantBoxRefs, memb
 
 export function GoalMatrixView({ goals, members, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect }: { goals: Goal[]; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }) {
   const { dispatch } = useStore();
+  const { can } = usePermissions();
   const dragRef = useRef<{ id: string; el: HTMLElement } | null>(null);
   const hoverQRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -589,7 +590,7 @@ export function GoalMatrixView({ goals, members, onOpenDetail, commentCounts, ba
     const onUp = () => {
       if (dragRef.current) {
         if (dragRef.current.el) dragRef.current.el.classList.remove('opacity-30', 'scale-95');
-        if (hoverQRef.current && quadrants[hoverQRef.current]) {
+        if (hoverQRef.current && quadrants[hoverQRef.current] && can('edit_goals')) {
           dispatch({ type: 'UPDATE_GOAL', payload: { id: dragRef.current.id, updates: { priority: quadrants[hoverQRef.current].priorityMap } } });
         }
         const prevHover = hoverQRef.current;

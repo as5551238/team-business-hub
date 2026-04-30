@@ -5,7 +5,7 @@ import type { ConnectionMode, SupabaseConfig, Action } from './types';
 import { SUPABASE_CONFIG_KEY } from './types';
 import { toCamel } from './types';
 import { reducer, hasPermission } from './reducer';
-import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert } from './supabase';
+import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError } from './supabase';
 import { generateAllData } from '@/data/dataGenerator';
 
 // --- Split Context Pattern ---
@@ -31,6 +31,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const realtimeChannels = useRef<any[]>([]);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Wire up write-error notification (STA-01)
+  useEffect(() => {
+    setOnWriteError((msg: string) => {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { id: `err-${Date.now()}`, type: 'error', title: '同步失败', message: msg, read: false, createdAt: new Date().toISOString() } });
+    });
+    return () => { setOnWriteError(() => {}); };
+  }, [dispatch]);
 
   useEffect(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -65,7 +73,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const defaultKey = 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie';
         doConnect(defaultUrl, defaultKey);
       }
-    } catch {
+    } catch (e) {
+      console.error('[StoreProvider] failed to load Supabase config:', e);
     }
     return () => { connectAbortRef.current = true; cleanupRealtime(); };
   }, []);
@@ -81,18 +90,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const data = await fetchAllFromSupabase();
       if (connectAbortRef.current) return false;
       if (data) {
-        const curUser = stateRef.current?.currentUser || null;
         const curView = stateRef.current?.viewingMemberId || null;
-        const localTags = stateRef.current?.tags || [];
-        const localBookmarks = stateRef.current?.bookmarks || [];
-        const localSavedViews = stateRef.current?.savedViews || [];
-        const remoteTagIds = new Set((data.tags || []).map((t: any) => t.id));
+        const localTags = Array.isArray(stateRef.current?.tags) ? stateRef.current.tags : [];
+        const remoteTagIds = new Set(data.tags.map((t: any) => t.id));
         const unsyncedTags = localTags.filter(t => !remoteTagIds.has(t.id));
         if (unsyncedTags.length > 0) {
           for (const tag of unsyncedTags) { await supabaseUpsert('tags', tag); }
-          data.tags = [...(data.tags || []), ...unsyncedTags];
+          data.tags = [...data.tags, ...unsyncedTags];
         }
-        dispatch({ type: 'MERGE_STATE', payload: { ...data, currentUser: curUser, viewingMemberId: curView, tags: data.tags || [], bookmarks: localBookmarks, savedViews: localSavedViews } });
+        // DB members is authority — force override to prevent stale local data (role, permissions)
+        const curUser = stateRef.current?.currentUser || null;
+        const dbUser = curUser ? data.members.find((m: any) => m.id === curUser.id) || null : null;
+        const dbMembers = data.members;
+        dispatch({ type: 'MERGE_STATE', payload: { ...data, currentUser: dbUser || curUser, viewingMemberId: curView, members: undefined } });
+        // Force-set members from DB (bypasses MERGE_STATE merge logic)
+        dispatch({ type: 'SET_STATE', payload: { ...stateRef.current, members: dbMembers, currentUser: dbUser || curUser } });
         localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey }));
         setConnectionMode('supabase');
         setupRealtime();
@@ -104,6 +116,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return true;
       }
     } catch (e: any) {
+      console.error('[doConnect] Connection failed:', e?.message, e?.stack?.substring(0, 300));
       setConnectionError(e.message || '连接失败');
       setConnectionMode('local');
       resetSupabase();
@@ -158,34 +171,59 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const sb = getSupabaseClient();
     if (!sb) return;
     // Supabase Realtime postgres_changes is broken — use REST polling instead
-    const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags'];
+    const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views'];
     const poll = async () => {
       if (document.visibilityState === 'hidden') return;
       try {
         const results = await Promise.allSettled(tables.map(table => {
           const query = table === 'members' ? sb.from(table).select('*').eq('status', 'active') : sb.from(table).select('*');
           return query.then(({ data }) => {
-            const key = table === 'item_links' ? 'itemLinks' : table === 'schedule_events' ? 'scheduleEvents' : table;
-            return { key, data: (data || []).map(toCamel) };
+            const key = table === 'item_links' ? 'itemLinks' : table === 'schedule_events' ? 'scheduleEvents' : table === 'saved_views' ? 'savedViews' : table;
+            return { key, data: Array.isArray(data) ? data.map(toCamel) : [] };
           });
         }));
         const payload: Record<string, any> = {};
-        results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; } else { console.warn('[poll] table fetch failed:', r.reason); } });
+        results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; } });
         dispatch({ type: 'MERGE_STATE', payload });
-      } catch {
+        // Broadcast to other tabs so they don't wait 10s (COL-01)
+        try { bc.postMessage('sync'); } catch {}
+      } catch (e) {
+        console.error('[poll] data sync failed:', e);
       }
     };
+    // BroadcastChannel for cross-tab instant sync (COL-01)
+    let bc: BroadcastChannel | null = null;
+    try { bc = new BroadcastChannel('tbh-sync'); } catch (e) { console.warn('[setupRealtime] BroadcastChannel not supported:', e); }
+    const onBcMessage = () => { poll(); };
+    if (bc) bc.addEventListener('message', onBcMessage);
     poll();
-    const timerId = window.setInterval(poll, 30000);
+    const timerId = window.setInterval(poll, 10000);
     const onVisible = () => { if (document.visibilityState === 'visible') poll(); };
     document.addEventListener('visibilitychange', onVisible);
-    realtimeChannels.current = [timerId, onVisible];
+    // Offline detection: show offline status, auto-recover on reconnect
+    const onOffline = () => setConnectionMode('offline');
+    const onOnline = () => { setConnectionMode('supabase'); poll(); };
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    // Store bc listener ref for cleanup (STA-03)
+    if (bc) (bc as any)._onMessage = onBcMessage;
+    realtimeChannels.current = [timerId, onVisible, onOffline, onOnline, ...(bc ? [bc] : [])];
   }
 
   function cleanupRealtime() {
     realtimeChannels.current.forEach(item => {
       if (typeof item === 'number') window.clearInterval(item);
       else if (typeof item === 'function') document.removeEventListener('visibilitychange', item);
+      else if (item instanceof BroadcastChannel) {
+        if (item._onMessage) item.removeEventListener('message', item._onMessage);
+        item.close();
+      }
+    });
+    // Also clean up online/offline listeners (stored as functions)
+    const fnItems = realtimeChannels.current.filter(i => typeof i === 'function');
+    fnItems.forEach(fn => {
+      window.removeEventListener('offline', fn);
+      window.removeEventListener('online', fn);
     });
     realtimeChannels.current = [];
   }

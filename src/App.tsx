@@ -39,52 +39,101 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const [lockUntil, setLockUntil] = useState(0);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(LOGIN_KEY);
+      const SESSION_TTL = 8 * 60 * 60 * 1000; // 8 hours
+      const loginTime = localStorage.getItem('tbh-login-time');
+      if (loginTime && (Date.now() - parseInt(loginTime)) > SESSION_TTL) {
+        // Session expired — clear and redirect to login
+        localStorage.removeItem(LOGIN_KEY);
+        localStorage.removeItem('tbh-login-time');
+        localStorage.removeItem('tbh-login-attempts');
+        return;
+      }
       if (saved && state.members.find(m => m.id === saved)) {
+        const member = state.members.find(m => m.id === saved);
+        if (member && member.role !== 'admin') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: saved }); }
         onLogin(saved);
       }
-    } catch {}
+    } catch (e) {
+      console.error('[App] failed to restore login state:', e);
+    }
   }, []);
+
+  function checkRateLimit(): boolean {
+    const now = Date.now();
+    if (now < lockUntil) {
+      const remain = Math.ceil((lockUntil - now) / 1000);
+      setError(`登录尝试过于频繁，请 ${remain} 秒后再试`);
+      return false;
+    }
+    return true;
+  }
+  function recordFailedAttempt() {
+    const key = 'tbh-login-attempts';
+    try {
+      const raw = localStorage.getItem(key);
+      const attempts: number[] = raw ? JSON.parse(raw) : [];
+      attempts.push(Date.now());
+      // Keep only attempts in last 5 minutes
+      const cutoff = Date.now() - 5 * 60 * 1000;
+      const recent = attempts.filter(t => t > cutoff);
+      localStorage.setItem(key, JSON.stringify(recent));
+      if (recent.length >= 5) {
+        setLockUntil(Date.now() + 5 * 60 * 1000);
+        setError('登录失败次数过多，已锁定 5 分钟');
+      }
+    } catch (e) {
+      console.error('[App] rate limit recording failed:', e);
+    }
+  }
 
   function handleLogin() {
     setError('');
-    const q = search.trim().toLowerCase();
+    if (!checkRateLimit()) return;
+    const q = search.trim().toLowerCase().replace(/\s/g, '');
     if (!q) { setError('请输入姓名、手机号、微信号或邮箱'); return; }
+    if (q.length < 2) { setError('输入过短，请至少输入2个字符'); return; }
     const found = state.members.find(m => {
-      if (m.name && m.name.toLowerCase().includes(q)) return true;
-      if (m.nickname && m.nickname.toLowerCase().includes(q)) return true;
-      if (m.phone && m.phone.includes(q)) return true;
-      if (m.wechatId && m.wechatId.toLowerCase().includes(q)) return true;
-      if (m.email && m.email.toLowerCase().includes(q)) return true;
+      if (m.name && m.name.toLowerCase().replace(/\s/g, '') === q) return true;
+      if (m.nickname && m.nickname.toLowerCase().replace(/\s/g, '') === q) return true;
+      if (m.phone && m.phone.replace(/\s/g, '') === q) return true;
+      if (m.wechatId && m.wechatId.toLowerCase().replace(/\s/g, '') === q) return true;
+      if (m.email && m.email.toLowerCase().replace(/\s/g, '') === q) return true;
       return false;
     });
-    if (!found) { setError('未找到匹配的成员，请检查输入或注册新账号'); return; }
-    try { localStorage.setItem(LOGIN_KEY, found.id); } catch {}
+    if (!found) { recordFailedAttempt(); setError('未找到匹配的成员，请检查输入或注册新账号'); return; }
+    try { localStorage.setItem(LOGIN_KEY, found.id); localStorage.setItem('tbh-login-time', String(Date.now())); } catch {}
     dispatch({ type: 'SET_CURRENT_USER', payload: found.id });
+    // Non-admin users default to personal view
+    if (found.role !== 'admin') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: found.id }); }
     onLogin(found.id);
   }
 
   function handleRegister() {
     setError('');
-    if (!name.trim()) { setError('请输入姓名'); return; }
+    if (!name.trim() || name.trim().length > 20) { setError('请输入姓名（最多20字）'); return; }
     if (!phone.trim() && !wechatId.trim()) { setError('请输入手机号或微信号（至少一项）'); return; }
     const exists = state.members.find(m =>
       (phone.trim() && m.phone === phone.trim()) ||
       (wechatId.trim() && m.wechatId === wechatId.trim())
     );
     if (exists) {
-      try { localStorage.setItem(LOGIN_KEY, exists.id); } catch {}
+      try { localStorage.setItem(LOGIN_KEY, exists.id); localStorage.setItem('tbh-login-time', String(Date.now())); } catch {}
       dispatch({ type: 'SET_CURRENT_USER', payload: exists.id });
+      if (exists.role !== 'admin') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: exists.id }); }
       onLogin(exists.id);
       return;
     }
     const newId = genId('m');
     dispatch({ type: 'ADD_MEMBER', payload: { id: newId, name: name.trim(), nickname: name.trim(), phone: phone.trim(), wechatId: wechatId.trim(), email: email.trim(), role: 'member' as const, department: 'SQ Team', avatar: name.trim().charAt(0).toUpperCase(), status: 'active' as const, permissions: [] } });
-    try { localStorage.setItem(LOGIN_KEY, newId); } catch {}
+    try { localStorage.setItem(LOGIN_KEY, newId); localStorage.setItem('tbh-login-time', String(Date.now())); } catch {}
     dispatch({ type: 'SET_CURRENT_USER', payload: newId });
+    // New registered user is always 'member' role → personal view
+    dispatch({ type: 'SET_VIEWING_MEMBER', payload: newId });
     onLogin(newId);
   }
 
@@ -118,27 +167,27 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
               <div className="space-y-3">
                 <div>
                   <label className="block text-sm font-medium mb-1">姓名 *</label>
-                  <input className="w-full border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="请输入您的姓名" value={name} onChange={e => setName(e.target.value)} />
+                  <input className="w-full border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="请输入您的姓名" value={name} onChange={e => setName(e.target.value)} maxLength={20} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">手机号</label>
                   <div className="relative">
                     <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input className="w-full border border-border rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="请输入手机号" value={phone} onChange={e => setPhone(e.target.value)} />
+                    <input className="w-full border border-border rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="请输入手机号" value={phone} onChange={e => setPhone(e.target.value)} maxLength={11} />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">微信号</label>
                   <div className="relative">
                     <MessageCircle size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input className="w-full border border-border rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="请输入微信号" value={wechatId} onChange={e => setWechatId(e.target.value)} />
+                    <input className="w-full border border-border rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="请输入微信号" value={wechatId} onChange={e => setWechatId(e.target.value)} maxLength={50} />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">邮箱（选填）</label>
                   <div className="relative">
                     <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input className="w-full border border-border rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="请输入邮箱" value={email} onChange={e => setEmail(e.target.value)} />
+                    <input className="w-full border border-border rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="请输入邮箱" value={email} onChange={e => setEmail(e.target.value)} maxLength={100} />
                   </div>
                 </div>
               </div>
@@ -162,8 +211,8 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
   const { state, dispatch } = useStore();
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
 
-  // All users default to team view (viewingMemberId = null)
-  // No auto-switch to personal view for non-admins
+  // Admin/manager default to team view (viewingMemberId = null), set during login
+  // Member users default to personal view (viewingMemberId = own ID), set during login
 
   function renderPage() {
     switch (currentPage) {

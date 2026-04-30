@@ -357,6 +357,11 @@ function TagsCategoriesSection() {
 }
 
 export function SettingsTab() {
+  const { state } = useStore();
+  const isAdmin = state.currentUser?.role === 'admin';
+  if (!isAdmin) {
+    return <div className="p-8 text-center text-muted-foreground text-sm">权限不足：系统设置仅管理员可访问</div>;
+  }
   return (
     <div className="space-y-5 animate-fade-in">
       <div><h2 className="text-lg font-bold flex items-center gap-2"><SettingsIcon size={20} /> 系统设置</h2><p className="text-sm text-muted-foreground mt-0.5">配置云端同步、通知和备份</p></div>

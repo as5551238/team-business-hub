@@ -2,6 +2,8 @@
 // 双通道：企业微信群机器人 + Server酱（个人微信）
 // 当前仅支持手动发送每日摘要 + 测试通道
 
+import { getSupabaseClient } from './client';
+
 const WECHAT_CONFIG_KEY = 'tbh-wechat-config';
 
 export type NotifyChannel = 'work_wechat' | 'server_chan';
@@ -49,11 +51,11 @@ export function isWeChatEnabled(): boolean {
 
 // ==================== 发送逻辑 ====================
 
-// 企业微信群机器人（通过 Supabase Edge RPC pg_net 服务端代理，无 CORS 问题）
-async function sendToWorkWechat(content: string): Promise<boolean> {
+// 企业微信群机器人（通过 Supabase RPC pg_net 服务端代理，无 CORS 问题）
+async function sendToWorkWechat(content: string, webhookUrl?: string): Promise<boolean> {
   const config = loadWeChatConfig();
-  const webhookUrl = config.workWechat.webhookUrl;
-  if (!webhookUrl) return false;
+  const url = webhookUrl || config.workWechat.webhookUrl;
+  if (!url) return false;
   const body = JSON.stringify({ msgtype: 'markdown', markdown: { content } });
 
   // 方法1: 通过 Supabase RPC 调用数据库 pg_net 函数（服务端发送，无 CORS）
@@ -61,42 +63,29 @@ async function sendToWorkWechat(content: string): Promise<boolean> {
     const sb = getSupabaseClient();
     if (sb) {
       const { error } = await sb.rpc('send_webhook', {
-        p_url: webhookUrl,
+        p_url: url,
         p_body: body,
       });
       if (!error) return true;
       console.error('RPC send_webhook failed:', error);
+      throw new Error('RPC 调用失败: ' + (error.message || JSON.stringify(error)));
     }
   } catch (e: any) {
     console.error('RPC 调用失败:', e);
-  }
-
-  // 方法2: 直接 POST（仅在同源环境或 CORS 允许时可用）
-  try {
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.errcode === 0) return true;
-      if (data.errcode) throw new Error(`企业微信错误: ${data.errcode} ${data.errmsg || ''}`);
-    }
-  } catch (e: any) {
-    throw new Error('发送失败：需要服务端代理(CORS限制)。请确保 Supabase 中已创建 send_webhook 函数。');
+    throw new Error('发送失败: ' + (e.message || '未知错误'));
   }
   return false;
 }
 
 // Server酱 v3（GET优先，失败POST，再失败放弃）
-async function sendToServerChan(title: string, content: string): Promise<boolean> {
+async function sendToServerChan(title: string, content: string, sendKey?: string): Promise<boolean> {
   const config = loadWeChatConfig();
-  const sendKey = config.serverChan.sendKey;
+  const key = sendKey || config.serverChan.sendKey;
+  if (!key) return false;
 
   // 方法1: GET请求（不受CORS限制）
   try {
-    const url = `https://sctapi.ftqq.com/${sendKey}.send?title=${encodeURIComponent(title)}&desp=${encodeURIComponent(content)}`;
+    const url = `https://sctapi.ftqq.com/${key}.send?title=${encodeURIComponent(title)}&desp=${encodeURIComponent(content)}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.code === 0) return true;
@@ -105,7 +94,7 @@ async function sendToServerChan(title: string, content: string): Promise<boolean
   } catch (e: any) {
     // 方法2: POST请求
     try {
-      const apiUrl = `https://sctapi.ftqq.com/${sendKey}.send`;
+      const apiUrl = `https://sctapi.ftqq.com/${key}.send`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -144,10 +133,10 @@ export async function testChannel(channel: NotifyChannel, config: WeChatConfig):
     const now = new Date().toLocaleString('zh-CN');
     if (channel === 'server_chan') {
       const content = `[测试消息]\n这是一条测试消息，如果收到说明配置正确！\n当前时间：${now}\n来自：团队业务中台`;
-      return await sendToServerChan('团队业务中台 - 测试', content);
+      return await sendToServerChan('团队业务中台 - 测试', content, config.serverChan.sendKey);
     }
     const content = `### 团队业务中台 - 测试消息\n\n> 这是一条测试消息，如果你看到了说明配置正确！\n> 当前时间：${now}\n> 来自：团队业务中台`;
-    return await sendToWorkWechat(content);
+    return await sendToWorkWechat(content, config.workWechat.webhookUrl);
   } catch (e: any) {
     console.error('测试发送失败:', e);
     throw e;

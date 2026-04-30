@@ -412,6 +412,7 @@ export default function Tasks() {
   }
 
   const handleDropToQuadrant = useCallback((taskId: string, quadrant: string) => {
+    if (!can('edit_tasks')) return;
     let np: TaskPriority = 'low';
     if (quadrant === '紧急重要') np = 'urgent'; else if (quadrant === '重要不紧急') np = 'high'; else if (quadrant === '紧急不重要') np = 'medium';
     dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { priority: np } } });
@@ -475,8 +476,10 @@ export default function Tasks() {
       const d = canvasDragRef.current;
       const nl = parseFloat(d.el.style.left);
       const nt = parseFloat(d.el.style.top);
-      dispatch({ type: 'UPDATE_TASK', payload: { id: d.id, updates: { canvasX: Math.round(nl), canvasY: Math.round(nt) } } });
-      setCanvasPositions(prev => ({ ...prev, [d.id]: { x: Math.round(nl), y: Math.round(nt) } }));
+      if (can('edit_tasks')) {
+        dispatch({ type: 'UPDATE_TASK', payload: { id: d.id, updates: { canvasX: Math.round(nl), canvasY: Math.round(nt) } } });
+        setCanvasPositions(prev => ({ ...prev, [d.id]: { x: Math.round(nl), y: Math.round(nt) } }));
+      }
       d.el.style.zIndex = '';
       canvasDragRef.current = null;
     };
@@ -646,7 +649,7 @@ export default function Tasks() {
     const onOpenDetail = (task: Task) => setDetailItem({ type: 'task', id: task.id });
     const onToggleExpand = (id: string) => setExpandedTask(prev => prev === id ? null : id);
     const onToggleSubtask = (taskId: string, subtaskId: string) => dispatch({ type: 'TOGGLE_SUBTASK', payload: { taskId, subtaskId } });
-    const onUpdateStatus = (taskId: string, status: TaskStatus) => dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status } } });
+    const onUpdateStatus = (taskId: string, status: TaskStatus) => { if (!can('edit_tasks')) return; dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status } } }); };
     const allShownTaskIds = topTasks.filter(t => !shownIds || shownIds.has(t.id)).map(t => t.id);
     const allSelected = allShownTaskIds.length > 0 && allShownTaskIds.every(id => selectedIds.has(id));
     const someSelected = allShownTaskIds.some(id => selectedIds.has(id));

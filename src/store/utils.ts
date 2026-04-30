@@ -1,2 +1,3 @@
 let counter = Date.now();
-export function genId(prefix: string) { return `${prefix}_${++counter}`; }
+let tabSalt = Math.random().toString(36).slice(2, 8);
+export function genId(prefix: string) { return `${prefix}_${++counter}${tabSalt}`; }

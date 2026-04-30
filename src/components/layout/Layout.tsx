@@ -83,11 +83,13 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
               <Cloud size={14} className="text-green-400" />
             ) : connectionMode === 'loading' ? (
               <Loader2 size={14} className="animate-spin text-amber-400" />
+            ) : connectionMode === 'offline' ? (
+              <CloudOff size={14} className="text-red-400" />
             ) : (
               <CloudOff size={14} className="text-white/40" />
             )}
-            <span className={`text-xs ${connectionMode === 'supabase' ? 'text-green-400' : connectionMode === 'loading' ? 'text-amber-400' : 'text-white/40'}`}>
-              {connectionMode === 'supabase' ? '云端同步' : connectionMode === 'loading' ? '连接中...' : '本地模式'}
+            <span className={`text-xs ${connectionMode === 'supabase' ? 'text-green-400' : connectionMode === 'loading' ? 'text-amber-400' : connectionMode === 'offline' ? 'text-red-400' : 'text-white/40'}`}>
+              {connectionMode === 'supabase' ? '云端同步' : connectionMode === 'loading' ? '连接中...' : connectionMode === 'offline' ? '网络离线' : '本地模式'}
             </span>
           </div>
         </div>
