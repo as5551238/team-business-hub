@@ -42,12 +42,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => { saveLocalStateImmediate(state); }, 2000);
+    const doSave = () => {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => saveLocalStateImmediate(stateRef.current));
+      } else {
+        saveLocalStateImmediate(stateRef.current);
+      }
+    };
+    debounceTimerRef.current = setTimeout(doSave, 2000);
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
-        saveLocalStateImmediate(state);
+        saveLocalStateImmediate(stateRef.current);
       }
     };
   }, [state]);
@@ -172,8 +179,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!sb) return;
     // Supabase Realtime postgres_changes is broken — use REST polling instead
     const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views'];
+    let polling = false;
+    let pollTimerId: number | null = null;
     const poll = async () => {
+      if (polling) return; // STA-04: skip if previous poll still in-flight
       if (document.visibilityState === 'hidden') return;
+      polling = true;
       try {
         const results = await Promise.allSettled(tables.map(table => {
           const query = table === 'members' ? sb.from(table).select('*').eq('status', 'active') : sb.from(table).select('*');
@@ -185,10 +196,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const payload: Record<string, any> = {};
         results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; } });
         dispatch({ type: 'MERGE_STATE', payload });
-        // Broadcast to other tabs so they don't wait 10s (COL-01)
         try { bc.postMessage('sync'); } catch {}
       } catch (e) {
         console.error('[poll] data sync failed:', e);
+      } finally {
+        polling = false;
       }
     };
     // BroadcastChannel for cross-tab instant sync (COL-01)
@@ -198,8 +210,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (bc) bc.addEventListener('message', onBcMessage);
     poll();
     const timerId = window.setInterval(poll, 10000);
-    const onVisible = () => { if (document.visibilityState === 'visible') poll(); };
+    const onVisible = () => {
+      // STA-04: immediate poll on visible, reset interval
+      poll();
+      if (pollTimerId) window.clearInterval(pollTimerId);
+      pollTimerId = window.setInterval(poll, 10000);
+    };
+    const onHidden = () => {
+      // STA-04: reduce polling to 30s when page is hidden
+      if (pollTimerId) window.clearInterval(pollTimerId);
+      pollTimerId = window.setInterval(poll, 30000);
+    };
     document.addEventListener('visibilitychange', onVisible);
+    document.addEventListener('visibilitychange', onHidden);
     // Offline detection: show offline status, auto-recover on reconnect
     const onOffline = () => setConnectionMode('offline');
     const onOnline = () => { setConnectionMode('supabase'); poll(); };
@@ -207,7 +230,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     window.addEventListener('online', onOnline);
     // Store bc listener ref for cleanup (STA-03)
     if (bc) (bc as any)._onMessage = onBcMessage;
-    realtimeChannels.current = [timerId, onVisible, onOffline, onOnline, ...(bc ? [bc] : [])];
+    realtimeChannels.current = [pollTimerId, onVisible, onHidden, onOffline, onOnline, ...(bc ? [bc] : [])];
   }
 
   function cleanupRealtime() {

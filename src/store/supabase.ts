@@ -8,7 +8,8 @@ export function saveLocalStateImmediate(state: AppState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     localStorage.setItem(CURRENT_USER_KEY, state.currentUser?.id || '');
-  } catch {
+  } catch (e) {
+    console.error('[saveLocalState] localStorage write failed (possibly full):', e);
   }
 }
 
