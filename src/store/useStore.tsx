@@ -209,20 +209,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const onBcMessage = () => { poll(); };
     if (bc) bc.addEventListener('message', onBcMessage);
     poll();
-    const timerId = window.setInterval(poll, 10000);
-    const onVisible = () => {
-      // STA-04: immediate poll on visible, reset interval
-      poll();
-      if (pollTimerId) window.clearInterval(pollTimerId);
-      pollTimerId = window.setInterval(poll, 10000);
+    const timerHolder = { id: window.setInterval(poll, 10000) as number };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        poll();
+        if (timerHolder.id) window.clearInterval(timerHolder.id);
+        timerHolder.id = window.setInterval(poll, 10000);
+      } else {
+        if (timerHolder.id) window.clearInterval(timerHolder.id);
+        timerHolder.id = window.setInterval(poll, 30000);
+      }
     };
-    const onHidden = () => {
-      // STA-04: reduce polling to 30s when page is hidden
-      if (pollTimerId) window.clearInterval(pollTimerId);
-      pollTimerId = window.setInterval(poll, 30000);
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    document.addEventListener('visibilitychange', onHidden);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     // Offline detection: show offline status, auto-recover on reconnect
     const onOffline = () => setConnectionMode('offline');
     const onOnline = () => { setConnectionMode('supabase'); poll(); };
@@ -230,7 +228,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     window.addEventListener('online', onOnline);
     // Store bc listener ref for cleanup (STA-03)
     if (bc) (bc as any)._onMessage = onBcMessage;
-    realtimeChannels.current = [pollTimerId, onVisible, onHidden, onOffline, onOnline, ...(bc ? [bc] : [])];
+    // Store timerHolder for cleanup — wrap to allow clearInterval on latest timer
+    realtimeChannels.current = [{ clear: () => window.clearInterval(timerHolder.id) } as any, onVisibilityChange, onOffline, onOnline, ...(bc ? [bc] : [])];
   }
 
   function cleanupRealtime() {
@@ -241,6 +240,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (item._onMessage) item.removeEventListener('message', item._onMessage);
         item.close();
       }
+      else if (item && typeof item.clear === 'function') item.clear();
     });
     // Also clean up online/offline listeners (stored as functions)
     const fnItems = realtimeChannels.current.filter(i => typeof i === 'function');
@@ -294,26 +294,28 @@ export function useStore() {
 
 export function useDashboardStats() {
   const { goals, projects, tasks, notifications, currentUser } = useStore().state;
-  const todayStr = new Date().toISOString().split('T')[0];
-  const now = new Date();
-  const activeGoals = goals.filter(g => g.status === 'in_progress');
-  const activeProjects = projects.filter(p => p.status === 'in_progress');
-  const myTasks = tasks.filter(t => t.leaderId === currentUser?.id && t.status !== 'done');
-  const overdueTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < todayStr);
-  const todayTodos = tasks.filter(t => t.leaderId === currentUser?.id && t.status !== 'done' && t.dueDate === todayStr);
-  const completedThisWeek = tasks.filter(t => {
-    if (!t.completedAt) return false;
-    const d = new Date(t.completedAt);
-    const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
-    return d >= weekAgo;
-  });
-  return {
-    activeGoals: activeGoals.length, activeProjects: activeProjects.length,
-    myTasks: myTasks.length, overdueTasks: overdueTasks.length, todayTodos,
-    completedThisWeek: completedThisWeek.length,
-    overallGoalProgress: activeGoals.length > 0 ? Math.round(activeGoals.reduce((s, g) => s + g.progress, 0) / activeGoals.length) : 0,
-    unreadNotifications: notifications.filter(n => !n.read).length,
-  };
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const now = useMemo(() => new Date(), []);
+  return useMemo(() => {
+    const activeGoals = goals.filter(g => g.status === 'in_progress');
+    const activeProjects = projects.filter(p => p.status === 'in_progress');
+    const myTasks = tasks.filter(t => t.leaderId === currentUser?.id && t.status !== 'done');
+    const overdueTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < todayStr);
+    const todayTodos = tasks.filter(t => t.leaderId === currentUser?.id && t.status !== 'done' && t.dueDate === todayStr);
+    const completedThisWeek = tasks.filter(t => {
+      if (!t.completedAt) return false;
+      const d = new Date(t.completedAt);
+      const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
+      return d >= weekAgo;
+    });
+    return {
+      activeGoals: activeGoals.length, activeProjects: activeProjects.length,
+      myTasks: myTasks.length, overdueTasks: overdueTasks.length, todayTodos,
+      completedThisWeek: completedThisWeek.length,
+      overallGoalProgress: activeGoals.length > 0 ? Math.round(activeGoals.reduce((s, g) => s + g.progress, 0) / activeGoals.length) : 0,
+      unreadNotifications: notifications.filter(n => !n.read).length,
+    };
+  }, [goals, projects, tasks, notifications, currentUser, todayStr, now]);
 }
 
 export function useGoalTree() {

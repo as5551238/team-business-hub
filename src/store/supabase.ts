@@ -6,7 +6,15 @@ import type { Notification, Activity, ItemLink, Category, Template, ScheduleEven
 
 export function saveLocalStateImmediate(state: AppState) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const json = JSON.stringify(state);
+    // DAT-06: check size before write (localStorage limit ~5-10MB)
+    if (json.length > 4 * 1024 * 1024) {
+      console.warn(`[saveLocalState] state too large (${(json.length / 1024 / 1024).toFixed(1)}MB), truncating activities/notifications`);
+      const trimmed = { ...state, activities: state.activities.slice(0, 50), notifications: state.notifications.slice(0, 100) };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    } else {
+      localStorage.setItem(STORAGE_KEY, json);
+    }
     localStorage.setItem(CURRENT_USER_KEY, state.currentUser?.id || '');
   } catch (e) {
     console.error('[saveLocalState] localStorage write failed (possibly full):', e);

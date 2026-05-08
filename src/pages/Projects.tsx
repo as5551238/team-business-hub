@@ -41,7 +41,7 @@ export default function Projects() {
   const projectTags = useMemo(() => { const tgs = new Set<string>(); state.projects.forEach(p => (p.tags || []).forEach(t => tgs.add(t))); return Array.from(tgs).sort(); }, [state.projects]);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const now = new Date();
+  const todayDate = useMemo(() => new Date(), []); // stable Date reference, recalculated on mount only
 
   const commentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -61,25 +61,25 @@ export default function Projects() {
     if (timeFilter === 'today') {
       result = result.filter(p => p.startDate <= todayStr && p.endDate >= todayStr);
     } else if (timeFilter === 'this_week') {
-      const dow = now.getDay() || 7;
-      const ws = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow + 1).toISOString().split('T')[0];
-      const we = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow + 7).toISOString().split('T')[0];
+      const dow = todayDate.getDay() || 7;
+      const ws = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() - dow + 1).toISOString().split('T')[0];
+      const we = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() - dow + 7).toISOString().split('T')[0];
       result = result.filter(p => p.endDate >= ws && p.endDate <= we);
     } else if (timeFilter === 'this_month') {
-      const ms = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-      const me = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+      const ms = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1).toISOString().split('T')[0];
+      const me = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).toISOString().split('T')[0];
       result = result.filter(p => p.startDate <= me && p.endDate >= ms);
     } else if (timeFilter === 'this_quarter') {
-      const qi = Math.floor(now.getMonth() / 3);
-      const qs = new Date(now.getFullYear(), qi * 3, 1).toISOString().split('T')[0];
-      const qe = new Date(now.getFullYear(), qi * 3 + 3, 0).toISOString().split('T')[0];
+      const qi = Math.floor(todayDate.getMonth() / 3);
+      const qs = new Date(todayDate.getFullYear(), qi * 3, 1).toISOString().split('T')[0];
+      const qe = new Date(todayDate.getFullYear(), qi * 3 + 3, 0).toISOString().split('T')[0];
       result = result.filter(p => p.startDate <= qe && p.endDate >= qs);
     }
     if (!isTeamView && viewingMember) {
       result = result.filter(p => p.leaderId === viewingMember.id || (p.supporterIds || []).includes(viewingMember.id));
     }
     return result;
-  }, [state.projects, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, personFilter, timeFilter, searchQuery, todayStr, now, isTeamView, viewingMember]);
+  }, [state.projects, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, personFilter, timeFilter, searchQuery, todayStr, todayDate, isTeamView, viewingMember]);
 
   const topProjects = filteredProjects.filter(p => !p.parentId);
   const activeFilterCount = [selectedStatuses.size > 0, selectedPriorities.size > 0, selectedLevels.size > 0, selectedCategories.size > 0, selectedTags.size > 0, personFilter.length > 0, timeFilter !== 'all', searchQuery.trim().length > 0].filter(Boolean).length;
@@ -91,7 +91,7 @@ export default function Projects() {
   const [formData, setFormData] = useState({
     title: '', description: '', goalId: '', parentId: '',
     startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+    endDate: new Date(Date.todayDate() + 30 * 86400000).toISOString().split('T')[0],
     leaderId: '', supporterIds: [] as string[], tags: [] as string[], category: '', priority: 'medium' as TaskPriority,
   });
 
@@ -110,7 +110,7 @@ export default function Projects() {
     if (!formData.title.trim()) return;
     dispatch({ type: 'ADD_PROJECT', payload: { title: formData.title, description: formData.description, goalId: formData.goalId || null, parentId: formData.parentId || null, status: 'planning', priority: formData.priority, startDate: formData.startDate, endDate: formData.endDate, leaderId: formData.leaderId || state.currentUser?.id || '', supporterIds: formData.supporterIds, tags: formData.tags, category: formData.category, taskCount: 0, attachments: [], trackingRecords: [], repeatCycle: 'none' } });
     setShowCreateDialog(false);
-    setFormData({ title: '', description: '', goalId: '', parentId: '', startDate: new Date().toISOString().split('T')[0], endDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0], leaderId: '', supporterIds: [], tags: [], category: '', priority: 'medium' });
+    setFormData({ title: '', description: '', goalId: '', parentId: '', startDate: new Date().toISOString().split('T')[0], endDate: new Date(Date.todayDate() + 30 * 86400000).toISOString().split('T')[0], leaderId: '', supporterIds: [], tags: [], category: '', priority: 'medium' });
     setUseTemplate(false); setSelectedTemplateId('');
   }
 

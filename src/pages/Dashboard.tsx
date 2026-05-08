@@ -194,7 +194,9 @@ function BookmarksWidget() {
 
   function handleSave() {
     if (!formTitle.trim() || !formUrl.trim()) return;
-    const url = formUrl.trim().startsWith('http') ? formUrl.trim() : 'https://' + formUrl.trim();
+    const trimmed = formUrl.trim();
+    if (trimmed.toLowerCase().startsWith('javascript:') || trimmed.toLowerCase().startsWith('data:')) return; // SEC-08: block XSS schemes
+    const url = trimmed.startsWith('http') ? trimmed : 'https://' + trimmed;
     if (editId) {
       updateBookmark(editId, { title: formTitle.trim(), url, category: formCategory, icon: formIcon });
       setEditId(null);
@@ -265,15 +267,15 @@ function BookmarksWidget() {
               <button className="p-0.5 hover:bg-muted rounded disabled:opacity-30" disabled={idx === filtered.length - 1 && activeCat === '全部'} onClick={() => handleMoveDown(idx)}><ChevronDown size={12} /></button>
             </div>
             <span className="text-lg flex-shrink-0">{bm.icon || '🔗'}</span>
-             <div className="flex-1 min-w-0">
-              <a href={bm.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium hover:text-primary truncate block" onClick={e => e.stopPropagation()}>{bm.title}</a>
+              <div className="flex-1 min-w-0">
+               {bm.url.startsWith('http') ? <a href={bm.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium hover:text-primary truncate block" onClick={e => e.stopPropagation()}>{bm.title}</a> : <span className="text-sm font-medium truncate block">{bm.title}</span>}
               <span className="text-xs text-muted-foreground truncate block">{bm.url}</span>
             </div>
             <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground flex-shrink-0">{bm.category}</span>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
               <button className="p-1 hover:bg-muted rounded" onClick={e => { e.stopPropagation(); handleEdit(bm); }}><Edit2 size={12} className="text-muted-foreground" /></button>
               <button className="p-1 hover:bg-red-50 rounded" onClick={e => { e.stopPropagation(); deleteBookmark(bm.id); }}><Trash2 size={12} className="text-red-400" /></button>
-              <a href={bm.url} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-muted rounded" onClick={e => e.stopPropagation()}><ExternalLink size={12} className="text-muted-foreground" /></a>
+              {bm.url.startsWith('http') && <a href={bm.url} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-muted rounded" onClick={e => e.stopPropagation()}><ExternalLink size={12} className="text-muted-foreground" /></a>}
             </div>
           </div>
         ))}
