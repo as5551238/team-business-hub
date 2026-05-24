@@ -1,18 +1,33 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useStore, useMemberLookup, useActiveMembers, usePermissions } from '@/store/useStore';
 import { uploadFile, deleteFile, BUCKET_NAMES } from '@/supabase/storage';
-import type { Goal, Project, Task, Comment, TrackingRecord, ItemLink, KeyResult, ItemType, RepeatCycle } from '@/types';
+import type { Goal, Project, Task, TrackingRecord, KeyResult, ItemType, RepeatCycle } from '@/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import {
-  X, Target, FolderKanban, CheckSquare, Calendar, Users, Tag, Link2,
+  X, Target, FolderKanban, CheckSquare, Users, Tag, Link2,
   MessageSquare, FileText, Paperclip, Plus, Trash2, ChevronRight, Clock,
-  Edit2, Save, Bell
+  Edit2, Save, Bell, AlertTriangle
 } from 'lucide-react';
 import { genId } from '@/store/utils';
+import { ProjectGanttChart } from '@/components/ProjectGanttChart';
+
+class DetailPanelErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) return (
+      <div className="p-6 text-center">
+        <p className="text-muted-foreground mb-3">面板加载失败</p>
+        <button className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-muted/50" onClick={() => this.setState({ hasError: false })}>重试</button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
 
 interface ItemDetailPanelProps {
   isOpen: boolean;
@@ -22,14 +37,11 @@ interface ItemDetailPanelProps {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  planning: { label: '规划中', color: 'bg-blue-100 text-blue-700' },
-  in_progress: { label: '进行中', color: 'bg-yellow-100 text-yellow-700' },
-  completed: { label: '已完成', color: 'bg-green-100 text-green-700' },
-  paused: { label: '已暂停', color: 'bg-gray-100 text-gray-700' },
-  cancelled: { label: '已取消', color: 'bg-red-100 text-red-700' },
   todo: { label: '待办', color: 'bg-gray-100 text-gray-600' },
+  in_progress: { label: '进行中', color: 'bg-yellow-100 text-yellow-700' },
   done: { label: '已完成', color: 'bg-green-100 text-green-700' },
   blocked: { label: '已阻塞', color: 'bg-red-100 text-red-700' },
+  cancelled: { label: '已取消', color: 'bg-slate-100 text-slate-500' },
 };
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
@@ -71,12 +83,34 @@ const QUADRANT_COLORS: Record<string, string> = {
 export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetailPanelProps) {
   const { state, dispatch } = useStore();
   const { can } = usePermissions();
+
   const canDelete = (itemType === 'goal' ? can('delete_goals') : itemType === 'project' ? can('delete_projects') : can('delete_tasks'));
   const canEdit = (itemType === 'goal' ? can('edit_goals') : itemType === 'project' ? can('edit_projects') : can('edit_tasks'));
   const panelRef = useRef<HTMLDivElement>(null);
   const commentsEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [panelWidth, setPanelWidth] = useState(480);
+
+  // Resize handler (useRef + DOM events per project conventions)
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!resizeRef.current || !panelRef.current) return;
+      const delta = resizeRef.current.startX - e.clientX;
+      const next = Math.max(360, Math.min(900, resizeRef.current.startWidth + delta));
+      panelRef.current.style.width = next + 'px';
+    };
+    const onUp = () => {
+      if (resizeRef.current && panelRef.current) {
+        setPanelWidth(parseInt(panelRef.current.style.width) || 480);
+      }
+      resizeRef.current = null;
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
 
   const goal = itemType === 'goal' ? state.goals.find(g => g.id === itemId) : null;
   const project = itemType === 'project' ? state.projects.find(p => p.id === itemId) : null;
@@ -89,7 +123,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   const [titleDraft, setTitleDraft] = useState('');
   const [statusOpen, setStatusOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
-  const [newComment, setNewComment] = useState('');
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [newTrackingDate, setNewTrackingDate] = useState(new Date().toISOString().split('T')[0]);
   const [newTrackingContent, setNewTrackingContent] = useState('');
   const [newTrackingResult, setNewTrackingResult] = useState('');
@@ -104,14 +138,42 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   const [mentionSearch, setMentionSearch] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentContent, setEditingCommentContent] = useState('');
+  const [newComment, setNewComment] = useState('');
+
+  // Extract description/summary BEFORE useState to avoid TDZ error
+  const description = goal?.description || project?.description || task?.description || '';
+  const summary = goal?.summary || project?.summary || task?.summary || '';
+
+  const [localDescription, setLocalDescription] = useState(description);
+  const [localSummary, setLocalSummary] = useState(summary);
+
+  // Sync local state when external data changes (e.g., Realtime update)
+  useEffect(() => { setLocalDescription(description); }, [description]);
+  useEffect(() => { setLocalSummary(summary); }, [summary]);
+
+  // 是否有未保存的编辑内容（扩展检查所有编辑状态）
+  const hasUnsavedEdits = !!(editingTitle || newComment || newTrackingContent
+    || editingKrId !== null || editingCommentId !== null
+    || customTagInput.trim() !== ''
+    || (addLinkTargetId && showAddLink));
+
+  function handleClose() { if (hasUnsavedEdits && !confirm('有未保存的内容，确认关闭？')) return; onClose(); }
+  function handleOverlayClick() { handleClose(); }
+
+  // beforeunload: 有未保存内容时阻止页面关闭
+  useEffect(() => {
+    if (!hasUnsavedEdits) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasUnsavedEdits]);
 
   const item = goal || project || task;
   const status = goal?.status || project?.status || task?.status || '';
   const priority = goal?.priority || project?.priority || task?.priority || 'medium';
-  const description = goal?.description || project?.description || task?.description || '';
   const tags = goal?.tags || project?.tags || task?.tags || [];
   const category = goal?.category || project?.category || task?.category || '';
-  const startDate = goal?.startDate || project?.startDate || '';
+  const startDate = goal?.startDate || project?.startDate || task?.startDate || '';
   const endDate = goal?.endDate || project?.endDate || '';
   const dueDate = task?.dueDate || null;
   const reminderDate = task?.reminderDate || null;
@@ -120,7 +182,12 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   const supporterIds = goal?.supporterIds || project?.supporterIds || task?.supporterIds || [];
   const attachments = goal?.attachments || project?.attachments || task?.attachments || [];
   const trackingRecords = goal?.trackingRecords || project?.trackingRecords || task?.trackingRecords || [];
-  const summary = goal?.summary || project?.summary || task?.summary || '';
+  const blockedBy = task?.blockedBy || [];
+  // Candidate tasks for blockedBy: tasks in same project/goal, excluding self and already blocked
+  const blockedByCandidates = useMemo(() => {
+    if (itemType !== 'task' || !task) return [];
+    return state.tasks.filter(t => t.id !== task.id && (t.projectId === task.projectId || t.goalId === task.goalId) && t.status !== 'done');
+  }, [state.tasks, task, itemType]);
 
   const links = useMemo(() => state.itemLinks.filter(l => (l.sourceId === itemId && l.sourceType === itemType) || (l.targetId === itemId && l.targetType === itemType)), [state.itemLinks, itemId, itemType]);
 
@@ -187,7 +254,9 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   }
 
   function handleStatusChange(newStatus: string) {
-    updateItem({ status: newStatus });
+    const validStatuses = ['todo', 'in_progress', 'done', 'blocked', 'cancelled'];
+    const status = validStatuses.includes(newStatus) ? newStatus : 'todo';
+    updateItem({ status });
     setStatusOpen(false);
   }
 
@@ -227,6 +296,11 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
     updateItem({ supporterIds: next });
   }
 
+  function toggleBlockedBy(taskId: string) {
+    const next = blockedBy.includes(taskId) ? blockedBy.filter(id => id !== taskId) : [...blockedBy, taskId];
+    updateItem({ blockedBy: next });
+  }
+
   function handleCategoryChange(val: string) {
     updateItem({ category: val });
   }
@@ -257,6 +331,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
 
   function handleDeleteLink(linkId: string) {
     if (!canEdit) return;
+    if (!confirm('确认删除此关联？')) return;
     dispatch({ type: 'DELETE_ITEM_LINK', payload: linkId });
   }
 
@@ -269,6 +344,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   }
 
   function handleDeleteTracking(recordId: string) {
+    if (!confirm('确认删除此跟踪记录？')) return;
     updateItem({ trackingRecords: trackingRecords.filter(r => r.id !== recordId) });
   }
 
@@ -293,16 +369,18 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
       return;
     }
     const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
     const before = newComment.substring(0, start);
-    const after = newComment.substring(end);
+    const after = newComment.substring(textarea.selectionEnd);
+    // Remove the partial @searchText that triggered the mention popup
+    const mentionPrefix = before.lastIndexOf('@');
+    const cleanedBefore = mentionPrefix >= 0 ? before.substring(0, mentionPrefix) : before;
     const inserted = `@${memberName} `;
-    setNewComment(before + inserted + after);
+    setNewComment(cleanedBefore + inserted + after);
     setMentionOpen(false);
     setMentionSearch('');
     setTimeout(() => {
       if (textarea) {
-        const pos = start + inserted.length;
+        const pos = cleanedBefore.length + inserted.length;
         textarea.setSelectionRange(pos, pos);
         textarea.focus();
       }
@@ -317,6 +395,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   }
 
   function handleDeleteComment(commentId: string) {
+    if (!confirm('确认删除此评论？')) return;
     dispatch({ type: 'DELETE_COMMENT', payload: commentId });
   }
 
@@ -352,12 +431,21 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
 
   function handleUpdateKR(krId: string, updates: Partial<KeyResult>) {
     if (itemType !== 'goal' || !goal) return;
-    updateItem({ keyResults: goal.keyResults.map(kr => kr.id === krId ? { ...kr, ...updates } : kr) });
+    const newKRs = goal.keyResults.map(kr => kr.id === krId ? { ...kr, ...updates } : kr);
+    const extraUpdates: Record<string, any> = { keyResults: newKRs };
+    // Sync selectedKRIds with kr.selected changes
+    if ('selected' in updates) {
+      const selectedIds = newKRs.filter(kr => kr.selected).map(kr => kr.id);
+      extraUpdates.selectedKRIds = selectedIds;
+    }
+    updateItem(extraUpdates);
   }
 
   function handleDeleteKR(krId: string) {
     if (itemType !== 'goal' || !goal) return;
-    updateItem({ keyResults: goal.keyResults.filter(kr => kr.id !== krId) });
+    if (!confirm('确认删除此关键结果？')) return;
+    const newKRs = goal.keyResults.filter(kr => kr.id !== krId);
+    updateItem({ keyResults: newKRs, selectedKRIds: (goal.selectedKRIds || []).filter(id => id !== krId) });
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -365,19 +453,27 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
       const files = e.target.files;
       if (!files || files.length === 0) return;
       const file = files[0];
+      if (file.size > 50 * 1024 * 1024) { setUploadStatus('error'); return; }
+      setUploadStatus('uploading');
       const path = `${itemType}/${itemId}/${Date.now()}_${file.name}`;
       const url = await uploadFile(BUCKET_NAMES.attachments, path, file);
       if (url) {
         const attachment = { id: genId('att'), name: file.name, type: file.type, size: file.size, url, uploadedBy: state.currentUser?.id || '', uploadedAt: new Date().toISOString() };
         updateItem({ attachments: [...attachments, attachment] });
+        setUploadStatus('success');
+      } else {
+        setUploadStatus('error');
       }
     } catch (err) {
       console.error('File upload failed:', err);
+      setUploadStatus('error');
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
+    setTimeout(() => setUploadStatus('idle'), 3000);
   }
 
   async function handleDeleteAttachment(attId: string, attUrl: string) {
+    if (!confirm('确认删除此附件？')) return;
     const urlParts = attUrl.split('/');
     const bucketIdx = urlParts.indexOf(BUCKET_NAMES.attachments);
     if (bucketIdx >= 0) {
@@ -385,6 +481,43 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
       await deleteFile(BUCKET_NAMES.attachments, [filePath]);
     }
     updateItem({ attachments: attachments.filter(a => a.id !== attId) });
+  }
+
+  // Paste image handler - upload and insert markdown
+  async function handlePasteImage(e: React.ClipboardEvent, type: 'description' | 'comment') {
+    const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+    e.preventDefault();
+    // Accumulate new attachments, dispatch once at the end to avoid stale closure
+    const newAttachments: typeof attachments = [];
+    for (const file of files) {
+      try {
+        const path = `${itemType}/${itemId}/${Date.now()}_${file.name}`;
+        const url = await uploadFile(BUCKET_NAMES.attachments, path, file);
+        if (url) {
+          const attachment = { id: genId('att'), name: file.name, type: file.type, size: file.size, url, uploadedBy: state.currentUser?.id || '', uploadedAt: new Date().toISOString() };
+          newAttachments.push(attachment);
+          if (type === 'description') {
+            const descArea = e.target as HTMLTextAreaElement;
+            const pos = descArea.selectionStart;
+            const md = `\n![${file.name}](${url})\n`;
+            descArea.value = descArea.value.slice(0, pos) + md + descArea.value.slice(pos);
+          } else {
+            setNewComment(prev => prev + `\n![${file.name}](${url})`);
+          }
+        } else {
+          setUploadStatus('error');
+        }
+      } catch (err) {
+        console.error('Paste image upload failed:', err);
+        setUploadStatus('error');
+      }
+    }
+    // Single dispatch with all new attachments
+    if (newAttachments.length > 0) {
+      updateItem({ attachments: [...attachments, ...newAttachments] });
+      setTimeout(() => setUploadStatus('idle'), 3000);
+    }
   }
 
   const { goalDescendants, availableParentGoals, availableParentProjects, availableParentTasks } = useMemo(() => {
@@ -422,9 +555,12 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
   }
 
   return (
+    <DetailPanelErrorBoundary>
     <>
-      {isOpen && <div className="fixed inset-0 bg-black/30 z-40 hidden md:block" onClick={onClose} />}
-      <div ref={panelRef} className={cn('fixed bg-white border-border shadow-xl z-50 flex flex-col transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:w-[480px] md:border-l', isOpen ? 'translate-x-0' : 'translate-x-full')}>
+      {isOpen && <div className="fixed inset-0 bg-black/30 z-40 hidden md:block" onClick={handleOverlayClick} />}
+      <div ref={panelRef} className={cn('fixed bg-white border-border shadow-xl z-50 flex flex-col transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', isOpen ? 'translate-x-0' : 'translate-x-full')} style={{ width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}>
+        {/* Drag resize handle */}
+        <div className="hidden md:block absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/20 active:bg-primary/30 z-10" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }} />
         <div className="overflow-y-auto flex-1">
           <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-border sticky top-0 bg-white z-10">
             <div className="flex items-start gap-2">
@@ -460,7 +596,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
                   </div>
                 </div>
               </div>
-              <button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={onClose}><X className="w-5 h-5" /></button>
+              <button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={handleClose}><X className="w-5 h-5" /></button>
             </div>
           </div>
           <div className="px-4 sm:px-5 py-1.5 border-b border-border/50 flex items-center gap-2">
@@ -468,7 +604,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
           </div>
 
           <Section title="背景信息">
-            <Textarea className="w-full min-h-[80px] text-sm" placeholder="输入描述信息..." defaultValue={description} onBlur={e => handleDescriptionBlur(e.target.value)} />
+            <Textarea className="w-full min-h-[80px] text-sm" maxLength={5000} placeholder="输入描述信息，支持直接粘贴图片..." value={localDescription} onChange={e => setLocalDescription(e.target.value)} onBlur={e => handleDescriptionBlur(e.target.value)} onPaste={e => handlePasteImage(e, 'description')} />
           </Section>
 
           <Section title="归属关系">
@@ -561,10 +697,14 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
               {itemType === 'task' && (
                 <div className="contents">
                   <div>
+                    <label className="text-xs text-muted-foreground">开始日期</label>
+                    <input type="date" className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1" value={startDate || ''} onChange={e => handleDateChange('startDate', e.target.value)} />
+                  </div>
+                  <div>
                     <label className="text-xs text-muted-foreground">截止日期</label>
                     <input type="date" className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1" value={dueDate || ''} onChange={e => handleDateChange('dueDate', e.target.value)} />
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="text-xs text-muted-foreground">提醒日期</label>
                     <input type="date" className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1" value={reminderDate || ''} onChange={e => handleDateChange('reminderDate', e.target.value)} />
                   </div>
@@ -578,6 +718,36 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
               </div>
             </div>
           </Section>
+
+          {itemType === 'project' && (
+            <Section title="项目计划" icon={<FolderKanban className="w-3.5 h-3.5" />}>
+              <ProjectGanttChart projectId={itemId} projectStartDate={startDate} projectEndDate={endDate} />
+            </Section>
+          )}
+
+          {itemType === 'project' && (() => {
+            const pTasks = state.tasks.filter(t => t.projectId === itemId);
+            const pTotal = pTasks.length;
+            const pDone = pTasks.filter(t => t.status === 'done').length;
+            const pInProgress = pTasks.filter(t => t.status === 'in_progress').length;
+            const pBlocked = pTasks.filter(t => t.status === 'blocked').length;
+            const pTodo = pTasks.filter(t => t.status === 'todo').length;
+            if (pTotal === 0) return null;
+            return (
+              <Section title="任务概览">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden"><div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pTotal > 0 ? Math.round(pDone / pTotal * 100) : 0}%` }} /></div>
+                  <span className="text-xs font-medium text-muted-foreground flex-shrink-0">{pDone}/{pTotal} 完成</span>
+                </div>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="rounded-lg bg-blue-50 px-2 py-1.5"><div className="text-sm font-bold text-blue-600">{pTodo}</div><div className="text-[10px] text-muted-foreground">待办</div></div>
+                  <div className="rounded-lg bg-indigo-50 px-2 py-1.5"><div className="text-sm font-bold text-indigo-600">{pInProgress}</div><div className="text-[10px] text-muted-foreground">进行中</div></div>
+                  <div className="rounded-lg bg-green-50 px-2 py-1.5"><div className="text-sm font-bold text-green-600">{pDone}</div><div className="text-[10px] text-muted-foreground">已完成</div></div>
+                  <div className="rounded-lg bg-amber-50 px-2 py-1.5"><div className="text-sm font-bold text-amber-600">{pBlocked}</div><div className="text-[10px] text-muted-foreground">阻塞</div></div>
+                </div>
+              </Section>
+            );
+          })()}
 
           <Section title="人员配置" icon={<Users className="w-3.5 h-3.5" />}>
             <div className="space-y-3">
@@ -602,6 +772,42 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
               </div>
             </div>
           </Section>
+
+          {itemType === 'task' && (
+            <Section title="前置任务" icon={<AlertTriangle className="w-3.5 h-3.5" />}>
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">设置前置任务后，这些任务完成前无法开始或完成当前任务</p>
+                {blockedBy.length > 0 && (
+                  <div className="space-y-1">
+                    {blockedBy.map(bid => {
+                      const bt = state.tasks.find(t => t.id === bid);
+                      if (!bt) return null;
+                      return (
+                        <div key={bid} className="flex items-center gap-2 px-2 py-1 rounded bg-amber-50 text-sm">
+                          <span className="flex-1 truncate" style={{ textDecoration: bt.status === 'done' ? 'line-through' : 'none' }}>{bt.title}</span>
+                          <span className={cn('text-[10px] px-1.5 py-0.5 rounded', bt.status === 'done' ? 'bg-green-100 text-green-700' : bt.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600')}>{bt.status === 'in_progress' ? '进行中' : bt.status === 'done' ? '已完成' : '待办'}</span>
+                          <button className="text-muted-foreground hover:text-destructive cursor-pointer" onClick={() => toggleBlockedBy(bid)}>✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {blockedByCandidates.length > 0 ? (
+                  <div className="space-y-1 max-h-[160px] overflow-y-auto">
+                    {blockedByCandidates.filter(t => !blockedBy.includes(t.id)).map(t => (
+                      <label key={t.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-accent cursor-pointer text-sm">
+                        <Checkbox checked={blockedBy.includes(t.id)} onCheckedChange={() => toggleBlockedBy(t.id)} />
+                        <span className="flex-1 truncate">{t.title}</span>
+                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded', t.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600')}>{t.status === 'in_progress' ? '进行中' : '待办'}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">暂无可选的前置任务（同项目/目标下的未完成任务）</p>
+                )}
+              </div>
+            </Section>
+          )}
 
           <Section title="标签 & 分类" icon={<Tag className="w-3.5 h-3.5" />}>
             <div className="space-y-3">
@@ -680,9 +886,9 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
                 {(goal.keyResults || []).map(kr => {
                   const pct = kr.targetValue > 0 ? Math.min(100, Math.round((kr.currentValue / kr.targetValue) * 100)) : 0;
                   return (
-                    <div key={kr.id} className="border rounded p-2 space-y-2">
+                    <div key={kr.id} className={`border rounded p-2 space-y-2${!canEdit ? ' opacity-60 pointer-events-none' : ''}`}>
                       <div className="flex items-center gap-2">
-                        <Checkbox checked={kr.selected} onCheckedChange={() => handleUpdateKR(kr.id, { selected: !kr.selected })} />
+                        <Checkbox checked={kr.selected} onCheckedChange={() => handleUpdateKR(kr.id, { selected: !kr.selected })} disabled={!canEdit} />
                         {editingKrId === kr.id ? (
                           <input className="flex-1 text-sm border border-input rounded px-1.5 py-0.5" value={krDraft.title || ''} onChange={e => setKrDraft({ ...krDraft, title: e.target.value })} onBlur={() => { handleUpdateKR(kr.id, { title: krDraft.title || kr.title }); setEditingKrId(null); }} onKeyDown={e => { if (e.key === 'Enter') { handleUpdateKR(kr.id, { title: krDraft.title || kr.title }); setEditingKrId(null); } }} autoFocus />
                         ) : (
@@ -698,11 +904,18 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
                         <span className="ml-auto font-medium">{pct}%</span>
                       </div>
                       <Progress value={pct} className="h-1.5" />
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
+                        <span>信心值</span>
+                        {[1, 3, 5, 7, 9].map(v => {
+                          const colorMap: Record<number, string> = { 1: 'bg-red-500 border-red-500', 3: 'bg-orange-500 border-orange-500', 5: 'bg-yellow-500 border-yellow-500', 7: 'bg-emerald-500 border-emerald-500', 9: 'bg-green-600 border-green-600' };
+                          return <button key={v} onClick={() => handleUpdateKR(kr.id, { confidence: v })} className={`w-5 h-4 rounded-sm border transition-colors text-white text-[9px] font-medium ${kr.confidence === v ? colorMap[v] : 'border-border hover:border-primary/50'}`}>{v}</button>;
+                        })}
+                      </div>
                     </div>
                   );
                 })}
                 {(goal.keyResults || []).length < 5 ? (
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleAddKR}><Plus className="w-3.5 h-3.5" />添加关键结果</Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleAddKR} disabled={!canEdit}><Plus className="w-3.5 h-3.5" />添加关键结果</Button>
                 ) : (
                   <span className="text-xs text-muted-foreground">最多创建5个关键结果</span>
                 )}
@@ -775,8 +988,8 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
               ))}
               <div className="space-y-2 p-2 border rounded bg-accent/20">
                 <input type="date" className="w-full text-sm border border-input rounded px-2 py-1" value={newTrackingDate} onChange={e => setNewTrackingDate(e.target.value)} />
-                <Textarea className="min-h-[60px] text-sm" placeholder="记录内容..." value={newTrackingContent} onChange={e => setNewTrackingContent(e.target.value)} />
-                <Textarea className="min-h-[40px] text-sm" placeholder="结果（可选）" value={newTrackingResult} onChange={e => setNewTrackingResult(e.target.value)} />
+                <Textarea className="min-h-[60px] text-sm" maxLength={2000} placeholder="记录内容..." value={newTrackingContent} onChange={e => setNewTrackingContent(e.target.value)} />
+                <Textarea className="min-h-[40px] text-sm" maxLength={2000} placeholder="结果（可选）" value={newTrackingResult} onChange={e => setNewTrackingResult(e.target.value)} />
                 <Button size="sm" className="h-7 text-xs" onClick={handleAddTracking} disabled={!newTrackingContent.trim()}><Plus className="w-3.5 h-3.5" />添加记录</Button>
               </div>
             </div>
@@ -823,7 +1036,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
                 <div ref={commentsEndRef} />
               </div>
               <div className="space-y-2">
-                <textarea ref={commentInputRef} className="w-full text-sm border border-input rounded px-2 py-1.5 min-h-[60px] resize-none" placeholder="发表评论，输入@提及成员..." value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleAddComment(); } }} />
+                <textarea ref={commentInputRef} className="w-full text-sm border border-input rounded px-2 py-1.5 min-h-[60px] resize-none" placeholder="发表评论，输入@提及成员，支持粘贴图片..." value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleAddComment(); } }} onPaste={e => handlePasteImage(e, 'comment')} />
                 <div className="flex items-center gap-2">
                   <div className="relative">
                     <button className="px-2 py-1 text-xs border border-border rounded hover:bg-accent cursor-pointer" onClick={() => setMentionOpen(!mentionOpen)}>@成员</button>
@@ -846,7 +1059,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
           </Section>
 
           <Section title="项目总结">
-            <Textarea className="w-full min-h-[60px] text-sm" placeholder="输入总结..." defaultValue={summary} onBlur={e => handleSummaryBlur(e.target.value)} />
+            <Textarea className="w-full min-h-[60px] text-sm" maxLength={3000} placeholder="输入总结..." value={localSummary} onChange={e => setLocalSummary(e.target.value)} onBlur={e => handleSummaryBlur(e.target.value)} />
           </Section>
 
           <Section title="附件" icon={<Paperclip className="w-3.5 h-3.5" />}>
@@ -854,13 +1067,15 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
               {attachments.map(att => (
                 <div key={att.id} className="flex items-center gap-2 text-sm p-1.5 border rounded hover:bg-accent/50">
                   <Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
-                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate hover:text-primary hover:underline">{att.name}</a>
+                  <a href={att.url && (att.url.startsWith('http://') || att.url.startsWith('https://')) ? att.url : '#'} target="_blank" rel="noopener noreferrer" className="flex-1 truncate hover:text-primary hover:underline">{att.name}</a>
                   <span className="text-[10px] text-muted-foreground">{formatFileSize(att.size)}</span>
                   <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" onClick={() => handleDeleteAttachment(att.id, att.url)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
                 </div>
               ))}
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()}><Plus className="w-3.5 h-3.5" />上传文件</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()} disabled={uploadStatus === 'uploading'}>{uploadStatus === 'uploading' ? '上传中...' : <><Plus className="w-3.5 h-3.5" />上传文件</>}</Button>
+                {uploadStatus === 'success' && <span className="text-xs text-green-600">上传成功</span>}
+                {uploadStatus === 'error' && <span className="text-xs text-destructive">上传失败，请重试</span>}
                 <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} />
               </div>
             </div>
@@ -868,6 +1083,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId }: ItemDetai
         </div>
       </div>
     </>
+    </DetailPanelErrorBoundary>
   );
 }
 

@@ -40,6 +40,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [lockUntil, setLockUntil] = useState(0);
+  const [loginPending, setLoginPending] = useState(false);
 
   useEffect(() => {
     try {
@@ -55,12 +56,30 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
       }
       if (saved && state.members.find(m => m.id === saved)) {
         const member = state.members.find(m => m.id === saved);
-        if (member && member.role !== 'admin') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: saved }); }
+        if (member && member.role === 'member') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: saved }); }
+        else { dispatch({ type: 'SET_VIEWING_MEMBER', payload: null }); }
         onLogin(saved);
       }
     } catch (e) {
       console.error('[App] failed to restore login state:', e);
     }
+  }, []);
+
+  // 持续检查 Session TTL，每 60s 验证一次
+  useEffect(() => {
+    const SESSION_TTL = 8 * 60 * 60 * 1000;
+    const interval = setInterval(() => {
+      try {
+        const loginTime = localStorage.getItem('tbh-login-time');
+        if (loginTime && (Date.now() - parseInt(loginTime)) > SESSION_TTL) {
+          localStorage.removeItem(LOGIN_KEY);
+          localStorage.removeItem('tbh-login-time');
+          localStorage.removeItem('tbh-login-attempts');
+          window.location.reload();
+        }
+      } catch {}
+    }, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   function checkRateLimit(): boolean {
@@ -92,6 +111,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
   }
 
   function handleLogin() {
+    if (loginPending) return; // prevent double-click
     setError('');
     if (!checkRateLimit()) return;
     const q = search.trim().toLowerCase().replace(/\s/g, '');
@@ -106,10 +126,12 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
       return false;
     });
     if (!found) { recordFailedAttempt(); setError('未找到匹配的成员，请检查输入或注册新账号'); return; }
+    setLoginPending(true);
     try { localStorage.setItem(LOGIN_KEY, found.id); localStorage.setItem('tbh-login-time', String(Date.now())); } catch {}
     dispatch({ type: 'SET_CURRENT_USER', payload: found.id });
-    // Non-admin users default to personal view
-    if (found.role !== 'admin') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: found.id }); }
+    // Member-role users default to personal view; admin/manager/leader default to team view
+    if (found.role === 'member') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: found.id }); }
+    else { dispatch({ type: 'SET_VIEWING_MEMBER', payload: null }); }
     onLogin(found.id);
   }
 
@@ -124,7 +146,8 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
     if (exists) {
       try { localStorage.setItem(LOGIN_KEY, exists.id); localStorage.setItem('tbh-login-time', String(Date.now())); } catch {}
       dispatch({ type: 'SET_CURRENT_USER', payload: exists.id });
-      if (exists.role !== 'admin') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: exists.id }); }
+      if (exists.role === 'member') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: exists.id }); }
+      else { dispatch({ type: 'SET_VIEWING_MEMBER', payload: null }); }
       onLogin(exists.id);
       return;
     }
@@ -194,7 +217,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
             )}
           </div>
           {error && <div className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</div>}
-          <button onClick={mode === 'login' ? handleLogin : handleRegister} className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+          <button onClick={mode === 'login' ? handleLogin : handleRegister} disabled={loginPending} className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             {mode === 'login' ? '登录' : '注册并登录'} <ArrowRight size={16} />
           </button>
           {mode === 'login' && (

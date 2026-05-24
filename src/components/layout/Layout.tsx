@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useStore, useViewingMember, useMemberLookup, useActiveMembers } from '@/store/useStore';
 import { hasPermission } from '@/store/reducer';
 import type { Permission } from '@/types';
+import type { Notification } from '@/types';
+import { requestNotificationPermission, sendBrowserNotification, isNotificationSupported } from '@/lib/browserNotify';
 import {
-  LayoutDashboard, Target, FolderKanban, CheckSquare,
+  LayoutDashboard, Target, FolderKanban, CheckSquare, StickyNote,
   BarChart3, Users, Bell, Search, Menu, X, ChevronDown,
   Settings, Cloud, CloudOff, Loader2, FileText, Eye, Users2,
   LogOut
@@ -25,8 +27,116 @@ const navItems: { page: Page; label: string; icon: React.ReactNode; requirePermi
   { page: 'projects', label: '项目中心', icon: <FolderKanban size={20} /> },
   { page: 'tasks', label: '任务中心', icon: <CheckSquare size={20} /> },
   { page: 'insight', label: '数据洞察', icon: <BarChart3 size={20} /> },
-  { page: 'admin', label: '管理中心', icon: <Settings size={20} />, requirePermission: 'manage_team' },
+  { page: 'admin', label: '管理中心', icon: <Settings size={20} />, requirePermission: 'manage_settings' as Permission },
 ];
+
+// --- Extracted React.memo sub-components ---
+
+interface MemberFilterDropdownProps {
+  isTeamView: boolean;
+  viewingMemberId: string | null;
+  viewingMember: { id: string; name: string; avatar: string; department: string } | null;
+  visibleMembers: { id: string; name: string; avatar: string; department: string; role: string }[];
+  setViewingMember: (id: string | null) => void;
+  onClose: () => void;
+}
+
+const MemberFilterDropdown = React.memo(function MemberFilterDropdown({ isTeamView, viewingMemberId, viewingMember, visibleMembers, setViewingMember, onClose }: MemberFilterDropdownProps) {
+  return (
+    <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-border z-50 animate-slide-up max-h-64 overflow-y-auto">
+      <div className="px-3 py-2 border-b border-border">
+        <button onClick={() => { setViewingMember(null); onClose(); }}
+          className={`w-full text-left px-2 py-1.5 rounded text-xs font-medium ${isTeamView ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}>
+          团队整体视图
+        </button>
+      </div>
+      {visibleMembers.map(m => (
+        <button key={m.id} onClick={() => { setViewingMember(m.id); onClose(); }}
+          className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left ${viewingMemberId === m.id ? 'bg-primary/10 text-primary' : ''}`}>
+          <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary">{m.avatar}</div>
+          {m.name}
+          <span className="text-muted-foreground ml-auto">{m.department}</span>
+        </button>
+      ))}
+    </div>
+  );
+});
+
+interface NotificationDropdownProps {
+  notifications: Notification[];
+  unreadCount: number;
+  onMarkAllRead: () => void;
+  onMarkRead: (id: string) => void;
+  onNavigate: (page: Page, itemId: string, itemType: string) => void;
+}
+
+const NotificationDropdown = React.memo(function NotificationDropdown({ notifications, unreadCount, onMarkAllRead, onMarkRead, onNavigate }: NotificationDropdownProps) {
+  return (
+    <div className="absolute right-0 top-full mt-1 w-80 bg-white rounded-lg shadow-lg border border-border z-50 animate-slide-up">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <span className="font-semibold text-sm">通知</span>
+        {unreadCount > 0 && <button className="text-xs text-primary hover:underline" onClick={onMarkAllRead}>全部已读</button>}
+      </div>
+      <div className="max-h-80 overflow-y-auto">
+        {notifications.slice(0, 8).map(n => {
+          const targetPage = n.relatedType === 'goal' ? 'goals' : n.relatedType === 'project' ? 'projects' : n.relatedType === 'task' ? 'tasks' : null;
+          return (
+            <div key={n.id} className={`px-4 py-3 border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors ${!n.read ? 'bg-primary/5' : ''}`}
+              onClick={() => { onMarkRead(n.id); if (targetPage) onNavigate(targetPage, n.relatedId, n.relatedType); }}>
+              <div className="flex items-start gap-2">
+                {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />}
+                <div className={!n.read ? '' : 'pl-3.5'}>
+                  <div className="text-sm font-medium">{n.title}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{n.message}</div>
+                  <div className="text-xs text-muted-foreground/60 mt-1">{new Date(n.createdAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {notifications.length === 0 && <div className="px-4 py-8 text-center text-sm text-muted-foreground">暂无通知</div>}
+      </div>
+    </div>
+  );
+});
+
+interface UserMenuDropdownProps {
+  user: { id: string; name: string; avatar: string; email?: string; role: string; department: string } | null;
+  visibleMembers: { id: string; name: string; avatar: string; role: string; department: string }[];
+  onSwitchUser: (id: string) => void;
+  onLogout: () => void;
+}
+
+const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMembers, onSwitchUser, onLogout }: UserMenuDropdownProps) {
+  return (
+    <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-border z-50 animate-slide-up">
+      <div className="px-4 py-3 border-b border-border">
+        <div className="font-medium text-sm">{user?.name}</div>
+        <div className="text-xs text-muted-foreground">{user?.role === 'admin' ? user?.email : user?.email?.replace(/(.{2}).*(.@.*)/, '$1***$2')}</div>
+      </div>
+      <div className="py-1 max-h-64 overflow-y-auto">
+        {visibleMembers.map(m => (
+          <button key={m.id}
+            onClick={(e) => { e.stopPropagation(); onSwitchUser(m.id); }}
+            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted transition-colors text-left ${m.id === user?.id ? 'bg-primary/5 text-primary' : ''}`}>
+            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">{m.avatar}</div>
+            <div className="flex flex-col"><span>{m.name}</span><span className="text-xs text-muted-foreground">{m.role === 'admin' ? '管理员' : m.role === 'manager' ? '经理' : m.role === 'leader' ? '负责人' : '成员'}</span></div>
+            <span className="text-xs text-muted-foreground ml-auto">{m.department}</span>
+          </button>
+        ))}
+      </div>
+      <div className="border-t border-border px-4 py-2">
+        <button onClick={(e) => { e.stopPropagation(); onLogout(); }}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-destructive transition-colors">
+          <LogOut size={14} />
+          <span>退出登录</span>
+        </button>
+      </div>
+    </div>
+  );
+});
+
+// --- Main Layout ---
 
 export default function Layout({ currentPage, onPageChange, children, currentUser }: LayoutProps) {
   const { state, dispatch, connectionMode } = useStore();
@@ -37,18 +147,144 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMemberFilter, setShowMemberFilter] = useState(false);
+  const [offlineWrites, setOfflineWrites] = useState(0);
   const user = state.currentUser;
   const isAdmin = user?.role === 'admin';
   const unreadCount = useMemo(() => state.notifications.filter(n => !n.read).length, [state.notifications]);
-  const myTaskCount = useMemo(() => state.tasks.filter(t => t.leaderId === currentUser?.id && t.status !== 'done').length, [state.tasks, currentUser?.id]);
-  // Non-admins: only show themselves and team view in member filter
+  const overdueCount = useMemo(() => { const today = new Date().toISOString().split('T')[0]; return state.tasks.filter(t => (t.leaderId === user?.id || (t.supporterIds || []).includes(user?.id || '')) && t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today).length; }, [state.tasks, user?.id]);
   const visibleMembers = isAdmin ? activeMembers : activeMembers.filter(m => m.id === currentUser?.id);
+  // Memoize visibleMembers for React.memo props comparison
+  const visibleMembersMemo = useMemo(() => visibleMembers, [isAdmin, activeMembers, currentUser?.id]);
 
+  // Track offline write count from localStorage (COL: offline indicator)
+  useEffect(() => {
+    if (connectionMode !== 'offline') { setOfflineWrites(0); return; }
+    const check = () => { try { const c = parseInt(localStorage.getItem('tbh-offline-writes') || '0'); setOfflineWrites(c); } catch {} };
+    check();
+    const id = setInterval(check, 2000);
+    return () => clearInterval(id);
+  }, [connectionMode]);
 
-  const handlePageClick = (page: Page) => {
+  // Reminder checker: every 60s, check tasks with reminderDate <= today
+  useEffect(() => {
+    const checkReminders = () => {
+      const today = new Date().toISOString().split('T')[0];
+      const existingKeys = new Set(state.notifications.map(n => n.relatedId + ':' + n.type));
+      for (const t of state.tasks) {
+        if (!t.reminderDate || t.status === 'done' || t.status === 'cancelled') continue;
+        if (t.leaderId !== user?.id && !(t.supporterIds || []).includes(user?.id || '')) continue;
+        if (t.reminderDate <= today) {
+          const key = t.id + ':reminder';
+          if (existingKeys.has(key)) continue;
+          dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'nrem_' + t.id + '_' + t.reminderDate, type: 'reminder' as const, title: '任务提醒', message: `"${t.title}" 的提醒时间已到 (${t.reminderDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
+        }
+      }
+    };
+    checkReminders();
+    const id = setInterval(checkReminders, 60000);
+    return () => clearInterval(id);
+  }, [state.tasks, state.notifications, dispatch, currentUser?.id]);
+
+  // Auto-rule 2: Overdue task detection — notify responsible users
+  useEffect(() => {
+    const checkOverdue = () => {
+      const today = new Date().toISOString().split('T')[0];
+      const existingKeys = new Set(state.notifications.map(n => n.relatedId + ':' + n.type));
+      for (const t of state.tasks) {
+        if (t.status === 'done' || t.status === 'cancelled') continue;
+        if (!t.dueDate || t.dueDate >= today) continue;
+        if (t.leaderId !== user?.id && !(t.supporterIds || []).includes(user?.id || '')) continue;
+        const key = t.id + ':overdue';
+        if (existingKeys.has(key)) continue;
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'novd_' + t.id + '_' + t.dueDate, type: 'overdue' as const, title: '任务已逾期', message: `"${t.title}" 已逾期 (截止 ${t.dueDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
+      }
+    };
+    checkOverdue();
+    const id = setInterval(checkOverdue, 60000);
+    return () => clearInterval(id);
+  }, [state.tasks, state.notifications, dispatch, currentUser?.id]);
+
+  // Request browser notification permission on mount
+  useEffect(() => {
+    if (isNotificationSupported()) requestNotificationPermission();
+  }, []);
+
+  // When new notifications arrive while page is hidden, show browser notification
+  const prevNotificationCountRef = useRef(state.notifications.length);
+  useEffect(() => {
+    const prevCount = prevNotificationCountRef.current;
+    const currCount = state.notifications.length;
+    if (currCount > prevCount && document.visibilityState !== 'visible') {
+      // Find the newest unread notification
+      const newest = state.notifications.find(n => !n.read);
+      if (newest) {
+        sendBrowserNotification(newest.title, { body: newest.message, tag: newest.id });
+      }
+    }
+    prevNotificationCountRef.current = currCount;
+  }, [state.notifications]);
+
+  const closeAllDropdowns = useCallback(() => { setShowNotifications(false); setShowUserMenu(false); setShowMemberFilter(false); }, []);
+
+  // Global keyboard shortcuts
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      // Skip when typing in input/textarea (except for Escape)
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        if (e.key === 'Escape') { (e.target as HTMLElement).blur(); closeAllDropdowns(); }
+        return;
+      }
+      // Cmd/Ctrl+K: focus search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      // Escape: close dropdowns
+      if (e.key === 'Escape') { closeAllDropdowns(); return; }
+      // Number keys 1-6: quick navigation
+      const navMap: Record<string, Page> = { '1': 'dashboard', '2': 'goals', '3': 'projects', '4': 'tasks', '5': 'insight', '6': 'admin' };
+      if (navMap[e.key]) { onPageChange(navMap[e.key]); return; }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onPageChange, closeAllDropdowns]);
+
+  const handlePageClick = useCallback((page: Page) => {
     onPageChange(page);
     setSidebarOpen(false);
-  };
+  }, [onPageChange]);
+
+  const handleMarkAllRead = useCallback(() => dispatch({ type: 'MARK_ALL_NOTIFICATIONS_READ' }), [dispatch]);
+  const handleMarkRead = useCallback((id: string) => dispatch({ type: 'MARK_NOTIFICATION_READ', payload: id }), [dispatch]);
+  const handleNotificationNavigate = useCallback((page: Page, itemId: string, itemType: string) => {
+    onPageChange(page);
+    setShowNotifications(false);
+    setTimeout(() => { window.dispatchEvent(new CustomEvent('tbh-open-detail', { detail: { itemId, itemType } })); }, 600);
+  }, [onPageChange]);
+  const handleSwitchUser = useCallback((id: string) => { dispatch({ type: 'SET_CURRENT_USER', payload: id }); setShowUserMenu(false); }, [dispatch]);
+  const handleLogout = useCallback(() => {
+    try { localStorage.removeItem(CURRENT_USER_KEY); } catch {}
+    dispatch({ type: 'SET_CURRENT_USER', payload: null });
+    setShowUserMenu(false);
+  }, [dispatch]);
+  const handleGlobalSearch = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return;
+    const q = (e.target as HTMLInputElement).value.trim();
+    if (!q) return;
+    const matched = state.members.filter(m => m.status === 'active' && (m.name === q || m.nickname === q));
+    onPageChange('tasks');
+    if (matched.length > 0) {
+      setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'tasks', persons: matched.map(m => m.id) } })), 100);
+    } else {
+      setTimeout(() => { const el = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (el) { el.value = q; el.focus(); el.dispatchEvent(new Event('input', { bubbles: true })); } }, 600);
+    }
+  }, [state.members, onPageChange]);
+
+  // Memoize notification slice to prevent re-render when other state changes
+  const notificationsMemo = useMemo(() => state.notifications, [state.notifications]);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -65,14 +301,15 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
         </div>
 
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {navItems.filter(item => !item.requirePermission || (user && hasPermission(state, user.id, item.requirePermission))).map(item => (
+          {navItems.filter(item => !item.requirePermission || (user && hasPermission(state, user.id, item.requirePermission))).map((item, idx) => (
             <button key={item.page} onClick={() => handlePageClick(item.page)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 text-left ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'}`}>
               {item.icon}
               {item.label}
-              {item.page === 'tasks' && myTaskCount > 0 && (
-                <span className="ml-auto bg-destructive text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{myTaskCount}</span>
+              {item.page === 'tasks' && overdueCount > 0 && (
+                <span className="ml-auto bg-destructive text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{overdueCount}</span>
               )}
+              <span className="ml-auto text-[10px] text-sidebar-foreground/30 hidden lg:inline">{idx + 1}</span>
             </button>
           ))}
         </nav>
@@ -89,7 +326,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
               <CloudOff size={14} className="text-white/40" />
             )}
             <span className={`text-xs ${connectionMode === 'supabase' ? 'text-green-400' : connectionMode === 'loading' ? 'text-amber-400' : connectionMode === 'offline' ? 'text-red-400' : 'text-white/40'}`}>
-              {connectionMode === 'supabase' ? '云端同步' : connectionMode === 'loading' ? '连接中...' : connectionMode === 'offline' ? '网络离线' : '本地模式'}
+              {connectionMode === 'supabase' ? '云端同步' : connectionMode === 'loading' ? '连接中...' : connectionMode === 'offline' ? `网络离线${offlineWrites > 0 ? ` · ${offlineWrites}项待同步` : ''}` : '本地模式'}
             </span>
           </div>
         </div>
@@ -118,28 +355,13 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           <div className="relative">
             <button onClick={() => { setShowMemberFilter(!showMemberFilter); setShowUserMenu(false); setShowNotifications(false); }} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!isTeamView ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>{isTeamView ? <><Eye size={14} /> <span className="hidden sm:inline">团队视图</span></> : <><Users2 size={14} /> <span className="hidden sm:inline">{viewingMember?.name || '个人'}</span></>}<ChevronDown size={12} className="text-muted-foreground" /></button>
             {showMemberFilter && (
-              <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-border z-50 animate-slide-up max-h-64 overflow-y-auto">
-                <div className="px-3 py-2 border-b border-border">
-                  <button onClick={() => { setViewingMember(null); setShowMemberFilter(false); }}
-                    className={`w-full text-left px-2 py-1.5 rounded text-xs font-medium ${isTeamView ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}>
-                    团队整体视图
-                  </button>
-                </div>
-                {visibleMembers.map(m => (
-                  <button key={m.id} onClick={() => { setViewingMember(m.id); setShowMemberFilter(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left ${viewingMemberId === m.id ? 'bg-primary/10 text-primary' : ''}`}>
-                    <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary">{m.avatar}</div>
-                    {m.name}
-                    <span className="text-muted-foreground ml-auto">{m.department}</span>
-                  </button>
-                ))}
-              </div>
+              <MemberFilterDropdown isTeamView={isTeamView} viewingMemberId={viewingMemberId} viewingMember={viewingMember} visibleMembers={visibleMembersMemo} setViewingMember={setViewingMember} onClose={closeAllDropdowns} />
             )}
           </div>
 
           <div className="flex-1" />
           <div className="hidden md:flex items-center gap-2 bg-muted rounded-lg px-3 py-1.5 text-sm w-64">
-            <Search size={16} /><input type="text" placeholder="搜索目标、项目、任务..." className="bg-transparent border-none outline-none flex-1 text-sm text-foreground placeholder:text-muted-foreground" onKeyDown={e => { if (e.key === 'Enter') { const q = (e.target as HTMLInputElement).value.trim(); if (q) { onPageChange('tasks'); setTimeout(() => { const el = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (el) { el.value = q; el.focus(); el.dispatchEvent(new Event('input', { bubbles: true })); } }, 600); } } }} />
+            <Search size={16} /><input ref={searchInputRef} type="text" placeholder="搜索... (⌘K)" className="bg-transparent border-none outline-none flex-1 text-sm text-foreground placeholder:text-muted-foreground" onKeyDown={handleGlobalSearch} />
           </div>
           <div className="relative">
             <button className="relative p-2 rounded-lg hover:bg-muted transition-colors"
@@ -148,28 +370,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
               {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />}
             </button>
             {showNotifications && (
-              <div className="absolute right-0 top-full mt-1 w-80 bg-white rounded-lg shadow-lg border border-border z-50 animate-slide-up">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                  <span className="font-semibold text-sm">通知</span>
-                  {unreadCount > 0 && <button className="text-xs text-primary hover:underline" onClick={() => dispatch({ type: 'MARK_ALL_NOTIFICATIONS_READ' })}>全部已读</button>}
-                </div>
-                <div className="max-h-80 overflow-y-auto">
-                  {state.notifications.slice(0, 8).map(n => (
-                    <div key={n.id} className={`px-4 py-3 border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors ${!n.read ? 'bg-primary/5' : ''}`}
-                      onClick={() => dispatch({ type: 'MARK_NOTIFICATION_READ', payload: n.id })}>
-                      <div className="flex items-start gap-2">
-                        {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />}
-                        <div className={!n.read ? '' : 'pl-3.5'}>
-                          <div className="text-sm font-medium">{n.title}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5">{n.message}</div>
-                          <div className="text-xs text-muted-foreground/60 mt-1">{new Date(n.createdAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {state.notifications.length === 0 && <div className="px-4 py-8 text-center text-sm text-muted-foreground">暂无通知</div>}
-                </div>
-              </div>
+              <NotificationDropdown notifications={notificationsMemo} unreadCount={unreadCount} onMarkAllRead={handleMarkAllRead} onMarkRead={handleMarkRead} onNavigate={handleNotificationNavigate} />
             )}
           </div>
           <div className="relative">
@@ -179,36 +380,13 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
               <ChevronDown size={14} className="hidden sm:block text-muted-foreground" />
             </button>
             {showUserMenu && (
-              <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-border z-50 animate-slide-up">
-                <div className="px-4 py-3 border-b border-border">
-                  <div className="font-medium text-sm">{user?.name}</div>
-                  <div className="text-xs text-muted-foreground">{user?.email}</div>
-                </div>
-              <div className="py-1 max-h-64 overflow-y-auto">
-                 {visibleMembers.map(m => (
-                    <button key={m.id}
-                      onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_CURRENT_USER', payload: m.id }); setShowUserMenu(false); }}
-                      className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted transition-colors text-left ${m.id === user?.id ? 'bg-primary/5 text-primary' : ''}`}>
-                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">{m.avatar}</div>
-                      <div className="flex flex-col"><span>{m.name}</span><span className="text-xs text-muted-foreground">{m.role === 'admin' ? '管理员' : m.role === 'manager' ? '经理' : m.role === 'leader' ? '负责人' : '成员'}</span></div>
-                      <span className="text-xs text-muted-foreground ml-auto">{m.department}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="border-t border-border px-4 py-2">
-                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.removeItem(CURRENT_USER_KEY); } catch {} dispatch({ type: 'SET_CURRENT_USER', payload: null }); setShowUserMenu(false); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-destructive transition-colors">
-                    <LogOut size={14} />
-                    <span>退出登录</span>
-                  </button>
-                </div>
-              </div>
+              <UserMenuDropdown user={user} visibleMembers={visibleMembersMemo} onSwitchUser={handleSwitchUser} onLogout={handleLogout} />
             )}
           </div>
         </header>
         <main className="flex-1 overflow-y-auto bg-muted/30">{children}</main>
       </div>
-      {(showNotifications || showUserMenu || showMemberFilter) && <div className="fixed inset-0 z-40" onClick={() => { setShowNotifications(false); setShowUserMenu(false); setShowMemberFilter(false); }} />}
+      {(showNotifications || showUserMenu || showMemberFilter) && <div className="fixed inset-0 z-40" onClick={closeAllDropdowns} />}
     </div>
   );
 }

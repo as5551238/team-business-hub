@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useStore, useTags, useViewingMember, useMemberLookup, useItemLookupMaps, usePermissions } from '@/store/useStore';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
+import { useVirtualScroll } from '@/hooks/useVirtualScroll';
 import type { Task, TaskStatus, TaskPriority, Comment } from '@/types';
 import { cn } from '@/lib/utils';
 import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, Ban, GripVertical, FileText, Copy, MessageSquare, Trash2, Check, Filter } from 'lucide-react';
@@ -8,7 +9,7 @@ import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 
 function getTodayStr() { return new Date().toISOString().split('T')[0]; }
 
-type ViewMode = 'board' | 'list' | 'table' | 'matrix' | 'canvas' | 'timeline';
+type ViewMode = 'board' | 'list' | 'table' | 'matrix' | 'timeline';
 type BusinessPriority = 'S' | 'A' | 'B' | 'C';
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; icon: any }> = {
@@ -34,13 +35,13 @@ const IMPORTANCE_CONFIG: Record<BusinessPriority, { label: string; color: string
 };
 
 const TIME_OPTIONS = [
-  { key: 'all', label: '全部时间' }, { key: 'today', label: '今天' }, { key: 'week', label: '本周' },
+  { key: 'all', label: '全部时间' }, { key: 'overdue', label: '已逾期' }, { key: 'today', label: '今天' }, { key: 'week', label: '本周' },
   { key: 'month', label: '本月' }, { key: 'quarter', label: '本季度' }, { key: 'custom', label: '自定义' },
 ];
 
 const VIEW_TABS: { key: ViewMode; label: string }[] = [
   { key: 'board', label: '看板' }, { key: 'list', label: '清单' }, { key: 'table', label: '全量' },
-  { key: 'matrix', label: '四象限' }, { key: 'canvas', label: '画布' }, { key: 'timeline', label: '时间线' },
+  { key: 'matrix', label: '四象限' }, { key: 'timeline', label: '时间线' },
 ];
 
 const BOARD_COLUMNS: { key: TaskStatus; label: string; color: string }[] = [
@@ -55,9 +56,9 @@ function getQuadrantForPriority(p: TaskPriority): string { if (p === 'urgent') r
 
 function isOverdue(task: Task): boolean { return task.status !== 'done' && task.status !== 'cancelled' && !!task.dueDate && task.dueDate < getTodayStr(); }
 
-const StatusBadge = React.memo(function StatusBadge({ status }: { status: TaskStatus }) { const c = STATUS_CONFIG[status]; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', c.color)}>{c.label}</span>; });
+const StatusBadge = React.memo(function StatusBadge({ status }: { status: TaskStatus }) { const c = STATUS_CONFIG[status] || STATUS_CONFIG.todo; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', c.color)}>{c.label}</span>; });
 
-const PriorityBadge = React.memo(function PriorityBadge({ priority }: { priority: TaskPriority }) { const c = URGENCY_CONFIG[priority]; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', c.color)}>{c.label}</span>; });
+const PriorityBadge = React.memo(function PriorityBadge({ priority }: { priority: TaskPriority }) { const c = URGENCY_CONFIG[priority] || URGENCY_CONFIG.medium; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', c.color)}>{c.label}</span>; });
 
 const BoardColHeader = React.memo(function BoardColHeader({ icon: Icon, label, color, count }: { icon: any; label: string; color: string; count: number }) {
   return <div className={cn('flex items-center gap-2 px-4 pb-2 border-b-2 mx-3 mb-3', color)}><Icon className="w-4 h-4" /><span className="font-semibold text-sm">{label}</span><span className="text-xs text-muted-foreground ml-auto">{count}</span></div>;
@@ -149,13 +150,14 @@ const TaskRow = React.memo(function TaskRow({ task, depth, childMap, expandedTas
   );
 });
 
-function isInTimeRange(dateStr: string | null, range: string): boolean {
+function isInTimeRange(dateStr: string | null, range: string, now?: Date): boolean {
   if (!dateStr) return false;
   const d = new Date(dateStr);
-  if (range === 'today') return d.toDateString() === new Date().toDateString();
-  if (range === 'week') { const today = new Date(); const ws = new Date(today); ws.setDate(today.getDate() - today.getDay()); ws.setHours(0, 0, 0, 0); return d >= ws; }
-  if (range === 'month') { const today = new Date(); return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear(); }
-  if (range === 'quarter') { const today = new Date(); const q = Math.floor(today.getMonth() / 3); return d.getMonth() >= q * 3 && d.getMonth() < (q + 1) * 3 && d.getFullYear() === today.getFullYear(); }
+  const today = now || new Date();
+  if (range === 'today') return d.toDateString() === today.toDateString();
+  if (range === 'week') { const ws = new Date(today); ws.setDate(today.getDate() - today.getDay()); ws.setHours(0, 0, 0, 0); return d >= ws; }
+  if (range === 'month') { return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear(); }
+  if (range === 'quarter') { const q = Math.floor(today.getMonth() / 3); return d.getMonth() >= q * 3 && d.getMonth() < (q + 1) * 3 && d.getFullYear() === today.getFullYear(); }
   return true;
 }
 
@@ -294,16 +296,17 @@ export default function Tasks() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [detailItem, setDetailItem] = useState<{ type: 'task'; id: string } | null>(null);
+  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d && d.itemType === 'task') setDetailItem({ type: 'task', id: d.itemId }); }; window.addEventListener('tbh-open-detail', h); return () => window.removeEventListener('tbh-open-detail', h); }, []);
+  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (!d || d.page !== 'tasks') return; if (d.statuses) setSelectedStatuses(new Set(d.statuses as string[])); if (d.timeFilter) setTimeFilter(d.timeFilter as string); if (d.persons) setSelectedPersons(new Set(d.persons as string[])); }; window.addEventListener('tbh-nav-filter', h); return () => window.removeEventListener('tbh-nav-filter', h); }, []);
   const [showPersonPicker, setShowPersonPicker] = useState(false);
   const [showCustomDate, setShowCustomDate] = useState(false);
   const [customDateFrom, setCustomDateFrom] = useState('');
   const [customDateTo, setCustomDateTo] = useState('');
-  const [fromTemplate, setFromTemplate] = useState(false);
+  const [newTags, setNewTags] = useState<Set<string>>(new Set());
+  const [newSupporters, setNewSupporters] = useState<Set<string>>(new Set());
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [sortField, setSortField] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [canvasPositions, setCanvasPositions] = useState<Record<string, { x: number; y: number }>>({});
-  const canvasDragRef = useRef<{ id: string; startX: number; startY: number; el: HTMLElement } | null>(null);
   const personPickerRef = useRef<HTMLDivElement>(null);
   const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -315,7 +318,7 @@ export default function Tasks() {
   type KanbanGroupBy = 'status' | 'tag' | 'priority' | 'category' | 'level' | 'person' | 'time';
   const [kanbanGroupBy, setKanbanGroupBy] = useState<KanbanGroupBy>(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).groupBy || 'status'; } catch { return 'status'; } });
   const [newColName, setNewColName] = useState('');
-  useEffect(() => { try { localStorage.setItem(KANBAN_LS_KEY, JSON.stringify({ customMode: kanbanCustomMode, columns: customColumns, groupBy: kanbanGroupBy })); } catch {} }, [kanbanCustomMode, customColumns, kanbanGroupBy]);
+  const [fromTemplate, setFromTemplate] = useState(false);  useEffect(() => { try { localStorage.setItem(KANBAN_LS_KEY, JSON.stringify({ customMode: kanbanCustomMode, columns: customColumns, groupBy: kanbanGroupBy })); } catch {} }, [kanbanCustomMode, customColumns, kanbanGroupBy]);
 
   // All users default to team view — no auto-switch to personal view
 
@@ -342,8 +345,11 @@ export default function Tasks() {
     if (selectedTags.size > 0) list = list.filter(t => (t.tags || []).some(tag => selectedTags.has(tag)));
     if (selectedPersons.size > 0) list = list.filter(t => selectedPersons.has(t.leaderId) || (t.supporterIds || []).some(s => selectedPersons.has(s)));
     if (timeFilter !== 'all') {
-      if (timeFilter === 'custom' && customDateFrom && customDateTo) list = list.filter(t => t.dueDate && t.dueDate >= customDateFrom && t.dueDate <= customDateTo);
-      else list = list.filter(t => isInTimeRange(t.dueDate, timeFilter));
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      if (timeFilter === 'overdue') list = list.filter(t => t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < todayStr);
+      else if (timeFilter === 'custom' && customDateFrom && customDateTo) list = list.filter(t => t.dueDate && t.dueDate >= customDateFrom && t.dueDate <= customDateTo);
+      else list = list.filter(t => isInTimeRange(t.dueDate, timeFilter, now));
     }
     if (searchQuery.trim()) { const q = searchQuery.trim().toLowerCase(); list = list.filter(t => t.title.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q)); }
     return list;
@@ -404,9 +410,9 @@ export default function Tasks() {
     if (!tpl) return;
     try {
       const data = JSON.parse(tpl.content);
-      dispatch({ type: 'ADD_TASK', payload: { title: data.title || tpl.title, description: data.description || '', projectId: data.projectId || null, goalId: data.goalId || null, parentId: null, status: 'todo' as TaskStatus, priority: (data.priority || 'medium') as TaskPriority, leaderId: data.leaderId || state.currentUser?.id || '', supporterIds: data.supporterIds || [], tags: data.tags || [], category: data.category || '', dueDate: data.dueDate || null, reminderDate: data.reminderDate || null, completedAt: null, subtasks: data.subtasks || [], attachments: [], trackingRecords: [], repeatCycle: data.repeatCycle || 'none', summary: '' } });
+      dispatch({ type: 'ADD_TASK', payload: { title: data.title || tpl.title, description: data.description || '', projectId: data.projectId || null, goalId: data.goalId || null, parentId: null, status: 'todo' as TaskStatus, priority: (data.priority || 'medium') as TaskPriority, leaderId: data.leaderId || state.currentUser?.id || '', supporterIds: data.supporterIds || [], tags: data.tags || [], category: data.category || '', startDate: data.startDate || null, dueDate: data.dueDate || null, reminderDate: data.reminderDate || null, completedAt: null, subtasks: data.subtasks || [], attachments: [], trackingRecords: [], repeatCycle: data.repeatCycle || 'none', summary: '' } });
     } catch {
-      dispatch({ type: 'ADD_TASK', payload: { title: tpl.title, description: tpl.description, projectId: null, goalId: null, parentId: null, status: 'todo' as TaskStatus, priority: 'medium' as TaskPriority, leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], category: '', dueDate: null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', summary: '' } });
+      dispatch({ type: 'ADD_TASK', payload: { title: tpl.title, description: tpl.description, projectId: null, goalId: null, parentId: null, status: 'todo' as TaskStatus, priority: 'medium' as TaskPriority, leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], category: '', startDate: null, dueDate: null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', summary: '' } });
     }
     setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate('');
   }
@@ -438,61 +444,16 @@ export default function Tasks() {
     const map = new Map<string, string>();
     filteredTasks.forEach(t => {
       if (t.leaderId && !map.has(t.leaderId)) {
-        const m = state.members.find(m => m.id === t.leaderId);
-        if (m) map.set(t.leaderId, m.name);
+        const name = getName(t.leaderId);
+        if (name && name !== '未知') map.set(t.leaderId, name);
       }
     });
     return [...map.entries()];
-  }, [filteredTasks, state.members]);
+  }, [filteredTasks, getName]);
 
-  const canvasItemMouseDown = useCallback((e: React.MouseEvent | React.TouchEvent, id: string) => {
-    let cx = 0; let cy = 0;
-    if ('touches' in e && e.touches.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
-    else if ('clientX' in e) { cx = (e as React.MouseEvent).clientX; cy = (e as React.MouseEvent).clientY; }
-    if (cx === 0 && cy === 0 && 'button' in e && (e as React.MouseEvent).button !== 0) return;
-    e.preventDefault();
-    const el = e.currentTarget as HTMLElement;
-    const existingPos = canvasPositions[id];
-    const origLeft = existingPos?.x ?? parseFloat(el.style.left) ?? 0;
-    const origTop = existingPos?.y ?? parseFloat(el.style.top) ?? 0;
-    el.dataset.origLeft = String(origLeft);
-    el.dataset.origTop = String(origTop);
-    canvasDragRef.current = { id, startX: cx, startY: cy, el };
-  }, [canvasPositions]);
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent | TouchEvent) => {
-      if (!canvasDragRef.current) return;
-      const pos = getTouchPos(e);
-      const d = canvasDragRef.current;
-      const ol = parseFloat(d.el.dataset.origLeft || '0');
-      const ot = parseFloat(d.el.dataset.origTop || '0');
-      d.el.style.left = (ol + pos.x - d.startX) + 'px';
-      d.el.style.top = (ot + pos.y - d.startY) + 'px';
-      d.el.style.zIndex = '10';
-    };
-    const onUp = () => {
-      if (!canvasDragRef.current) return;
-      const d = canvasDragRef.current;
-      const nl = parseFloat(d.el.style.left);
-      const nt = parseFloat(d.el.style.top);
-      if (can('edit_tasks')) {
-        dispatch({ type: 'UPDATE_TASK', payload: { id: d.id, updates: { canvasX: Math.round(nl), canvasY: Math.round(nt) } } });
-        setCanvasPositions(prev => ({ ...prev, [d.id]: { x: Math.round(nl), y: Math.round(nt) } }));
-      }
-      d.el.style.zIndex = '';
-      canvasDragRef.current = null;
-    };
-    const mmH = (e: MouseEvent) => onMove(e);
-    const muH = () => onUp();
-    const tmH = (e: TouchEvent) => onMove(e);
-    const teH = () => onUp();
-    document.addEventListener('mousemove', mmH);
-    document.addEventListener('mouseup', muH);
-    document.addEventListener('touchmove', tmH, { passive: true });
-    document.addEventListener('touchend', teH);
-    return () => { document.removeEventListener('mousemove', mmH); document.removeEventListener('mouseup', muH); document.removeEventListener('touchmove', tmH); document.removeEventListener('touchend', teH); };
-  }, [dispatch]);
+  // Virtual scroll for table view (must be at component top level, not inside renderTable)
+  const TASK_TABLE_ROW_H = 42;
+  const taskTableVirtual = useVirtualScroll({ itemCount: sortedTasks.length, rowHeight: TASK_TABLE_ROW_H });
 
   function renderBoard() {
     const onOpenDetail = (task: Task) => setDetailItem({ type: 'task', id: task.id });
@@ -677,12 +638,16 @@ export default function Tasks() {
   }
 
   function renderTable() {
+    const needsVirtual = sortedTasks.length > 50;
+    const virtual = taskTableVirtual;
+    const TABLE_ROW_H = TASK_TABLE_ROW_H;
+    const visibleTasks = needsVirtual ? sortedTasks.slice(virtual.startIdx, virtual.endIdx) : sortedTasks;
     return (
       <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className={`overflow-x-auto${needsVirtual ? ' overflow-y-auto' : ''}`} style={needsVirtual ? { maxHeight: 'calc(100vh - 220px)' } : undefined} ref={needsVirtual ? virtual.scrollRef : undefined} onScroll={needsVirtual ? virtual.onScroll : undefined}>
           <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/50 border-b border-border">
+            <thead className={`bg-muted/50 border-b border-border${needsVirtual ? ' sticky top-0 z-10' : ''}`}>
+              <tr>
                 {batchProps.batchMode && <th className="w-10 px-2"><input type="checkbox" checked={sortedTasks.length > 0 && batchProps.selectedIds.size === sortedTasks.length} className="rounded" onChange={e => { e.stopPropagation(); if (sortedTasks.length > 0 && batchProps.selectedIds.size === sortedTasks.length) { setSelectedIds(new Set()); } else { setSelectedIds(new Set(sortedTasks.map(t => t.id))); } }} /></th>}
                 {[
                   { field: 'title', label: '任务名称' }, { field: 'status', label: '状态' }, { field: 'priority', label: '紧急程度' },
@@ -694,7 +659,8 @@ export default function Tasks() {
             </thead>
             <tbody>
               {sortedTasks.length === 0 && <tr><td colSpan={9} className="text-center py-12 text-muted-foreground text-sm">暂无匹配任务</td></tr>}
-              {sortedTasks.map(task => {
+              {needsVirtual && virtual.startIdx > 0 && <tr style={{ height: virtual.startIdx * TABLE_ROW_H }} />}
+              {visibleTasks.map(task => {
                 const od = isOverdue(task);
                 return (
                   <tr key={task.id} className={cn('border-b border-border/50 hover:bg-muted/30 cursor-pointer transition-colors', od && 'bg-red-50/30')} onClick={() => setDetailItem({ type: 'task', id: task.id })}>
@@ -711,46 +677,9 @@ export default function Tasks() {
                   </tr>
                 );
               })}
+              {needsVirtual && virtual.endIdx < sortedTasks.length && <tr style={{ height: (sortedTasks.length - virtual.endIdx) * TABLE_ROW_H }} />}
             </tbody>
           </table>
-        </div>
-      </div>
-    );
-  }
-
-  function renderCanvas() {
-    const posTasks = filteredTasks;
-    const defaultW = 220;
-    const defaultH = 120;
-    const cols = Math.max(1, Math.floor((typeof window !== 'undefined' ? window.innerWidth - 80 : 1000) / (defaultW + 20)));
-    return (
-      <div className="relative bg-muted/20 rounded-xl border border-border overflow-auto" style={{ minHeight: Math.ceil(posTasks.length / cols) * (defaultH + 20) + 40 }}>
-        <div className="relative" style={{ width: '100%', minHeight: '100%' }}>
-          <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
-            {posTasks.filter(t => (t.parentId || '')).map(task => {
-              const parent = posTasks.find(p => p.id === task.parentId);
-              if (!parent) return null;
-              const pPos = canvasPositions[parent.id];
-              const tPos = canvasPositions[task.id];
-              const px = pPos?.x ?? 0; const py = pPos?.y ?? 0;
-              const cx = tPos?.x ?? 0; const cy = tPos?.y ?? 0;
-              return <line key={task.id + '-line'} x1={px} y1={py} x2={cx} y2={cy} stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4,4" />;
-            })}
-          </svg>
-          {posTasks.map((task, i) => {
-            const pos = canvasPositions[task.id];
-            const x = pos?.x ?? (i % cols) * (defaultW + 20) + 20;
-            const y = pos?.y ?? Math.floor(i / cols) * (defaultH + 20) + 20;
-            const cc = commentCounts[task.id] || 0;
-            return (
-              <div key={task.id} className="absolute bg-white rounded-lg border border-border shadow-sm p-3 hover:shadow-md transition-shadow cursor-pointer select-none" style={{ left: x, top: y, width: defaultW, minHeight: 80 }} onClick={() => setDetailItem({ type: 'task', id: task.id })} onMouseDown={e => canvasItemMouseDown(e, task.id)} onTouchStart={e => canvasItemMouseDown(e, task.id)}>
-                {batchProps.batchMode && <div className="mb-1" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded" onChange={e => { e.stopPropagation(); batchProps.onToggleSelect(task.id); }} /></div>}
-                <div className="flex items-center gap-1.5 mb-1.5"><GripVertical className="w-3 h-3 text-muted-foreground/40" /><StatusBadge status={task.status} />{cc > 0 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto"><MessageSquare size={10} />{cc}</span>}</div>
-                <p className="text-sm font-medium truncate mb-1">{task.title}</p>
-                <div className="flex items-center justify-between text-xs text-muted-foreground"><span className="truncate">{getName(task.leaderId)}</span><PriorityBadge priority={task.priority} /></div>
-              </div>
-            );
-          })}
         </div>
       </div>
     );
@@ -794,23 +723,23 @@ export default function Tasks() {
     );
   }
 
-  const activeFilterCount = [selectedStatuses.size > 0, selectedPriorities.size > 0, selectedLevels.size > 0, selectedCategories.size > 0, selectedTags.size > 0, selectedPersons.size > 0, timeFilter !== 'all'].filter(Boolean).length;
+  const activeFilterCount = (selectedStatuses.size > 0 ? 1 : 0) + (selectedPriorities.size > 0 ? 1 : 0) + (selectedLevels.size > 0 ? 1 : 0) + (selectedCategories.size > 0 ? 1 : 0) + (selectedTags.size > 0 ? 1 : 0) + (selectedPersons.size > 0 ? 1 : 0) + (timeFilter !== 'all' ? 1 : 0);
 
   const toggleSelectAll = useCallback(() => {
     if (selectedIds.size === filteredTasks.length) setSelectedIds(new Set());
     else setSelectedIds(new Set(filteredTasks.map(t => t.id)));
   }, [selectedIds.size, filteredTasks]);
 
-  const batchDelete = useCallback(() => { if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
+  const batchDelete = useCallback(() => { if (!can('delete_tasks')) return; if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
   const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_tasks')) return; if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); }, [selectedIds, dispatch]);
   const batchAssign = useCallback((leaderId: string) => { if (!can('edit_tasks')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
 
-  function closeCreateDialog() { setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate(''); }
+  function closeCreateDialog() { setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate(''); setNewTags(new Set()); setNewSupporters(new Set()); }
 
   function doCreateTask() {
     const title = (document.getElementById('new-task-title') as HTMLInputElement)?.value?.trim();
     if (!title) return;
-    dispatch({ type: 'ADD_TASK', payload: { title, description: (document.getElementById('new-task-desc') as HTMLTextAreaElement)?.value || '', projectId: (document.getElementById('new-task-project') as HTMLSelectElement)?.value || null, goalId: null, parentId: (document.getElementById('new-task-parent') as HTMLSelectElement)?.value || null, status: 'todo' as TaskStatus, priority: ((document.getElementById('new-task-priority') as HTMLSelectElement)?.value || 'medium') as TaskPriority, leaderId: (document.getElementById('new-task-leader') as HTMLSelectElement)?.value || state.currentUser?.id || '', supporterIds: [], tags: [], category: (document.getElementById('new-task-category') as HTMLInputElement)?.value || '', dueDate: (document.getElementById('new-task-due') as HTMLInputElement)?.value || null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', summary: '' } });
+    dispatch({ type: 'ADD_TASK', payload: { title, description: (document.getElementById('new-task-desc') as HTMLTextAreaElement)?.value || '', projectId: (document.getElementById('new-task-project') as HTMLSelectElement)?.value || null, goalId: (document.getElementById('new-task-goal') as HTMLSelectElement)?.value || null, parentId: (document.getElementById('new-task-parent') as HTMLSelectElement)?.value || null, status: 'todo' as TaskStatus, priority: ((document.getElementById('new-task-priority') as HTMLSelectElement)?.value || 'medium') as TaskPriority, leaderId: (document.getElementById('new-task-leader') as HTMLSelectElement)?.value || state.currentUser?.id || '', supporterIds: Array.from(newSupporters), tags: Array.from(newTags), category: (document.getElementById('new-task-category') as HTMLInputElement)?.value || '', startDate: (document.getElementById('new-task-start') as HTMLInputElement)?.value || null, dueDate: (document.getElementById('new-task-due') as HTMLInputElement)?.value || null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', summary: '' } });
     closeCreateDialog();
   }
 
@@ -873,35 +802,39 @@ export default function Tasks() {
           {viewMode === 'list' && renderList()}
           {viewMode === 'table' && renderTable()}
           {viewMode === 'matrix' && <TaskMatrixView filteredTasks={filteredTasks} setDetailItem={setDetailItem} getMemberName={getName} getQuadrantForPriority={getQuadrantForPriority} handleDropToQuadrant={handleDropToQuadrant} commentCounts={commentCounts} batchProps={batchProps} />}
-          {viewMode === 'canvas' && renderCanvas()}
           {viewMode === 'timeline' && renderTimeline()}
         </div>
       </div>
 
 
       {showCreateDialog && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={closeCreateDialog}>
-          <div className="bg-white rounded-xl border border-border shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0"><h2 className="text-lg font-semibold">新建任务</h2><button className="text-sm px-3 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors" onClick={closeCreateDialog}>关闭</button></div>
-            <div className="p-6 space-y-4 overflow-y-auto overflow-x-visible">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={closeCreateDialog} />
+          <div className="relative bg-white rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-5 md:px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0"><h3 className="font-semibold">新建任务</h3><button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={closeCreateDialog}><X size={16} /></button></div>
+            <div className="px-5 md:px-6 py-4 space-y-4 overflow-y-auto flex-1">
               {!fromTemplate ? (
                 <div className="space-y-4">
-                  <div><label className="text-sm font-medium mb-1.5 block">标题</label><input type="text" id="new-task-title" className="w-full text-sm border border-input rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-ring" placeholder="输入任务标题" /></div>
-                  <div><label className="text-sm font-medium mb-1.5 block">描述</label><textarea id="new-task-desc" className="w-full text-sm border border-input rounded-lg px-3 py-2 min-h-[80px] focus:outline-none focus:ring-1 focus:ring-ring" placeholder="输入任务描述" /></div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className="text-sm font-medium mb-1.5 block">紧急程度</label><select id="new-task-priority" className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white"><option value="medium">中</option><option value="low">低</option><option value="high">高</option><option value="urgent">紧急</option></select></div>
-                    <div><label className="text-sm font-medium mb-1.5 block">主导人</label><select id="new-task-leader" className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white"><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div><label className="text-sm font-medium mb-1.5 block">任务名称 *</label><input type="text" id="new-task-title" className="w-full text-sm border border-input rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-ring" placeholder="输入任务名称" /></div>
+                  <div><label className="text-sm font-medium mb-1.5 block">描述</label><textarea id="new-task-desc" className="w-full text-sm border border-input rounded-lg px-3 py-2 min-h-[80px] resize-none focus:outline-none focus:ring-1 focus:ring-ring" placeholder="输入任务描述" /></div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div><label className="text-sm font-medium mb-1.5 block">紧急程度</label><select id="new-task-priority" className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white"><option value="urgent">紧急 (S)</option><option value="high">高 (A)</option><option value="medium" selected>中 (B)</option><option value="low">低 (C)</option></select></div>
+                    <div><label className="text-sm font-medium mb-1.5 block">开始日期</label><input type="date" id="new-task-start" className="w-full text-sm border border-input rounded-lg px-3 py-2" /></div>
                     <div><label className="text-sm font-medium mb-1.5 block">截止日期</label><input type="date" id="new-task-due" className="w-full text-sm border border-input rounded-lg px-3 py-2" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="text-sm font-medium mb-1.5 block">关联目标</label><select id="new-task-goal" className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white"><option value="">无</option>{state.goals.filter(g => g.status === 'in_progress').map(g => <option key={g.id} value={g.id}>{g.title}</option>)}</select></div>
                     <div><label className="text-sm font-medium mb-1.5 block">所属项目</label><select id="new-task-project" className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white"><option value="">无</option>{state.projects.filter(p => p.status === 'in_progress').map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select></div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className="text-sm font-medium mb-1.5 block">分类</label><input type="text" id="new-task-category" className="w-full text-sm border border-input rounded-lg px-3 py-2" placeholder="输入分类" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="text-sm font-medium mb-1.5 block">主导人</label><select id="new-task-leader" className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white"><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
                     <div><label className="text-sm font-medium mb-1.5 block">父任务</label><select id="new-task-parent" className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white"><option value="">无</option>{state.tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled').map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></div>
                   </div>
+                  <div><label className="text-sm font-medium mb-1.5 block">分类</label><select id="new-task-category" className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white"><option value="">未分类</option>{allCategories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div><label className="text-sm font-medium mb-1.5 block">标签</label><div className="flex flex-wrap gap-1.5">{tags.map(t => <button key={t.id || t.name} data-new-task-tag={t.name} type="button" className={cn('text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer', newTags.has(t.name) ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-border hover:border-primary/50')} onClick={() => setNewTags(prev => { const n = new Set(prev); n.has(t.name) ? n.delete(t.name) : n.add(t.name); return n; })}>{t.name}</button>)}</div></div>
+                  {activeMembers.length > 0 && <div><label className="text-sm font-medium mb-1.5 block">协作者</label><div className="flex flex-wrap gap-1.5">{activeMembers.map(m => { const sel = newSupporters.has(m.id); return <button key={m.id} type="button" className={cn('text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer flex items-center gap-1', sel ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-border hover:border-primary/50')} onClick={() => setNewSupporters(prev => { const n = new Set(prev); n.has(m.id) ? n.delete(m.id) : n.add(m.id); return n; })}><span className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-[8px]">{m.name[0]}</span>{m.name}</button>; })}</div></div>}
                   <button className="w-full bg-primary text-primary-foreground py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors" onClick={doCreateTask}>创建任务</button>
-                  {taskTemplates.length > 0 && <button className="w-full border border-input text-muted-foreground py-2.5 rounded-lg text-sm font-medium hover:bg-accent transition-colors flex items-center justify-center gap-1.5" onClick={() => setFromTemplate(true)}><Copy className="w-4 h-4" />从模板创建</button>}
+                  {taskTemplates.length > 0 && <button className="w-full border border-border text-muted-foreground py-2.5 rounded-lg text-sm font-medium hover:bg-accent transition-colors flex items-center justify-center gap-1.5" onClick={() => setFromTemplate(true)}><Copy className="w-4 h-4" />从模板创建</button>}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -919,7 +852,7 @@ export default function Tasks() {
         </div>
       )}
 
-      {detailItem && <ItemDetailPanel isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
+      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
     </div>
   );
 }

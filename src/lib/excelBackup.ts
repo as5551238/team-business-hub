@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { BackupData, Member, Goal, Project, Task, Notification, Activity, ItemLink, Tag, Category, Template, ScheduleEvent, Note, ReviewEntry } from '@/types';
+import type { BackupData, Member, Goal, Project, Task, Notification, Activity, ItemLink, Tag, Category, Template, ScheduleEvent, Note, ReviewEntry, Comment, Bookmark, SavedView } from '@/types';
 
 interface FlatMember extends Omit<Member, 'permissions'> { permissions: string; }
 interface FlatGoal extends Omit<Goal, 'keyResults' | 'tags' | 'supporterIds' | 'attachments' | 'trackingRecords' | 'selectedKRIds'> { keyResults: string; tags: string; supporterIds: string; attachments: string; trackingRecords: string; selectedKRIds: string; }
@@ -16,6 +16,9 @@ function parseArr(val: any): any[] {
   if (Array.isArray(val)) return val;
   try { const p = JSON.parse(val); return Array.isArray(p) ? p : []; } catch { return []; }
 }
+
+interface FlatComment extends Omit<Comment, 'mentionedMemberIds'> { mentionedMemberIds: string; }
+interface FlatSavedView extends Omit<SavedView, 'filters'> { filters: string; }
 
 export function exportToExcel(data: BackupData): ArrayBuffer {
   const wb = XLSX.utils.book_new();
@@ -68,6 +71,18 @@ export function exportToExcel(data: BackupData): ArrayBuffer {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.notes), '笔记');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.reviews), '复盘');
 
+  const flatComments: FlatComment[] = (data.comments || []).map(c => ({
+    ...c, mentionedMemberIds: arrStr(c.mentionedMemberIds),
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(flatComments), '评论');
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.bookmarks || []), '书签');
+
+  const flatSavedViews: FlatSavedView[] = (data.savedViews || []).map(v => ({
+    ...v, filters: arrStr(v.filters),
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(flatSavedViews), '视图');
+
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 }
 
@@ -97,7 +112,7 @@ export function importFromExcel(buffer: ArrayBuffer): BackupData | null {
       ...p, tags: parseArr(p.tags), supporterIds: parseArr(p.supporterIds),
       attachments: parseArr(p.attachments), trackingRecords: parseArr(p.trackingRecords),
       repeatCycle: p.repeatCycle || 'none', discussionThreadId: p.discussionThreadId || null,
-      summary: p.summary || '', priority: p.priority || 'medium', status: p.status || 'planning',
+      summary: p.summary || '', priority: p.priority || 'medium', status: p.status || 'todo',
     }));
 
     const tasks = getSheet('任务').map((t: any) => ({
@@ -117,6 +132,20 @@ export function importFromExcel(buffer: ArrayBuffer): BackupData | null {
 
     if (members.length === 0) return null;
 
+    const comments = getSheet('评论').map((c: any) => ({
+      ...c, mentionedMemberIds: parseArr(c.mentionedMemberIds),
+      followUpRequired: c.followUpRequired || false,
+      followUpStatus: c.followUpStatus || 'none', isRead: c.isRead || false,
+    }));
+
+    const bookmarks = getSheet('书签').map((b: any) => ({
+      ...b, icon: b.icon || 'file', category: b.category || '默认',
+    }));
+
+    const savedViews = getSheet('视图').map((v: any) => ({
+      ...v, filters: parseArr(v.filters), filterLogic: v.filterLogic || 'and',
+    }));
+
     return {
       version: '3.0', exportedAt: new Date().toISOString(),
       members: members as Member[], goals: goals as Goal[], projects: projects as Project[],
@@ -125,6 +154,8 @@ export function importFromExcel(buffer: ArrayBuffer): BackupData | null {
       tags: tags as Tag[], categories: categories as Category[],
       templates: getSheet('模板') as Template[], scheduleEvents: getSheet('日程') as ScheduleEvent[],
       notes: getSheet('笔记') as Note[], reviews: getSheet('复盘') as ReviewEntry[],
+      comments: comments as Comment[], bookmarks: bookmarks as Bookmark[],
+      savedViews: savedViews as SavedView[],
     };
   } catch (e) {
     console.error('Excel import error:', e);

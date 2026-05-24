@@ -1,4 +1,4 @@
-import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark } from '@/types';
+import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark, StatusFlowRule, AutomationRule, Sprint } from '@/types';
 
 export const STORAGE_KEY = 'tbh-data';
 const LEGACY_STORAGE_KEY = 'team-business-hub-data';
@@ -45,6 +45,7 @@ export type Action =
   | { type: 'UPDATE_TAG'; payload: { id: string; updates: Partial<Tag> } }
   | { type: 'DELETE_TAG'; payload: string }
   | { type: 'ADD_SAVED_VIEW'; payload: Omit<SavedView, 'id' | 'createdAt'> }
+  | { type: 'UPDATE_SAVED_VIEW'; payload: { id: string; updates: Partial<SavedView> } }
   | { type: 'DELETE_SAVED_VIEW'; payload: string }
   | { type: 'ADD_REVIEW'; payload: Omit<ReviewEntry, 'id' | 'createdAt' | 'updatedAt'> }
   | { type: 'UPDATE_REVIEW'; payload: { id: string; updates: Partial<ReviewEntry> } }
@@ -69,7 +70,17 @@ export type Action =
   | { type: 'UPDATE_BOOKMARK'; payload: { id: string; updates: Partial<Bookmark> } }
   | { type: 'DELETE_BOOKMARK'; payload: string }
   | { type: 'REORDER_BOOKMARKS'; payload: Bookmark[] }
-  | { type: 'SET_BOOKMARKS'; payload: Bookmark[] };
+  | { type: 'SET_BOOKMARKS'; payload: Bookmark[] }
+  | { type: 'ADD_STATUS_FLOW_RULE'; payload: Omit<StatusFlowRule, 'id'> & { id?: string } }
+  | { type: 'UPDATE_STATUS_FLOW_RULE'; payload: { index: number; rule: StatusFlowRule } }
+  | { type: 'DELETE_STATUS_FLOW_RULE'; payload: number }
+  | { type: 'SET_STATUS_FLOW_RULES'; payload: StatusFlowRule[] }
+  | { type: 'ADD_AUTOMATION_RULE'; payload: Omit<AutomationRule, 'id' | 'createdAt' | 'updatedAt'> }
+  | { type: 'UPDATE_AUTOMATION_RULE'; payload: { id: string; updates: Partial<AutomationRule> } }
+  | { type: 'DELETE_AUTOMATION_RULE'; payload: string }
+  | { type: 'ADD_SPRINT'; payload: Omit<Sprint, 'id' | 'createdAt' | 'updatedAt'> }
+  | { type: 'UPDATE_SPRINT'; payload: { id: string; updates: Partial<Sprint> } }
+  | { type: 'DELETE_SPRINT'; payload: string };
 
 export function toCamel(row: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
@@ -83,7 +94,8 @@ export function toCamel(row: Record<string, any>): Record<string, any> {
 export function toSnake(obj: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
   for (const key of Object.keys(obj)) {
-    const snake = key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
+    // Handle consecutive uppercase abbreviations (e.g., selectedKRIds → selected_kr_ids not selected_k_r_ids)
+    const snake = key.replace(/[A-Z]{2,}/g, m => `_${m.toLowerCase()}`).replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
     result[snake] = obj[key];
   }
   return result;
@@ -112,43 +124,93 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: any[
     currentUser: data.currentUser ?? null,
     viewingMemberId: (data as any).viewingMemberId || null,
     batchOperations: arr((data as any).batchOperations),
+    statusFlowRules: arr((data as any).statusFlowRules),
+    automationRules: arr((data as any).automationRules),
+    sprints: arr((data as any).sprints),
   };
   result.goals = result.goals.map((g: any) => ({
-    ...g, tags: g.tags || [], keyResults: g.keyResults || [],
-    attachments: g.attachments || [], trackingRecords: g.trackingRecords || [],
-    supporterIds: g.supporterIds || [], priority: g.priority || 'medium',
-    status: g.status || 'planning', repeatCycle: g.repeatCycle || 'none',
-    selectedKRIds: g.selectedKRIds || [], discussionThreadId: g.discussionThreadId ?? null,
-    summary: g.summary || '', progress: g.progress || 0,
+    ...g, tags: g.tags ?? [], keyResults: g.keyResults ?? [],
+    attachments: g.attachments ?? [], trackingRecords: g.trackingRecords ?? [],
+    supporterIds: g.supporterIds ?? [], priority: g.priority ?? 'medium',
+    status: g.status ?? 'todo', repeatCycle: g.repeatCycle ?? 'none',
+    selectedKRIds: g.selectedKRIds ?? [], discussionThreadId: g.discussionThreadId ?? null,
+    summary: g.summary ?? '', progress: g.progress ?? 0,
+    parentId: g.parentId ?? null, level: g.level ?? 0,
+    startDate: g.startDate ?? '', endDate: g.endDate ?? '',
+    description: g.description ?? '', type: g.type ?? 'okr',
   }));
   result.projects = result.projects.map((p: any) => ({
-    ...p, tags: p.tags || [], attachments: p.attachments || [],
-    trackingRecords: p.trackingRecords || [], supporterIds: p.supporterIds || [],
-    priority: p.priority || 'medium', status: p.status || 'planning',
-    repeatCycle: p.repeatCycle || 'none', discussionThreadId: p.discussionThreadId ?? null,
-    summary: p.summary || '', progress: p.progress || 0,
+    ...p, tags: p.tags ?? [], attachments: p.attachments ?? [],
+    trackingRecords: p.trackingRecords ?? [], supporterIds: p.supporterIds ?? [],
+    priority: p.priority ?? 'medium', status: p.status ?? 'todo',
+    repeatCycle: p.repeatCycle ?? 'none', discussionThreadId: p.discussionThreadId ?? null,
+    summary: p.summary ?? '', progress: p.progress ?? 0,
+    parentId: p.parentId ?? null, goalId: p.goalId ?? null,
+    startDate: p.startDate ?? '', endDate: p.endDate ?? '',
+    taskCount: p.taskCount ?? 0, description: p.description ?? '',
   }));
   result.tasks = result.tasks.map((t: any) => ({
-    ...t, tags: t.tags || [], subtasks: t.subtasks || [],
-    attachments: t.attachments || [], trackingRecords: t.trackingRecords || [],
-    supporterIds: t.supporterIds || [], priority: t.priority || 'medium',
-    status: t.status || 'todo', category: t.category || '',
-    repeatCycle: t.repeatCycle || 'none', discussionThreadId: t.discussionThreadId ?? null,
-    summary: t.summary || '', parentId: t.parentId || null,
+    ...t, tags: t.tags ?? [], subtasks: t.subtasks ?? [],
+    attachments: t.attachments ?? [], trackingRecords: t.trackingRecords ?? [],
+    supporterIds: t.supporterIds ?? [], priority: t.priority ?? 'medium',
+    status: t.status ?? 'todo', category: t.category ?? '',
+    repeatCycle: t.repeatCycle ?? 'none', discussionThreadId: t.discussionThreadId ?? null,
+    summary: t.summary ?? '', parentId: t.parentId ?? null,
+    startDate: t.startDate ?? null, dueDate: t.dueDate ?? null,
+    reminderDate: t.reminderDate ?? null, completedAt: t.completedAt ?? null,
+    goalId: t.goalId ?? null, projectId: t.projectId ?? null,
+    blockedBy: t.blockedBy ?? [],
+    sprintId: t.sprintId ?? null,
+    description: t.description ?? '',
   }));
   result.members = result.members.map((m: any) => ({
-    ...m, permissions: m.permissions || [], role: m.role || 'member',
-    avatar: m.avatar || '', status: m.status || 'active',
+    ...m, permissions: m.permissions ?? [], role: m.role ?? 'member',
+    avatar: m.avatar ?? '', status: m.status ?? 'active',
   }));
   result.notifications = result.notifications.map((n: any) => ({
     ...n, read: n.read ?? false,
   }));
   result.categories = result.categories.map((c: any) => ({
-    ...c, appliesTo: c.appliesTo || [], color: c.color || '#6366f1',
-    icon: c.icon || 'tag',
+    ...c, appliesTo: c.appliesTo ?? [], color: c.color ?? '#6366f1',
+    icon: c.icon ?? 'tag',
   }));
   result.tags = result.tags.map((t: any) => ({
     ...t, color: t.color || '#6366f1',
+  }));
+  result.notes = result.notes.map((n: any) => ({
+    ...n, tags: n.tags ?? [], category: n.category ?? '',
+  }));
+  result.comments = result.comments.map((c: any) => ({
+    ...c, mentionedMemberIds: c.mentionedMemberIds ?? [],
+    isRead: c.isRead ?? false, followUpRequired: c.followUpRequired ?? false,
+    followUpStatus: c.followUpStatus ?? 'none',
+  }));
+  result.scheduleEvents = result.scheduleEvents.map((e: any) => ({
+    ...e, repeatCycle: e.repeatCycle ?? 'none', allDay: e.allDay ?? true, memberId: e.memberId ?? '',
+  }));
+  result.bookmarks = result.bookmarks.map((b: any) => ({
+    ...b, icon: b.icon ?? 'file', category: b.category ?? '默认', order: b.order ?? 0, memberId: b.memberId ?? '',
+  }));
+  result.savedViews = result.savedViews.map((v: any) => ({
+    ...v, filters: v.filters ?? [], filterLogic: v.filterLogic ?? 'and', memberId: v.memberId ?? '', updatedAt: v.updatedAt || v.createdAt || '',
+  }));
+  result.templates = result.templates.map((t: any) => ({
+    ...t, isPublic: t.isPublic ?? true, category: t.category ?? '',
+  }));
+  result.activities = result.activities.map((a: any) => ({
+    ...a, details: a.details ?? '',
+  }));
+  result.reviews = result.reviews.map((r: any) => ({
+    ...r, content: r.content ?? '', improvements: Array.isArray(r.improvements) ? r.improvements : [], metrics: r.metrics && typeof r.metrics === 'object' ? r.metrics : { goalsCompleted: 0, goalsInProgress: 0, projectsCompleted: 0, projectsInProgress: 0, tasksCompleted: 0, tasksOverdue: 0, tasksTotal: 0, completionRate: 0 },
+  }));
+  result.statusFlowRules = result.statusFlowRules.map((r: any) => ({
+    ...r, id: r.id ?? '', allowedRoles: r.allowedRoles ?? r.allowed_roles ?? [], autoActions: r.autoActions ?? r.auto_actions ?? [],
+  }));
+  result.automationRules = result.automationRules.map((r: any) => ({
+    ...r, condition: r.condition ?? {}, actions: r.actions ?? [],
+  }));
+  result.sprints = result.sprints.map((sp: any) => ({
+    ...sp, goalIds: sp.goalIds ?? sp.goal_ids ?? [], status: sp.status ?? 'planning',
   }));
   return result;
 }

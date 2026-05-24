@@ -51,7 +51,7 @@ interface GoalTemplate {
   title: string;
   description: string;
   type: 'okr' | 'kpi' | 'milestone';
-  status: 'in_progress' | 'completed' | 'planning' | 'paused';
+  status: 'in_progress' | 'done' | 'todo' | 'blocked';
   children?: GoalTemplate[];
 }
 
@@ -71,9 +71,9 @@ const goalTemplates: GoalTemplate[] = [
         { title: '渠道合作伙伴拓展', description: '发展至少50家渠道合作伙伴', type: 'okr', status: 'in_progress' },
         { title: '在线获客能力建设', description: '建立SEO、SEM、内容营销获客体系', type: 'milestone', status: 'in_progress' },
       ]},
-      { title: '增值服务收入', description: '通过培训和咨询等增值服务创收', type: 'kpi', status: 'planning', children: [
-        { title: '培训业务体系搭建', description: '推出线上线下结合的培训服务', type: 'milestone', status: 'planning' },
-        { title: '咨询业务开拓', description: '提供数字化转型咨询服务', type: 'milestone', status: 'planning' },
+      { title: '增值服务收入', description: '通过培训和咨询等增值服务创收', type: 'kpi', status: 'todo', children: [
+        { title: '培训业务体系搭建', description: '推出线上线下结合的培训服务', type: 'milestone', status: 'todo' },
+        { title: '咨询业务开拓', description: '提供数字化转型咨询服务', type: 'milestone', status: 'todo' },
       ]},
     ],
   },
@@ -102,7 +102,7 @@ const goalTemplates: GoalTemplate[] = [
         { title: '消息通知系统重构', description: '智能通知和提醒机制', type: 'milestone', status: 'in_progress' },
       ]},
       { title: '用户反馈体系', description: '建立完整的用户反馈收集和响应机制', type: 'milestone', status: 'in_progress', children: [
-        { title: '应用内反馈系统', description: '一键反馈和NPS调查', type: 'milestone', status: 'completed' },
+        { title: '应用内反馈系统', description: '一键反馈和NPS调查', type: 'milestone', status: 'done' },
         { title: '用户调研常态化', description: '每月用户访谈和可用性测试', type: 'milestone', status: 'in_progress' },
       ]},
       { title: '设计系统建设', description: '统一视觉设计语言和组件库', type: 'milestone', status: 'in_progress', children: [
@@ -115,7 +115,7 @@ const goalTemplates: GoalTemplate[] = [
     title: '技术架构升级', description: '完成微服务架构迁移，系统可用性99.9%', type: 'okr', status: 'in_progress',
     children: [
       { title: '微服务架构迁移', description: '核心业务模块拆分为独立微服务', type: 'milestone', status: 'in_progress', children: [
-        { title: '用户服务拆分', description: '用户中心独立部署', type: 'milestone', status: 'completed' },
+        { title: '用户服务拆分', description: '用户中心独立部署', type: 'milestone', status: 'done' },
         { title: '订单服务拆分', description: '订单系统独立部署', type: 'milestone', status: 'in_progress' },
         { title: '通知服务拆分', description: '消息通知独立服务', type: 'milestone', status: 'in_progress' },
         { title: 'API网关搭建', description: '统一API网关和服务治理', type: 'milestone', status: 'in_progress' },
@@ -144,9 +144,9 @@ const goalTemplates: GoalTemplate[] = [
         { title: '市场团队扩充', description: '招聘5名市场人才', type: 'kpi', status: 'in_progress' },
       ]},
       { title: '培训体系搭建', description: '建立内部培训和知识分享体系', type: 'milestone', status: 'in_progress', children: [
-        { title: '新人入职培训', description: '标准化新人入职培训流程', type: 'milestone', status: 'completed' },
+        { title: '新人入职培训', description: '标准化新人入职培训流程', type: 'milestone', status: 'done' },
         { title: '技术分享会', description: '双周技术分享会制度', type: 'milestone', status: 'in_progress' },
-        { title: '管理培训计划', description: '储备干部培养计划', type: 'milestone', status: 'planning' },
+        { title: '管理培训计划', description: '储备干部培养计划', type: 'milestone', status: 'todo' },
       ]},
       { title: '绩效管理优化', description: '建立OKR+360度评估体系', type: 'milestone', status: 'in_progress', children: [
         { title: 'OKR落地执行', description: '全员OKR对齐和跟踪', type: 'milestone', status: 'in_progress' },
@@ -164,7 +164,7 @@ const goalTemplates: GoalTemplate[] = [
       ]},
       { title: '行业活动参与', description: '参加至少10场行业峰会和展会', type: 'kpi', status: 'in_progress', children: [
         { title: '行业展会参展', description: '参加5场大型行业展会', type: 'milestone', status: 'in_progress' },
-        { title: '自办行业大会', description: '举办年度用户大会', type: 'milestone', status: 'planning' },
+        { title: '自办行业大会', description: '举办年度用户大会', type: 'milestone', status: 'todo' },
       ]},
     ],
   },
@@ -211,10 +211,10 @@ const goalTemplates: GoalTemplate[] = [
     ],
   },
   {
-    title: 'Q1目标复盘', description: '完成Q1所有目标的复盘和总结', type: 'milestone', status: 'completed', children: [
-      { title: '营收目标复盘', description: '分析Q1营收完成情况', type: 'milestone', status: 'completed' },
-      { title: '产品目标复盘', description: '分析Q1产品迭代和用户反馈', type: 'milestone', status: 'completed' },
-      { title: '团队目标复盘', description: '分析Q1团队建设和人才发展', type: 'milestone', status: 'completed' },
+    title: 'Q1目标复盘', description: '完成Q1所有目标的复盘和总结', type: 'milestone', status: 'done', children: [
+      { title: '营收目标复盘', description: '分析Q1营收完成情况', type: 'milestone', status: 'done' },
+      { title: '产品目标复盘', description: '分析Q1产品迭代和用户反馈', type: 'milestone', status: 'done' },
+      { title: '团队目标复盘', description: '分析Q1团队建设和人才发展', type: 'milestone', status: 'done' },
     ],
   },
 ];
@@ -227,11 +227,11 @@ export function generateGoals(members: Member[]): Goal[] {
   function flattenTemplates(templates: GoalTemplate[], parentId: string | null, level: number) {
     templates.forEach(t => {
       const startDate = level === 0 ? '2026-04-01' : offsetDate(baseDate, randInt(0, 30));
-      const endDate = t.status === 'completed'
+      const endDate = t.status === 'done'
         ? offsetDate(startDate, randInt(10, 30))
         : offsetDate(startDate, randInt(60, 180));
       const owner = pick(activeMembers);
-      const progress = t.status === 'completed' ? 100 : t.status === 'planning' ? 0 : randInt(5, 80);
+      const progress = t.status === 'done' ? 100 : t.status === 'todo' ? 0 : randInt(5, 80);
 
       const krs = level <= 1 && Math.random() > 0.3 ? [
         { id: gid('kr'), title: '关键指标', targetValue: randInt(3, 100) * 10, currentValue: Math.round(randInt(1, progress) / 100 * randInt(3, 100) * 10), unit: pick(['%', '个', '万元', '人', '分']), selected: false },
@@ -257,13 +257,13 @@ export function generateGoals(members: Member[]): Goal[] {
 }
 
 // ==================== 项目 (110+) ====================
-const projectTemplates: { title: string; desc: string; status: 'in_progress' | 'completed' | 'planning' }[] = [
+const projectTemplates: { title: string; desc: string; status: 'in_progress' | 'done' | 'todo' }[] = [
   // 目标1-企业客户
   { title: '大客户A合作签约', desc: '推进与金融行业龙头A的深度合作', status: 'in_progress' },
   { title: '大客户B方案设计', desc: '为教育行业客户B定制解决方案', status: 'in_progress' },
   { title: '大客户C需求对接', desc: '医疗行业客户C需求分析和方案规划', status: 'in_progress' },
   { title: '客户续费率优化计划', desc: '通过客户关怀和增值服务降低流失', status: 'in_progress' },
-  { title: '增值服务产品化', desc: '将培训和咨询打包为标准化产品', status: 'planning' },
+  { title: '增值服务产品化', desc: '将培训和咨询打包为标准化产品', status: 'todo' },
   { title: '金融行业解决方案V2', desc: '金融行业专属功能迭代', status: 'in_progress' },
   { title: '教育行业解决方案V2', desc: '教育行业专属功能迭代', status: 'in_progress' },
   { title: '医疗行业解决方案V1', desc: '医疗行业解决方案首次发布', status: 'in_progress' },
@@ -277,11 +277,11 @@ const projectTemplates: { title: string; desc: string; status: 'in_progress' | '
   { title: '任务协作体验升级', desc: '多视图任务管理', status: 'in_progress' },
   { title: '移动端性能优化', desc: '移动端加载速度和交互优化', status: 'in_progress' },
   { title: '消息通知系统重构', desc: '智能通知和提醒机制', status: 'in_progress' },
-  { title: '应用内反馈系统', desc: '用户反馈收集和NPS调查', status: 'completed' },
+  { title: '应用内反馈系统', desc: '用户反馈收集和NPS调查', status: 'done' },
   { title: '设计规范V2.0', desc: '统一视觉设计语言', status: 'in_progress' },
   { title: '前端组件库升级', desc: '基于设计规范升级组件库', status: 'in_progress' },
   // 目标4-技术架构
-  { title: '用户服务微服务化', desc: '用户中心独立部署', status: 'completed' },
+  { title: '用户服务微服务化', desc: '用户中心独立部署', status: 'done' },
   { title: '订单服务微服务化', desc: '订单系统独立部署', status: 'in_progress' },
   { title: '通知服务微服务化', desc: '消息通知独立服务', status: 'in_progress' },
   { title: 'API网关建设', desc: '统一API网关和服务治理', status: 'in_progress' },
@@ -295,7 +295,7 @@ const projectTemplates: { title: string; desc: string; status: 'in_progress' | '
   // 目标5-团队
   { title: 'Q2技术招聘', desc: '招聘5名技术人才', status: 'in_progress' },
   { title: 'Q2产品招聘', desc: '招聘3名产品人才', status: 'in_progress' },
-  { title: '新人培训流程', desc: '标准化入职培训', status: 'completed' },
+  { title: '新人培训流程', desc: '标准化入职培训', status: 'done' },
   { title: '技术分享制度', desc: '双周技术分享会', status: 'in_progress' },
   { title: 'OKR管理工具推广', desc: '全员使用OKR管理工具', status: 'in_progress' },
   { title: '绩效评估系统', desc: '360度绩效评估系统', status: 'in_progress' },
@@ -321,30 +321,30 @@ const projectTemplates: { title: string; desc: string; status: 'in_progress' | '
   { title: '数据治理体系', desc: '数据标准和质量管理', status: 'in_progress' },
   { title: '数据指标字典', desc: '北极星指标和指标体系', status: 'in_progress' },
   // 补充项目凑够110+
-  { title: '内部知识库建设', desc: '团队知识沉淀和共享', status: 'planning' },
+  { title: '内部知识库建设', desc: '团队知识沉淀和共享', status: 'todo' },
   { title: '竞品监控体系', desc: '自动化竞品分析', status: 'in_progress' },
-  { title: '国际化多语言支持', desc: '英语和日语版本', status: 'planning' },
+  { title: '国际化多语言支持', desc: '英语和日语版本', status: 'todo' },
   { title: '数据迁移工具', desc: '客户数据导入导出工具', status: 'in_progress' },
-  { title: '开放API平台', desc: '对外开放API接口', status: 'planning' },
-  { title: '移动端App开发', desc: '原生移动端应用', status: 'planning' },
-  { title: '桌面客户端开发', desc: 'Windows/Mac桌面客户端', status: 'planning' },
+  { title: '开放API平台', desc: '对外开放API接口', status: 'todo' },
+  { title: '移动端App开发', desc: '原生移动端应用', status: 'todo' },
+  { title: '桌面客户端开发', desc: 'Windows/Mac桌面客户端', status: 'todo' },
   { title: 'AI助手集成', desc: 'AI智能助手功能', status: 'in_progress' },
   { title: '第三方集成生态', desc: '企业微信/钉钉/飞书集成', status: 'in_progress' },
   { title: '日志监控平台', desc: '统一日志和监控告警', status: 'in_progress' },
   { title: '灾备方案建设', desc: '数据备份和容灾方案', status: 'in_progress' },
   { title: '权限体系升级', desc: '细粒度权限控制', status: 'in_progress' },
   { title: '审计日志系统', desc: '操作审计和安全日志', status: 'in_progress' },
-  { title: 'Q1复盘报告', desc: 'Q1业务复盘', status: 'completed' },
-  { title: '年度规划制定', desc: '2026年度业务规划', status: 'completed' },
+  { title: 'Q1复盘报告', desc: 'Q1业务复盘', status: 'done' },
+  { title: '年度规划制定', desc: '2026年度业务规划', status: 'done' },
   { title: '企业文化活动', desc: '团建和文化活动', status: 'in_progress' },
-  { title: '办公环境优化', desc: '新办公室选址和装修', status: 'completed' },
+  { title: '办公环境优化', desc: '新办公室选址和装修', status: 'done' },
   { title: '供应商评估优化', desc: '核心供应商评估和优化', status: 'in_progress' },
   { title: '法务合同管理', desc: '合同管理流程优化', status: 'in_progress' },
   { title: '知识产权保护', desc: '商标和专利申请', status: 'in_progress' },
   { title: '内部工具平台', desc: '内部效率工具开发', status: 'in_progress' },
   { title: '官网改版', desc: '企业官网全面改版', status: 'in_progress' },
   { title: '产品定价策略', desc: '产品定价体系优化', status: 'in_progress' },
-  { title: '合作伙伴大会', desc: '年度合作伙伴大会', status: 'planning' },
+  { title: '合作伙伴大会', desc: '年度合作伙伴大会', status: 'todo' },
   { title: 'Q2营收冲刺计划', desc: 'Q2营收目标冲刺', status: 'in_progress' },
   { title: '新客户获取计划', desc: '批量获客活动', status: 'in_progress' },
   { title: '产品路线图更新', desc: 'Q3产品路线图制定', status: 'in_progress' },
@@ -353,12 +353,12 @@ const projectTemplates: { title: string; desc: string; status: 'in_progress' | '
   { title: '用户调研报告', desc: '月度用户调研', status: 'in_progress' },
   { title: '竞品分析报告', desc: '季度竞品分析', status: 'in_progress' },
   { title: '财务预算编制', desc: 'Q3财务预算', status: 'in_progress' },
-  { title: '人才梯队建设', desc: '核心岗位继任计划', status: 'planning' },
+  { title: '人才梯队建设', desc: '核心岗位继任计划', status: 'todo' },
   { title: '实习生培养计划', desc: '暑期实习生计划', status: 'in_progress' },
   { title: '服务器成本优化', desc: '云资源成本降低30%', status: 'in_progress' },
   { title: '数据安全审计', desc: '年度数据安全审计', status: 'in_progress' },
   { title: '产品内测计划', desc: '核心功能内测', status: 'in_progress' },
-  { title: '用户大会筹备', desc: '年度用户大会筹备', status: 'planning' },
+  { title: '用户大会筹备', desc: '年度用户大会筹备', status: 'todo' },
   { title: '渠道激励政策', desc: '代理商激励政策制定', status: 'in_progress' },
   { title: '客户案例库建设', desc: '典型客户案例收集和展示', status: 'in_progress' },
 ];
@@ -373,9 +373,9 @@ export function generateProjects(members: Member[], goals: Goal[]): Project[] {
     const owner = pick(activeMembers);
     const teamSize = randInt(2, 5);
     const team = [owner.id, ...activeMembers.filter(m => m.id !== owner.id).slice(0, teamSize - 1).map(m => m.id)];
-    const startDate = pt.status === 'completed' ? offsetDate('2026-03-01', randInt(0, 20)) : offsetDate('2026-04-01', randInt(0, 30));
-    const endDate = pt.status === 'completed' ? offsetDate(startDate, randInt(15, 40)) : offsetDate(startDate, randInt(30, 120));
-    const progress = pt.status === 'completed' ? 100 : pt.status === 'planning' ? 0 : randInt(5, 75);
+    const startDate = pt.status === 'done' ? offsetDate('2026-03-01', randInt(0, 20)) : offsetDate('2026-04-01', randInt(0, 30));
+    const endDate = pt.status === 'done' ? offsetDate(startDate, randInt(15, 40)) : offsetDate(startDate, randInt(30, 120));
+    const progress = pt.status === 'done' ? 100 : pt.status === 'todo' ? 0 : randInt(5, 75);
 
     projects.push({
       id: gid('p'), title: pt.title, description: pt.desc,
@@ -388,7 +388,7 @@ export function generateProjects(members: Member[], goals: Goal[]): Project[] {
     });
   });
 
-  const nonCompletedProjects = projects.filter(p => p.status !== 'completed');
+  const nonCompletedProjects = projects.filter(p => p.status !== 'done');
   const subProjectCount = Math.max(1, Math.floor(nonCompletedProjects.length * 0.15));
   for (let i = 0; i < subProjectCount; i++) {
     const child = nonCompletedProjects[i % nonCompletedProjects.length];
@@ -449,8 +449,8 @@ export function generateTasks(members: Member[], projects: Project[], goals: Goa
 
   projects.forEach(project => {
     // 每个项目 3-8 个任务
-    const taskCount = project.status === 'completed' ? randInt(3, 5) : randInt(4, 8);
-    const doneRatio = project.status === 'completed' ? 1.0 : project.status === 'planning' ? 0 : Math.random() * 0.5;
+    const taskCount = project.status === 'done' ? randInt(3, 5) : randInt(4, 8);
+    const doneRatio = project.status === 'done' ? 1.0 : project.status === 'todo' ? 0 : Math.random() * 0.5;
 
     for (let i = 0; i < taskCount; i++) {
       const tmpl = taskTemplates[taskIdx % taskTemplates.length];
@@ -458,7 +458,7 @@ export function generateTasks(members: Member[], projects: Project[], goals: Goa
 
       const statusRoll = Math.random();
       let status: Task['status'];
-      if (project.status === 'completed') {
+      if (project.status === 'done') {
         status = 'done';
       } else if (statusRoll < doneRatio) {
         status = 'done';
@@ -558,7 +558,7 @@ export function generateActivities(tasks: Task[], goals: Goal[], projects: Proje
 
   recentDone.forEach(t => {
     activities.push({
-      id: gid('a'), memberId: t.leaderId, action: 'completed',
+      id: gid('a'), memberId: t.leaderId, action: 'done',
       targetType: 'task', targetId: t.id, targetTitle: t.title,
       details: '标记任务为已完成', createdAt: t.completedAt || new Date().toISOString(),
     });

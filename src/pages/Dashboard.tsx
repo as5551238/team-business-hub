@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useStore, useDashboardStats, useViewingMember, useMemberLookup, useBookmarks, usePermissions } from '@/store/useStore';
+import { useStore, useDashboardStats, useViewingMember, useMemberLookup, useItemLookupMaps, useBookmarks, usePermissions } from '@/store/useStore';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import {
   Target, FolderKanban, CheckCircle2, AlertTriangle,
   TrendingUp, Clock, ArrowRight, Zap, Settings,
-  Calendar, Users, Plus, ListTodo, BarChart3, X, GripVertical, Trash2, UserPlus, Bookmark, ExternalLink, Edit2, ChevronUp, ChevronDown, Globe, Search
+  Calendar, Users, Plus, ListTodo, BarChart3, X, GripVertical, Trash2, Bookmark, ExternalLink, Edit2, ChevronUp, ChevronDown, Globe, Search
 } from 'lucide-react';
 import type { Bookmark as BookmarkType } from '@/types';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+
+const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 const priorityColors: Record<string, string> = {
   urgent: 'bg-red-100 text-red-700 border-red-200',
@@ -22,11 +25,12 @@ const statusLabels: Record<string, string> = {
 };
 const actionLabels: Record<string, string> = { completed: '完成了', created: '创建了', updated: '更新了' };
 
-type WidgetId = 'stats' | 'todayTodos' | 'goalProgress' | 'recentActivities' | 'upcomingDeadlines' | 'teamWorkload' | 'quickActions' | 'bookmarks';
+type WidgetId = 'stats' | 'todayTodos' | 'trend' | 'goalProgress' | 'recentActivities' | 'upcomingDeadlines' | 'teamWorkload' | 'quickActions' | 'bookmarks';
 
 const WIDGET_META: Record<WidgetId, { label: string; icon: React.ReactNode }> = {
   stats: { label: '数据概览', icon: <BarChart3 size={16} /> },
   todayTodos: { label: '今日待办', icon: <Zap size={16} /> },
+  trend: { label: '完成趋势', icon: <TrendingUp size={16} /> },
   goalProgress: { label: '目标进度', icon: <TrendingUp size={16} /> },
   recentActivities: { label: '最近动态', icon: <Clock size={16} /> },
   upcomingDeadlines: { label: '即将到期', icon: <Calendar size={16} /> },
@@ -35,8 +39,8 @@ const WIDGET_META: Record<WidgetId, { label: string; icon: React.ReactNode }> = 
   bookmarks: { label: '常用网址', icon: <Globe size={16} /> },
 };
 
-const DEFAULT_WIDGETS: WidgetId[] = ['stats', 'todayTodos', 'goalProgress', 'recentActivities'];
-const ALL_WIDGETS: WidgetId[] = ['stats', 'todayTodos', 'goalProgress', 'recentActivities', 'upcomingDeadlines', 'teamWorkload', 'quickActions', 'bookmarks'];
+const DEFAULT_WIDGETS: WidgetId[] = ['stats', 'todayTodos', 'trend', 'goalProgress', 'recentActivities'];
+const ALL_WIDGETS: WidgetId[] = ['stats', 'todayTodos', 'trend', 'goalProgress', 'recentActivities', 'upcomingDeadlines', 'teamWorkload', 'quickActions', 'bookmarks'];
 const STORAGE_KEY = 'dashboard-widgets-order';
 
 function loadWidgets(): WidgetId[] {
@@ -63,11 +67,11 @@ interface DashboardProps {
   onPageChange: (page: string) => void;
 }
 
-function StatCard({ icon, label, value, sub, color }: {
-  icon: React.ReactNode; label: string; value: number | string; sub?: string; color: string;
+const StatCard = React.memo(function StatCard({ icon, label, value, sub, color, onClick }: {
+  icon: React.ReactNode; label: string; value: number | string; sub?: string; color: string; onClick?: () => void;
 }) {
   return (
-    <div className="bg-white rounded-xl p-5 border border-border shadow-sm">
+    <div className={`bg-white rounded-xl p-5 border border-border shadow-sm ${onClick ? 'cursor-pointer hover:shadow-md hover:border-primary/30 transition-all' : ''}`} onClick={onClick}>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{label}</p>
@@ -78,7 +82,7 @@ function StatCard({ icon, label, value, sub, color }: {
       </div>
     </div>
   );
-}
+});
 
 function CustomizeDialog({ widgets, onSave, onClose }: {
   widgets: WidgetId[]; onSave: (w: WidgetId[]) => void; onClose: () => void;
@@ -274,7 +278,7 @@ function BookmarksWidget() {
             <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground flex-shrink-0">{bm.category}</span>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
               <button className="p-1 hover:bg-muted rounded" onClick={e => { e.stopPropagation(); handleEdit(bm); }}><Edit2 size={12} className="text-muted-foreground" /></button>
-              <button className="p-1 hover:bg-red-50 rounded" onClick={e => { e.stopPropagation(); deleteBookmark(bm.id); }}><Trash2 size={12} className="text-red-400" /></button>
+              <button className="p-1 hover:bg-red-50 rounded" onClick={e => { e.stopPropagation(); if (confirm('确认删除此书签？')) deleteBookmark(bm.id); }}><Trash2 size={12} className="text-red-400" /></button>
               {bm.url.startsWith('http') && <a href={bm.url} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-muted rounded" onClick={e => e.stopPropagation()}><ExternalLink size={12} className="text-muted-foreground" /></a>}
             </div>
           </div>
@@ -289,7 +293,21 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
   const { can } = usePermissions();
   const stats = useDashboardStats();
   const { isTeamView, viewingMember, viewingMemberId } = useViewingMember();
-  const { nameMap: memberNameMap } = useMemberLookup();
+  const { nameMap: memberNameMap, getAvatar } = useMemberLookup();
+  const { getProjectTitle } = useItemLookupMaps();
+
+  // Mini-chart data for stats widget
+  const taskStatusData = useMemo(() => {
+    const counts: Record<string, number> = { todo: 0, in_progress: 0, done: 0, blocked: 0, cancelled: 0 };
+    state.tasks.forEach(t => { counts[t.status] = (counts[t.status] || 0) + 1; });
+    return Object.entries(counts).filter(([, v]) => v > 0).map(([name, value]) => ({ name: { todo: '待办', in_progress: '进行中', done: '完成', blocked: '阻塞', cancelled: '取消' }[name] || name, value }));
+  }, [state.tasks]);
+
+  const taskPriorityData = useMemo(() => {
+    const counts: Record<string, number> = { urgent: 0, high: 0, medium: 0, low: 0 };
+    state.tasks.forEach(t => { counts[t.priority] = (counts[t.priority] || 0) + 1; });
+    return Object.entries(counts).filter(([, v]) => v > 0).map(([name, value]) => ({ name: { urgent: '紧急', high: '高', medium: '中', low: '低' }[name] || name, value }));
+  }, [state.tasks]);
   const [widgets, setWidgets] = useState<WidgetId[]>(loadWidgets);
   const [showCustomize, setShowCustomize] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -333,12 +351,54 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
   }, [memberTasks, todayStr, weekLaterStr]);
 
   const memberTaskCounts = useMemo(() => {
+    // Build member->task counts in O(T) single pass instead of O(M×N) nested loops
+    const countsMap = new Map<string, { active: number; done: number }>();
+    for (const t of memberTasks) {
+      // Count for leaderId only (matches original filter: t.leaderId === m.id)
+      if (!countsMap.has(t.leaderId)) countsMap.set(t.leaderId, { active: 0, done: 0 });
+      const c = countsMap.get(t.leaderId)!;
+      if (t.status === 'done') c.done++;
+      else c.active++;
+    }
     return state.members.map(m => {
-      const assigned = memberTasks.filter(t => t.leaderId === m.id && t.status !== 'done');
-      const done = memberTasks.filter(t => t.leaderId === m.id && t.status === 'done');
-      return { member: m, active: assigned.length, done: done.length, total: assigned.length + done.length };
+      const c = countsMap.get(m.id) || { active: 0, done: 0 };
+      return { member: m, active: c.active, done: c.done, total: c.active + c.done };
     });
   }, [state.members, memberTasks]);
+
+  const commentCountMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    (state.comments || []).forEach(c => { m[c.itemId] = (m[c.itemId] || 0) + 1; });
+    return m;
+  }, [state.comments]);
+
+  const teamWorkloadSorted = useMemo(() => memberTaskCounts.filter(m => m.total > 0).sort((a, b) => b.active - a.active), [memberTaskCounts]);
+
+  // Trend data: memoized to avoid O(14×N) recomputation on every render
+  const trendData = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - (6 - i));
+      return d.toISOString().split('T')[0];
+    });
+    // Single O(N) pass to count completed + created per day
+    const completedMap: Record<string, number> = {};
+    const createdMap: Record<string, number> = {};
+    for (const d of days) { completedMap[d] = 0; createdMap[d] = 0; }
+    for (const t of state.tasks) {
+      if (t.status === 'done' && t.completedAt) {
+        const day = t.completedAt.slice(0, 10);
+        if (day in completedMap) completedMap[day]++;
+      }
+      if (t.createdAt) {
+        const day = t.createdAt.slice(0, 10);
+        if (day in createdMap) createdMap[day]++;
+      }
+    }
+    return days.map(d => {
+      const dt = new Date(d);
+      return { day: `${dt.getMonth() + 1}/${dt.getDate()}`, created: createdMap[d], completed: completedMap[d] };
+    });
+  }, [state.tasks]);
 
   const openDetail = useCallback((id: string, type: 'goal' | 'project' | 'task') => {
     setSelectedItemId(id);
@@ -378,13 +438,53 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
 
   const WIDGETS: Record<WidgetId, () => React.ReactNode> = {
     stats: () => (
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={<Target size={20} className="text-blue-600" />} label="进行中目标" value={stats.activeGoals} sub={`平均进度 ${stats.overallGoalProgress}%`} color="bg-blue-50" />
-        <StatCard icon={<FolderKanban size={20} className="text-emerald-600" />} label="活跃项目" value={stats.activeProjects} color="bg-emerald-50" />
-        <StatCard icon={<Clock size={20} className="text-orange-600" />} label="我的待办" value={stats.myTasks} sub={`今日 ${stats.todayTodos.length} 项`} color="bg-orange-50" />
-        <StatCard icon={<AlertTriangle size={20} className="text-red-600" />} label="已逾期" value={stats.overdueTasks} color="bg-red-50" />
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard icon={<Target size={20} className="text-blue-600" />} label="进行中目标" value={stats.activeGoals} sub={`平均进度 ${stats.overallGoalProgress}%`} color="bg-blue-50" onClick={() => { onPageChange('goals'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'goals', statuses: ['in_progress'] } })), 100); }} />
+          <StatCard icon={<FolderKanban size={20} className="text-emerald-600" />} label="活跃项目" value={stats.activeProjects} color="bg-emerald-50" onClick={() => { onPageChange('projects'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'projects', statuses: ['in_progress'] } })), 100); }} />
+          <StatCard icon={<Clock size={20} className="text-orange-600" />} label="我的待办" value={stats.myTasks} sub={`今日 ${stats.todayTodos.length} 项`} color="bg-orange-50" onClick={() => { onPageChange('tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'tasks', statuses: ['todo', 'in_progress'] } })), 100); }} />
+          <StatCard icon={<AlertTriangle size={20} className="text-red-600" />} label="已逾期" value={stats.overdueTasks} color="bg-red-50" onClick={() => { onPageChange('tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'tasks', timeFilter: 'overdue' } })), 100); }} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => onPageChange('tasks')}>
+            <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold text-muted-foreground">任务状态分布</span><BarChart3 size={14} className="text-muted-foreground/50" /></div>
+            <div className="h-[120px]">{taskStatusData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={taskStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>{taskStatusData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={(v: number, n: string) => [`${v} 项`, n]} /></PieChart></ResponsiveContainer>) : (<div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>)}</div>
+          </div>
+          <div className="bg-white rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => onPageChange('tasks')}>
+            <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold text-muted-foreground">优先级分布</span><BarChart3 size={14} className="text-muted-foreground/50" /></div>
+            <div className="h-[120px]">{taskPriorityData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={taskPriorityData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>{taskPriorityData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={(v: number, n: string) => [`${v} 项`, n]} /></PieChart></ResponsiveContainer>) : (<div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>)}</div>
+          </div>
+        </div>
       </div>
     ),
+    trend: () => {
+      return (
+        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-muted-foreground">近7天任务趋势</span>
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-blue-500" />新建</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />完成</span>
+            </div>
+          </div>
+          <div className="h-[160px]">
+            {trendData.some(d => d.created > 0 || d.completed > 0) ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendData}>
+                  <XAxis dataKey="day" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip formatter={(v: number) => [`${v} 项`]} />
+                  <Line type="monotone" dataKey="created" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="新建" />
+                  <Line type="monotone" dataKey="completed" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="完成" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>
+            )}
+          </div>
+        </div>
+      );
+    },
     todayTodos: () => (
       <div className="bg-white rounded-xl border border-border shadow-sm">
         <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-border">
@@ -401,7 +501,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
           ) : stats.todayTodos.map(task => {
             const doneSubs = (task.subtasks || []).filter(s => s.completed).length;
             const totalSubs = (task.subtasks || []).length;
-            const taskComments = (state.comments || []).filter(c => c.itemId === task.id).length;
+            const taskComments = commentCountMap[task.id] || 0;
             return (
               <div key={task.id} className="px-4 md:px-5 py-3.5 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => openDetail(task.id, 'task')}>
                 <div className="flex items-start gap-3">
@@ -422,7 +522,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
                         <span className="text-xs text-muted-foreground">{doneSubs}/{totalSubs}</span>
                       </div>
                     )}
-                    {task.projectId && <div className="text-xs text-muted-foreground mt-1">{state.projects.find(p => p.id === task.projectId)?.title}</div>}
+                    {task.projectId && <div className="text-xs text-muted-foreground mt-1">{getProjectTitle(task.projectId)}</div>}
                   </div>
                 </div>
               </div>
@@ -441,7 +541,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
         </div>
         <div className="divide-y divide-border">
           {activeGoals.slice(0, 5).map(goal => {
-            const goalComments = (state.comments || []).filter(c => c.itemId === goal.id).length;
+            const goalComments = commentCountMap[goal.id] || 0;
             return (
               <div key={goal.id} className="px-4 md:px-5 py-3.5 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => openDetail(goal.id, 'goal')}>
                 <div className="flex items-center justify-between mb-2">
@@ -478,7 +578,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
               if (activity.targetType === 'goal' || activity.targetType === 'project' || activity.targetType === 'task') openDetail(activity.targetId, activity.targetType);
             }}>
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
-                {state.members.find(m => m.id === activity.memberId)?.avatar || '?'}
+                {getAvatar(activity.memberId) || '?'}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm">
@@ -538,7 +638,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
         <div className="divide-y divide-border">
           {memberTaskCounts.length === 0 ? (
             <div className="px-5 py-10 text-center text-muted-foreground text-sm">暂无成员数据</div>
-          ) : memberTaskCounts.filter(m => m.total > 0).sort((a, b) => b.active - a.active).map(({ member, active, done, total }) => {
+          ) : teamWorkloadSorted.map(({ member, active, done, total }) => {
             const pct = total > 0 ? Math.round((done / total) * 100) : 0;
             return (
               <div key={member.id} className="px-4 md:px-5 py-3.5">

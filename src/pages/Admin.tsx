@@ -1,16 +1,29 @@
 import { useState, Component, type ReactNode, type ErrorInfo } from 'react';
-import { Users, Wrench, Calendar, Settings as SettingsIcon, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Users, Wrench, Calendar, StickyNote, Settings as SettingsIcon, AlertTriangle, RefreshCw, GitBranch, Zap, Flag, BarChart3, Target, FileText } from 'lucide-react';
 import { TeamTab } from './admin/TeamTab';
 import { ToolboxTab } from './admin/ToolboxTab';
 import { ScheduleTab } from './admin/ScheduleTab';
+import { NotesTab } from './admin/NotesTab';
 import { SettingsTab } from './admin/SettingsTab';
+import { FlowConfigTab } from './admin/FlowConfigTab';
+import { AutomationTab } from './admin/AutomationTab';
+import { SprintTab } from './admin/SprintTab';
+import { GlobalGanttView as GlobalGanttTab } from './admin/GlobalGanttTab';
+import { OKRAlignmentView as OKRAlignmentTab } from './admin/OKRAlignmentTab';import { MarkdownDocTab } from './admin/MarkdownDocTab';
 import type { AdminTab } from './admin/constants';
 import { useStore } from '@/store/useStore';
 
 const tabItems: { key: AdminTab; label: string; icon: typeof Users }[] = [
   { key: 'team', label: '团队', icon: Users },
+  { key: 'sprint', label: '迭代', icon: Flag },
+  { key: 'flow', label: '流程配置', icon: GitBranch },
+  { key: 'automation', label: '自动化', icon: Zap },
+  { key: 'gantt', label: '甘特图', icon: BarChart3 },
+  { key: 'okr', label: 'OKR对齐', icon: Target },
+  { key: 'docs', label: '文档', icon: FileText },
   { key: 'toolbox', label: '工具箱', icon: Wrench },
   { key: 'schedule', label: '日程', icon: Calendar },
+  { key: 'notes', label: '记事本', icon: StickyNote },
   { key: 'settings', label: '设置', icon: SettingsIcon },
 ];
 
@@ -35,7 +48,7 @@ class TabErrorBoundary extends Component<{ children: ReactNode; name: string }, 
   }
 }
 
-const TAB_LABELS: Record<AdminTab, string> = { team: '团队管理', toolbox: '工具箱', schedule: '日程管理', settings: '系统设置' };
+const TAB_LABELS: Record<AdminTab, string> = { team: '团队管理', toolbox: '工具箱', schedule: '日程管理', notes: '记事本', settings: '系统设置', flow: '流程配置', automation: '自动化规则', sprint: '迭代管理', gantt: '全局甘特图', okr: 'OKR对齐视图', docs: 'Markdown文档' };
 
 export default function Admin({ activeTab }: { activeTab?: string }) {
   const { state } = useStore();
@@ -46,9 +59,10 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
   const visibleTabs = tabItems.filter(t => {
     if (t.key === 'settings') return isAdmin;
     if (t.key === 'team') return isManager;
+    if (t.key === 'flow' || t.key === 'automation') return isManager;
     return true;
   });
-  const [tab, setTab] = useState<AdminTab>((activeTab as AdminTab) || (visibleTabs[0]?.key || 'toolbox'));
+  const [tab, setTab] = useState<AdminTab>((activeTab as AdminTab) || (visibleTabs[0]?.key || 'sprint'));
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
@@ -65,7 +79,14 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
       {tab === 'team' && <TabErrorBoundary key="team" name={TAB_LABELS.team}><TeamTab /></TabErrorBoundary>}
       {tab === 'toolbox' && <TabErrorBoundary key="toolbox" name={TAB_LABELS.toolbox}><ToolboxTab /></TabErrorBoundary>}
       {tab === 'schedule' && <TabErrorBoundary key="schedule" name={TAB_LABELS.schedule}><ScheduleTab /></TabErrorBoundary>}
+      {tab === 'notes' && <TabErrorBoundary key="notes" name={TAB_LABELS.notes}><NotesTab /></TabErrorBoundary>}
       {tab === 'settings' && <TabErrorBoundary key="settings" name={TAB_LABELS.settings}><SettingsTab /></TabErrorBoundary>}
+      {tab === 'flow' && <TabErrorBoundary key="flow" name={TAB_LABELS.flow}><FlowConfigTab /></TabErrorBoundary>}
+      {tab === 'automation' && <TabErrorBoundary key="automation" name={TAB_LABELS.automation}><AutomationTab /></TabErrorBoundary>}
+      {tab === 'sprint' && <TabErrorBoundary key="sprint" name={TAB_LABELS.sprint}><SprintTab /></TabErrorBoundary>}
+      {tab === 'gantt' && <TabErrorBoundary key="gantt" name={TAB_LABELS.gantt}><GlobalGanttTab /></TabErrorBoundary>}
+      {tab === 'okr' && <TabErrorBoundary key="okr" name={TAB_LABELS.okr}><OKRAlignmentTab /></TabErrorBoundary>}
+      {tab === 'docs' && <TabErrorBoundary key="docs" name={TAB_LABELS.docs}><MarkdownDocTab /></TabErrorBoundary>}
     </div>
   );
 }

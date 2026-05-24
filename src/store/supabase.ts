@@ -1,7 +1,6 @@
 import type { AppState, Goal, Project, Task, Member, SubTask } from '@/types';
 import { getSupabaseClient } from '@/supabase/client';
 import { STORAGE_KEY, CURRENT_USER_KEY, ensureAppStateDefaults, toCamel, toSnake } from './types';
-import { generateAllData } from '@/data/dataGenerator';
 import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView } from '@/types';
 
 export function saveLocalStateImmediate(state: AppState) {
@@ -67,7 +66,7 @@ export async function fetchAllFromSupabase(): Promise<AppState | null> {
   const sb = getSupabaseClient();
   if (!sb) return null;
   try {
-    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes] = await Promise.allSettled([
+    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes] = await Promise.allSettled([
       sb.from('members').select('*').eq('status', 'active').order('join_date'),
       sb.from('goals').select('*').order('level'),
       sb.from('projects').select('*').order('created_at', { ascending: false }),
@@ -84,6 +83,9 @@ export async function fetchAllFromSupabase(): Promise<AppState | null> {
       sb.from('tags').select('*').order('created_at'),
       sb.from('bookmarks').select('*').order('created_at'),
       sb.from('saved_views').select('*').order('created_at', { ascending: false }),
+      sb.from('status_flow_rules').select('*').order('created_at'),
+      sb.from('automation_rules').select('*').order('created_at', { ascending: false }),
+      sb.from('sprints').select('*').order('created_at', { ascending: false }),
     ]);
     const val = (r: PromiseSettledResult<any>) => r.status === 'fulfilled' ? r.value : null;
     const data = (r: any) => Array.isArray(r?.data) ? r.data : [];
@@ -111,6 +113,9 @@ export async function fetchAllFromSupabase(): Promise<AppState | null> {
       tags: data(val(tagsRes)).map(toCamel),
       bookmarks: data(val(bookmarksRes)).map(toCamel) as Bookmark[],
       savedViews: data(val(savedViewsRes)).map(toCamel) as SavedView[],
+      statusFlowRules: data(val(statusFlowRulesRes)).map(toCamel),
+      automationRules: data(val(automationRulesRes)).map(toCamel),
+      sprints: data(val(sprintsRes)).map(toCamel),
     });
   } catch (e) { console.error('Supabase fetch failed:', e); return null; }
 }
@@ -119,11 +124,21 @@ export async function fetchAllFromSupabase(): Promise<AppState | null> {
 let _onWriteError: ((msg: string) => void) | null = null;
 export function setOnWriteError(cb: (msg: string) => void) { _onWriteError = cb; }
 
-async function withRetry(fn: () => Promise<any>, retries = 2): Promise<void> {
+// Failed write queue — stores operations that failed after all retries.
+// When connection is restored, replayFailedWrites() re-executes them.
+interface PendingWrite { fn: () => Promise<any>; label: string; addedAt: number; }
+const failedWrites: PendingWrite[] = [];
+const MAX_PENDING_WRITES = 100;
+
+async function withRetry(fn: () => Promise<any>, retries = 2, label = 'write'): Promise<void> {
   for (let i = 0; i <= retries; i++) {
     try { await fn(); return; } catch (e: any) {
       if (i === retries) {
-        console.error('Supabase operation failed after retries:', e);
+        console.error(`Supabase ${label} failed after retries:`, e);
+        // Queue for replay on reconnect instead of silently losing data
+        if (failedWrites.length < MAX_PENDING_WRITES) {
+          failedWrites.push({ fn, label, addedAt: Date.now() });
+        }
         _onWriteError?.('数据同步失败，已自动重试。请检查网络后刷新页面。');
         return;
       }
@@ -132,11 +147,27 @@ async function withRetry(fn: () => Promise<any>, retries = 2): Promise<void> {
   }
 }
 
+/** Replay all queued failed writes — called when connection is restored */
+export async function replayFailedWrites(): Promise<void> {
+  if (failedWrites.length === 0) return;
+  const batch = failedWrites.splice(0, failedWrites.length);
+  console.log(`[Supabase] Replaying ${batch.length} queued writes...`);
+  for (const pw of batch) {
+    try { await pw.fn(); } catch (e) {
+      console.error(`[Supabase] Replay failed for ${pw.label}:`, e);
+      // Re-queue if still failing (but only once to prevent infinite loop)
+      if (failedWrites.length < MAX_PENDING_WRITES) {
+        failedWrites.push({ ...pw, addedAt: Date.now() });
+      }
+    }
+  }
+}
+
 /** Whitelist of DB columns per table — prevents sending unknown columns that cause 400 errors */
 const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   goals: new Set(['id','title','description','type','status','parent_id','level','start_date','end_date','owner_id','key_results','progress','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','selected_kr_ids']),
-  projects: new Set(['id','title','description','goal_id','status','start_date','end_date','owner_id','member_ids','task_count','progress','created_at','updated_at','leader_id','supporter_ids','parent_id','canvas_x','canvas_y','priority','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments']),
-  tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments']),
+  projects: new Set(['id','title','description','goal_id','status','start_date','end_date','owner_id','member_ids','task_count','progress','created_at','updated_at','leader_id','supporter_ids','parent_id','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments']),
+  tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','start_date','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','blocked_by','sprint_id']),
   members: new Set(['id','name','role','department','avatar','email','status','join_date','created_at','updated_at','nickname','phone','wechat_id','permissions']),
   notifications: new Set(['id','type','title','message','related_id','related_type','member_id','read','created_at']),
   activities: new Set(['id','member_id','action','target_type','target_id','target_title','details','created_at']),
@@ -146,10 +177,13 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   tags: new Set(['id','name','color','created_at','updated_at']),
   templates: new Set(['id','title','description','type','content','created_by','updated_by','is_public','category','created_at','updated_at']),
   schedule_events: new Set(['id','title','description','start_date','end_date','all_day','color','linked_item_id','linked_item_type','member_id','repeat_cycle','created_at','updated_at']),
-  notes: new Set(['id','title','content','folder','color','is_pinned','linked_item_id','linked_item_type','created_by','updated_by','created_at','updated_at']),
-  comments: new Set(['id','item_id','item_type','member_id','member_name','content','created_at']),
-  bookmarks: new Set(['id','title','url','category','icon','order','created_at']),
-  saved_views: new Set(['id','name','type','filters','filter_logic','created_at']),
+  notes: new Set(['id','title','content','folder','color','is_pinned','linked_item_id','linked_item_type','created_by','updated_by','created_at','updated_at','category','tags']),
+  comments: new Set(['id','item_id','item_type','member_id','member_name','content','created_at','mentioned_member_ids','is_read','follow_up_required','follow_up_status']),
+  bookmarks: new Set(['id','title','url','category','icon','order','member_id','created_at']),
+  saved_views: new Set(['id','name','type','filters','filter_logic','member_id','updated_at','created_at']),
+  status_flow_rules: new Set(['id','from_status','to_status','allowed_roles','auto_actions','created_at','updated_at']),
+  automation_rules: new Set(['id','name','enabled','item_type','trigger','condition','actions','created_at','updated_at']),
+  sprints: new Set(['id','name','start_date','end_date','goal_ids','status','created_at','updated_at']),
 };
 
 /** Columns that reference other tables via FK — empty strings must become null */
@@ -185,7 +219,7 @@ export async function supabaseUpdate(table: string, id: string, data: Record<str
   const sb = getSupabaseClient();
   if (!sb) return;
   await withRetry(async () => {
-    let q = sb.from(table).update(filterColumns(table, toSnake(data))).eq('id', id);
+    let q = sb.from(table).update(filterColumns(table, toSnake(data)), { count: 'exact' }).eq('id', id);
     // Optimistic locking (DAT-01): only apply if record hasn't changed since last read
     if (oldUpdatedAt) q = q.eq('updated_at', oldUpdatedAt);
     const res = await q;
@@ -202,7 +236,7 @@ export async function supabaseInsert(table: string, data: Record<string, any>) {
   const sb = getSupabaseClient();
   if (!sb) return;
   await withRetry(async () => {
-    const res = await sb.from(table).upsert(filterColumns(table, toSnake(data)));
+    const res = await sb.from(table).upsert(filterColumns(table, toSnake(data)), { onConflict: 'id' });
     if (res.error) throw res.error;
   });
 }
@@ -230,6 +264,6 @@ export function logActivity(params: { memberId?: string; action: string; targetT
       target_id: params.targetId,
       target_title: params.targetTitle.slice(0, 200),
       details: (params.details || '').slice(0, 500),
-    }).then();
+    }).catch(() => {});
   } catch {}
 }

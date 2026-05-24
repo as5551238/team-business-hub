@@ -1,11 +1,12 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useStore, useMemberLookup, usePermissions } from '@/store/useStore';
 import type { Project, ProjectStatus, TaskPriority } from '@/types';
 import { FolderKanban, Calendar, MoreHorizontal, Edit2, Trash2, GripVertical, ChevronRight, MessageSquare, CheckCircle2, Target, Tag } from 'lucide-react';
 import { statusLabels, statusColors, priorityLabels, priorityColors, bpLabels, bpFromPriority, getTouchPos } from './constants';
 import type { BatchProps } from './constants';
+import { useVirtualScroll } from '@/hooks/useVirtualScroll';
 
-function ProjectCard({ project, members, expanded, hasChildren, onToggle, onClick, tags, commentCount, batchMode, isSelected, onToggleSelect }: {
+const ProjectCard = React.memo(function ProjectCard({ project, members, expanded, hasChildren, onToggle, onClick, tags, commentCount, batchMode, isSelected, onToggleSelect }: {
   project: Project; members: { id: string; name: string; avatar: string }[];
   expanded: boolean; hasChildren: boolean; onToggle: () => void;
   onClick: () => void; tags: Array<{ id: string; name: string; color: string }>;
@@ -16,14 +17,15 @@ function ProjectCard({ project, members, expanded, hasChildren, onToggle, onClic
   const [showMenu, setShowMenu] = useState(false);
   const leader = members.find(m => m.id === project.leaderId);
   const supporters = [...new Set((project.supporterIds || []))].map(id => members.find(m => m.id === id)).filter(Boolean) as typeof members;
-  const goal = useStore(s => s.state.goals.find(g => g.id === project.goalId));
+  const { state: _projState } = useStore();
+  const goal = _projState.goals.find(g => g.id === project.goalId);
   const uniqueTags = [...new Set((project.tags || []))];
 
   return (
     <div className="bg-white rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md border-border">
       <div className="p-5">
         <div className="flex items-start gap-3 mb-3">
-          {batchMode && <input type="checkbox" checked={isSelected} className="mt-1 rounded" onChange={e => { e.stopPropagation(); onToggleSelect(project.id); }} />}
+          {batchMode && <div onClick={e => e.stopPropagation()}><input type="checkbox" checked={isSelected} readOnly className="mt-1 rounded cursor-pointer" onClick={() => onToggleSelect(project.id)} /></div>}
           <GripVertical size={16} className="text-muted-foreground hover:text-foreground flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing" />
           {hasChildren && <button className="flex-shrink-0 mt-0.5 text-muted-foreground hover:text-foreground transition-transform" onClick={e => { e.stopPropagation(); onToggle(); }}><ChevronRight size={16} className={`transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} /></button>}
           {!hasChildren && <div className="w-4 flex-shrink-0" />}
@@ -47,8 +49,8 @@ function ProjectCard({ project, members, expanded, hasChildren, onToggle, onClic
                 <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
                 <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border border-border z-50 py-1">
                   <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); onClick(); setShowMenu(false); }}><Edit2 size={14} /> 编辑</button>
-                  {can('edit_projects') && project.status !== 'completed' && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, updates: { status: 'completed' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 完成</button>}
-                  {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除</button>}
+                  {can('edit_projects') && project.status !== 'done' && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, updates: { status: 'done' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 完成</button>}
+                  {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除</button>}
                 </div>
               </div>
             )}
@@ -93,9 +95,9 @@ function ProjectCard({ project, members, expanded, hasChildren, onToggle, onClic
       </div>
     </div>
   );
-}
+});
 
-export function ProjectTreeNode({ project, filteredProjects, members, expandedIds, toggleExpand, tags, depth, setDetailItem, commentCounts, batchProps, visited }: {
+export const ProjectTreeNode = React.memo(function ProjectTreeNode({ project, filteredProjects, members, expandedIds, toggleExpand, tags, depth, setDetailItem, commentCounts, batchProps, visited }: {
   project: Project; filteredProjects: Project[]; members: { id: string; name: string; avatar: string }[];
   expandedIds: Set<string>; toggleExpand: (id: string) => void;
   tags: Array<{ id: string; name: string; color: string }>; depth: number;
@@ -117,7 +119,7 @@ export function ProjectTreeNode({ project, filteredProjects, members, expandedId
       )}
     </div>
   );
-}
+});
 
 export function ProjectListView({ projects, members, setDetailItem, commentCounts, batchProps }: {
   projects: Project[]; members: { id: string; name: string; avatar: string }[];
@@ -128,40 +130,59 @@ export function ProjectListView({ projects, members, setDetailItem, commentCount
   const { can } = usePermissions();
   const [showMenuId, setShowMenuId] = useState<string | null>(null);
   function progressColor(p: number) { return p >= 80 ? 'bg-green-500' : p >= 50 ? 'bg-blue-500' : 'bg-amber-500'; }
-  return (
-    <div className="bg-white rounded-xl border border-border divide-y divide-border/50">
-      {projects.map(project => {
-        const leader = (members || []).find(m => m.id === project.leaderId);
-            return (
-              <div key={project.id} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover:bg-muted/30 transition-colors group cursor-pointer" onClick={() => setDetailItem({ type: 'project', id: project.id })}>
-                {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(project.id)} className="rounded flex-shrink-0" onChange={() => batchProps.onToggleSelect(project.id)} /></span>}
-                <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0 bg-orange-100 text-orange-700"><FolderKanban size={12} /></div>
-            <span className={`text-[11px] px-1.5 py-0.5 rounded flex-shrink-0 ${statusColors[project.status]}`}>{statusLabels[project.status]}</span>
-            <div className="flex-1 min-w-0">
-              <span className="text-sm font-medium truncate block">{project.title}</span>
+
+  const LIST_ROW_H = 48;
+  const needsVirtual = projects.length > 50;
+  const virtual = useVirtualScroll({ itemCount: projects.length, rowHeight: LIST_ROW_H });
+
+  const listItem = (project: Project) => {
+    const leader = (members || []).find(m => m.id === project.leaderId);
+    return (
+      <div key={project.id} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover:bg-muted/30 transition-colors group cursor-pointer border-b border-border/50" onClick={() => setDetailItem({ type: 'project', id: project.id })}>
+        {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(project.id)} className="rounded flex-shrink-0" onChange={() => batchProps.onToggleSelect(project.id)} /></span>}
+        <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0 bg-orange-100 text-orange-700"><FolderKanban size={12} /></div>
+        <span className={`text-[11px] px-1.5 py-0.5 rounded flex-shrink-0 ${statusColors[project.status]}`}>{statusLabels[project.status]}</span>
+        <div className="flex-1 min-w-0"><span className="text-sm font-medium truncate block">{project.title}</span></div>
+        <div className="hidden sm:flex items-center gap-2 w-48 flex-shrink-0">
+          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${progressColor(project.progress)}`} style={{ width: `${project.progress}%` }} /></div>
+          <span className="text-xs font-medium text-muted-foreground min-w-[32px] text-right">{project.progress}%</span>
+        </div>
+        {leader && <div className="hidden md:flex items-center gap-1 flex-shrink-0"><div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center"><span className="text-[10px] font-bold text-primary">{leader.name.charAt(0)}</span></div></div>}
+        <span className="text-[11px] text-muted-foreground flex-shrink-0 hidden sm:inline w-20 text-right">{project.endDate}</span>
+        <span className="text-[10px] text-muted-foreground flex-shrink-0 flex items-center gap-0.5"><MessageSquare size={11} />{commentCounts[project.id] || 0}</span>
+        <div className="relative flex-shrink-0">
+          <button className="p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === project.id ? null : project.id); }}><MoreHorizontal size={14} /></button>
+          {showMenuId === project.id && (
+            <div className="relative">
+              <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
+              <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-border z-50 py-1">
+                <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); setShowMenuId(null); }}><Edit2 size={12} /> 编辑</button>
+                {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
+              </div>
             </div>
-            <div className="hidden sm:flex items-center gap-2 w-48 flex-shrink-0">
-              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${progressColor(project.progress)}`} style={{ width: `${project.progress}%` }} /></div>
-              <span className="text-xs font-medium text-muted-foreground min-w-[32px] text-right">{project.progress}%</span>
-            </div>
-            {leader && <div className="hidden md:flex items-center gap-1 flex-shrink-0"><div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center"><span className="text-[10px] font-bold text-primary">{leader.name.charAt(0)}</span></div></div>}
-            <span className="text-[11px] text-muted-foreground flex-shrink-0 hidden sm:inline w-20 text-right">{project.endDate}</span>
-            <span className="text-[10px] text-muted-foreground flex-shrink-0 flex items-center gap-0.5"><MessageSquare size={11} />{commentCounts[project.id] || 0}</span>
-            <div className="relative flex-shrink-0">
-              <button className="p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === project.id ? null : project.id); }}><MoreHorizontal size={14} /></button>
-              {showMenuId === project.id && (
-                <div className="relative">
-                  <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
-                  <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-border z-50 py-1">
-                    <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); setShowMenuId(null); }}><Edit2 size={12} /> 编辑</button>
-                    {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
-                  </div>
-                </div>
-              )}
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  if (needsVirtual) {
+    return (
+      <div className="bg-white rounded-xl border border-border overflow-hidden">
+        <div ref={virtual.scrollRef} className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }} onScroll={virtual.onScroll}>
+          <div style={{ height: virtual.totalHeight, overflow: 'hidden' }}>
+            <div style={{ transform: `translateY(${virtual.startIdx * LIST_ROW_H}px)` }}>
+              {projects.slice(virtual.startIdx, virtual.endIdx).map(listItem)}
             </div>
           </div>
-        );
-      })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-border divide-y divide-border/50">
+      {projects.map(listItem)}
     </div>
   );
 }
@@ -188,19 +209,24 @@ export function ProjectTableView({ projects, members, setDetailItem, commentCoun
   function Th({ col, children }: { col: string; children: React.ReactNode }) {
     return <th className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap cursor-pointer hover:bg-muted/50 select-none" onClick={() => toggleSort(col)}>{children} {sortCol === col && (sortDir === 'asc' ? '\u2191' : '\u2193')}</th>;
   }
+  const TABLE_ROW_H = 42;
+  const needsVirtual = sorted.length > 50;
+  const virtual = useVirtualScroll({ itemCount: sorted.length, rowHeight: TABLE_ROW_H });
+  const visibleSorted = needsVirtual ? sorted.slice(virtual.startIdx, virtual.endIdx) : sorted;
+
   return (
     <div className="bg-white rounded-xl border border-border overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border bg-muted/30">
+      <div className={needsVirtual ? 'overflow-y-auto' : ''} style={needsVirtual ? { maxHeight: 'calc(100vh - 220px)' } : undefined} ref={needsVirtual ? virtual.scrollRef : undefined} onScroll={needsVirtual ? virtual.onScroll : undefined}>
+        <table className="w-full text-sm">
+          <thead className={`border-b border-border bg-muted/30${needsVirtual ? ' sticky top-0 z-10' : ''}`}>
             {batchProps.batchMode && <th className="w-10 px-2"><input type="checkbox" checked={batchProps.selectedIds.size === projects.length && projects.length > 0} className="rounded" onChange={e => { e.stopPropagation(); if (batchProps.selectedIds.size === projects.length) projects.forEach(p => batchProps.onToggleSelect(p.id)); else projects.forEach(p => { if (!batchProps.selectedIds.has(p.id)) batchProps.onToggleSelect(p.id); }); }} /></th>}
             <Th col="title">项目名称</Th><Th col="status">状态</Th><Th col="priority">紧急程度</Th><Th col="progress">进度</Th><Th col="leaderId">主导人</Th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">支持人</th><Th col="startDate">开始</Th><Th col="endDate">截止</Th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">分类</th><Th col="taskCount">任务</Th><th className="text-left px-3 py-3 font-medium text-muted-foreground whitespace-nowrap">@</th><th className="w-10"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border/50">
-          {sorted.map(project => {
+          </thead>
+          <tbody className="divide-y divide-border/50">
+            {needsVirtual && virtual.startIdx > 0 && <tr style={{ height: virtual.startIdx * TABLE_ROW_H }} />}
+            {visibleSorted.map(project => {
             const leader = (members || []).find(m => m.id === project.leaderId);
             const supporters = (project.supporterIds || []).map(id => (members || []).find(m => m.id === id)).filter(Boolean).map(s => s!.name);
             return (
@@ -225,7 +251,7 @@ export function ProjectTableView({ projects, members, setDetailItem, commentCoun
                         <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
                         <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-border z-50 py-1">
                           <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); setShowMenuId(null); }}><Edit2 size={12} /> 编辑</button>
-                          {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
+                          {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
                         </div>
                       </div>
                     )}
@@ -233,14 +259,16 @@ export function ProjectTableView({ projects, members, setDetailItem, commentCoun
                 </td>
               </tr>
             );
-          })}
-        </tbody>
-      </table>
+            })}
+            {needsVirtual && virtual.endIdx < sorted.length && <tr style={{ height: (sorted.length - virtual.endIdx) * TABLE_ROW_H }} />}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-function KanbanMiniCard({ p, members, setDetailItem, commentCounts, batchProps, enableDrag }: { p: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; enableDrag?: boolean }) {
+const KanbanMiniCard = React.memo(function KanbanMiniCard({ p, members, setDetailItem, commentCounts, batchProps, enableDrag }: { p: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; enableDrag?: boolean }) {
   const leader = (members || []).find(m => m.id === p.leaderId);
   return (
     <div className="bg-white rounded-lg border border-border p-3 hover:shadow-sm transition-shadow cursor-pointer" draggable={enableDrag} onDragStart={(e: React.DragEvent) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => setDetailItem({ type: 'project', id: p.id })}>
@@ -258,7 +286,7 @@ function KanbanMiniCard({ p, members, setDetailItem, commentCounts, batchProps, 
       {leader && <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground"><div className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center"><span className="text-[8px] font-bold text-primary">{leader.name.charAt(0)}</span></div>{leader.name}</div>}
     </div>
   );
-}
+});
 
 export function ProjectKanbanView({ projects, members, setDetailItem, commentCounts, batchProps, tags: kanbanTags }: {
   projects: Project[]; members: { id: string; name: string; avatar: string }[];
@@ -274,9 +302,9 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
   const [newColName, setNewColName] = useState('');
   useEffect(() => { try { localStorage.setItem(KANBAN_LS_KEY, JSON.stringify({ customMode: kanbanCustomMode, columns: customColumns, groupBy: kanbanGroupBy })); } catch {} }, [kanbanCustomMode, customColumns, kanbanGroupBy]);
   const defaultColumns: Array<{ key: ProjectStatus; label: string; color: string }> = [
-    { key: 'planning', label: '规划中', color: 'border-t-gray-400' },
+    { key: 'todo', label: '待办', color: 'border-t-gray-400' },
     { key: 'in_progress', label: '进行中', color: 'border-t-blue-500' },
-    { key: 'completed', label: '已完成', color: 'border-t-green-500' },
+    { key: 'done', label: '已完成', color: 'border-t-green-500' },
   ];
   function addColumn() { const n = newColName.trim(); if (n && !customColumns.includes(n)) { setCustomColumns(prev => [...prev, n]); setNewColName(''); } }
   function removeColumn(idx: number) { setCustomColumns(prev => prev.filter((_, i) => i !== idx)); }
@@ -322,7 +350,7 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
         {cols.map(col => {
           const items = getItems(col.key) || [];
           return (
-            <div key={col.key} className={`w-[300px] flex-shrink-0 bg-muted/20 rounded-xl border border-border border-t-4 ${col.color || 'border-t-gray-400'} p-4`} onDragOver={(e: React.DragEvent) => e.preventDefault()} onDrop={(e: React.DragEvent) => { e.preventDefault(); const projectId = e.dataTransfer.getData('text/plain'); if (!projectId) return; if (onDropCustom) { onDropCustom(projectId, col.key); return; } if (enableDrag) { const validStatuses: Record<string, ProjectStatus> = { planning: 'planning', in_progress: 'in_progress', completed: 'completed' }; const newStatus = validStatuses[col.key]; if (newStatus) { storeDispatch({ type: 'UPDATE_PROJECT', payload: { id: projectId, updates: { status: newStatus } } }); } } }}>
+            <div key={col.key} className={`w-[300px] flex-shrink-0 bg-muted/20 rounded-xl border border-border border-t-4 ${col.color || 'border-t-gray-400'} p-4`} onDragOver={(e: React.DragEvent) => e.preventDefault()} onDrop={(e: React.DragEvent) => { e.preventDefault(); const projectId = e.dataTransfer.getData('text/plain'); if (!projectId) return; if (onDropCustom) { onDropCustom(projectId, col.key); return; }               if (enableDrag) { const validStatuses: Record<string, ProjectStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done' }; const newStatus = validStatuses[col.key]; if (newStatus) { storeDispatch({ type: 'UPDATE_PROJECT', payload: { id: projectId, updates: { status: newStatus } } }); } } }}>
               <div className="flex items-center justify-between mb-4"><span className="text-sm font-semibold">{col.label}</span><span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{items.length}</span></div>
               <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                 {items.map(p => <KanbanMiniCard key={p.id} p={p} {...miniCardProps} enableDrag={!!enableDrag || !!onDropCustom} />)}
@@ -341,7 +369,7 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">{groupByBtns}</div>
-        {renderCols(tagColumns.map(t => ({ key: t, label: t })), col => projects.filter(p => p.status !== 'completed' && p.status !== 'cancelled' && (col === '未分类' ? (p.tags || []).length === 0 : (p.tags || []).includes(col))))}
+        {renderCols(tagColumns.map(t => ({ key: t, label: t })), col => projects.filter(p => p.status !== 'done' && p.status !== 'cancelled' && (col === '未分类' ? (p.tags || []).length === 0 : (p.tags || []).includes(col))))}
       </div>
     );
   }
@@ -411,7 +439,7 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">{groupByBtns}</div>
         {renderCols(timeCols, col => projects.filter(p => {
-          if (col === 'overdue') return p.endDate && p.endDate < todayStr && p.status !== 'completed' && p.status !== 'cancelled';
+          if (col === 'overdue') return p.endDate && p.endDate < todayStr && p.status !== 'done' && p.status !== 'cancelled';
           if (col === 'today') return p.endDate === todayStr;
           if (col === 'week') return p.endDate > todayStr && p.endDate <= weekEndStr;
           if (col === 'later') return p.endDate > weekEndStr;
@@ -447,7 +475,7 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
   );
 }
 
-function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, batchProps, dispatch, dragRef }: { project: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; dispatch: React.Dispatch<any>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
+const MatrixQuadrantCard = React.memo(function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, batchProps, dispatch, dragRef }: { project: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; dispatch: React.Dispatch<any>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
   const { can } = usePermissions();
   const leader = (members || []).find(m => m.id === project.leaderId);
   return (
@@ -456,7 +484,7 @@ function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, ba
         {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(project.id)} className="rounded" onChange={() => batchProps.onToggleSelect(project.id)} /></span>}
         <span className="text-xs font-medium truncate flex-1">{project.title}</span>
         <div className="relative flex-shrink-0">
-          {can('delete_projects') && <button className="p-0.5 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_PROJECT', payload: project.id }); }}><Trash2 size={12} className="text-destructive" /></button>}
+          {can('delete_projects') && <button className="p-0.5 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); }}><Trash2 size={12} className="text-destructive" /></button>}
         </div>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
@@ -473,7 +501,7 @@ function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, ba
       </div>
     </div>
   );
-}
+});
 
 export function ProjectMatrixView({ projects, members, setDetailItem, commentCounts, batchProps }: {
   projects: Project[]; members: { id: string; name: string; avatar: string }[];
@@ -492,7 +520,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
   const boxRefs = useRef<Record<string, HTMLElement | null>>({});
 
   function daysUntilEnd(endDate: string) { return Math.ceil((new Date(endDate).getTime() - new Date(todayStr).getTime()) / MS_DAY); }
-  function isUrgent(p: Project) { return p.status !== 'completed' && p.status !== 'cancelled' && p.status !== 'paused' && !!p.endDate && daysUntilEnd(p.endDate) <= URGENT_DAYS; }
+  function isUrgent(p: Project) { return p.status !== 'done' && p.status !== 'cancelled' && p.status !== 'blocked' && !!p.endDate && daysUntilEnd(p.endDate) <= URGENT_DAYS; }
   function isImportant(p: Project) { return p.priority === 'urgent' || p.priority === 'high'; }
 
   const quadrants: Record<string, { title: string; accent: string; hoverAccent: string; dropPriority: TaskPriority }> = {
@@ -505,7 +533,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
 
   const grouped: Record<string, Project[]> = { Q1: [], Q2: [], Q3: [], Q4: [] };
   projects.forEach(p => {
-    if (!p.priority || p.status === 'completed' || p.status === 'cancelled' || p.status === 'paused') { grouped.Q4.push(p); return; }
+    if (!p.priority || p.status === 'done' || p.status === 'cancelled' || p.status === 'blocked') { grouped.Q4.push(p); return; }
     switch (p.priority) {
       case 'urgent': grouped.Q1.push(p); break;
       case 'high': grouped.Q2.push(p); break;
@@ -708,7 +736,7 @@ export function ProjectCanvasView({ projects, members, setDetailItem, batchProps
     return () => { document.removeEventListener('mousemove', mmHandler); document.removeEventListener('mouseup', muHandler); document.removeEventListener('touchmove', tmHandler); document.removeEventListener('touchend', teHandler); };
   }, [dispatch]);
 
-  const statusBorderColors: Record<string, string> = { planning: 'border-gray-400', in_progress: 'border-blue-500', completed: 'border-green-500', paused: 'border-amber-400' };
+  const statusBorderColors: Record<string, string> = { todo: 'border-gray-400', in_progress: 'border-blue-500', done: 'border-green-500', blocked: 'border-amber-400' };
 
   const startPan = useCallback(() => { isPanningRef.current = true; panRef.current = { x: canvasPanX, y: canvasPanY }; }, [canvasPanX, canvasPanY]);
 

@@ -27,8 +27,8 @@ export function TeamTab() {
       const all = [...leadTasks, ...supportTasks];
       const done = all.filter(t => t.status === 'done').length;
       const active = all.filter(t => t.status !== 'done' && t.status !== 'cancelled').length;
-      const lead = projects.filter(p => p.leaderId === m.id && p.status !== 'completed' && p.status !== 'cancelled').length;
-      const support = projects.filter(p => (p.supporterIds || []).includes(m.id) && p.leaderId !== m.id && p.status !== 'completed' && p.status !== 'cancelled').length;
+      const lead = projects.filter(p => p.leaderId === m.id && p.status !== 'done' && p.status !== 'cancelled').length;
+      const support = projects.filter(p => (p.supporterIds || []).includes(m.id) && p.leaderId !== m.id && p.status !== 'done' && p.status !== 'cancelled').length;
       map.set(m.id, { total: all.length, done, active, rate: all.length > 0 ? Math.round((done / all.length) * 100) : 0, lead, support });
     }
     return map;
@@ -50,7 +50,10 @@ export function TeamTab() {
   function cancelEditing() { setEditingId(null); }
   function saveEditing() {
     if (!editingId || !editForm.name.trim()) return;
-    dispatch({ type: 'UPDATE_MEMBER', payload: { id: editingId, updates: { name: editForm.name.trim(), nickname: editForm.nickname.trim(), wechatId: editForm.wechatId.trim(), phone: editForm.phone.trim(), email: editForm.email.trim(), role: editForm.role, department: editForm.department.trim() || '未分配', status: editForm.status as 'active' | 'inactive', avatar: editForm.name.trim().slice(0, 2) } } });
+    const updates: any = { name: editForm.name.trim(), nickname: editForm.nickname.trim(), wechatId: editForm.wechatId.trim(), phone: editForm.phone.trim(), email: editForm.email.trim(), role: editForm.role, department: editForm.department.trim() || '未分配', status: editForm.status as 'active' | 'inactive', avatar: editForm.name.trim().slice(0, 2) };
+    const originalMember = state.members.find(m => m.id === editingId);
+    if (originalMember && originalMember.role !== editForm.role) updates.permissions = [];
+    dispatch({ type: 'UPDATE_MEMBER', payload: { id: editingId, updates } });
     setEditingId(null);
   }
 
@@ -104,7 +107,7 @@ export function TeamTab() {
                   <div><label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Briefcase size={12} /> 部门</label><input className={inputCls} value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} /></div>
                   <div><label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Shield size={12} /> 角色</label>
                     <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}>
-                      <option value="member">成员</option><option value="manager">负责人</option><option value="admin">管理员</option>
+                      <option value="member">成员</option><option value="manager">负责人</option><option value="leader">组长</option><option value="admin">管理员</option>
                     </select>
                   </div>
                   <div><label className="block text-xs font-medium text-muted-foreground mb-1">状态</label>
@@ -129,7 +132,7 @@ export function TeamTab() {
                   <div className="flex items-center gap-2 text-muted-foreground"><Briefcase size={14} className="flex-shrink-0" /><span>部门：</span><span className="text-foreground font-medium">{member.department}</span></div>
                 </div>
                 <div><div className="text-xs font-medium text-muted-foreground mb-1">权限说明</div><span className={`text-xs px-1.5 py-0.5 rounded ${roleColors[member.role]}`}><Shield size={10} className="inline mr-1" />{permissionDesc[member.role]}</span></div>
-                {canEdit && <button onClick={() => setEditingId(member.id)} className="text-xs px-3 py-1.5 rounded-lg border border-primary text-primary hover:bg-primary/5 font-medium flex items-center gap-1"><Edit2 size={12} /> 编辑信息</button>}
+                {canEdit && <button onClick={() => startEditing(member)} className="text-xs px-3 py-1.5 rounded-lg border border-primary text-primary hover:bg-primary/5 font-medium flex items-center gap-1"><Edit2 size={12} /> 编辑信息</button>}
                 {hasPermission('manage_team') && <button onClick={e => { e.stopPropagation(); handleDeleteMember(member.id, member.name); }} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1"><Trash2 size={12} /> 删除成员</button>}
               </div>
             )}
@@ -139,7 +142,7 @@ export function TeamTab() {
                 <div className="space-y-1">
                   {allPermissions.map(perm => (
                     <label key={perm} className="flex items-center gap-2 py-0.5 cursor-pointer text-xs">
-                      <input type="checkbox" className="rounded" checked={member.permissions?.length ? (member.permissions || []).includes(perm) : getRoleDefaultPermission(member.role, perm)} onChange={e => { e.stopPropagation(); const cur = member.permissions || []; const newP = cur.includes(perm) ? cur.filter((p: any) => p !== perm) : [...cur, perm]; dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: newP } } }); }} />
+                      <input type="checkbox" className="rounded" checked={member.permissions?.length ? (member.permissions || []).includes(perm) : getRoleDefaultPermission(member.role, perm)} onChange={e => { e.stopPropagation(); const effectivePerms = member.permissions?.length ? [...member.permissions] : allPermissions.filter(p => getRoleDefaultPermission(member.role, p)); const newP = effectivePerms.includes(perm) ? effectivePerms.filter((p: any) => p !== perm) : [...effectivePerms, perm]; dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: newP } } }); }} />
                       <span>{permLabels[perm] || perm}</span>
                     </label>
                   ))}

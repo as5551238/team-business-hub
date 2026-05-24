@@ -1,6 +1,7 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useStore, useMemberLookup, usePermissions } from '@/store/useStore';
 import type { Goal, TaskPriority } from '@/types';
+import { useVirtualScroll } from '@/hooks/useVirtualScroll';
 import {
   Target, TrendingUp, Calendar, MoreHorizontal, Edit2, Trash2,
   FolderKanban, GripVertical, ChevronRight, Clock, CheckCircle2,
@@ -11,7 +12,7 @@ import {
   bizLabels, bizColors, progressColor, progressTextColor
 } from './constants';
 
-export function GoalCard({ goal, members, projects, expanded, hasChildren, onToggle, tags, onOpenDetail, commentCount, batchMode, selected, onToggleSelect }: {
+export const GoalCard = React.memo(function GoalCard({ goal, members, projects, expanded, hasChildren, onToggle, tags, onOpenDetail, commentCount, batchMode, selected, onToggleSelect }: {
   goal: Goal;
   members: { id: string; name: string; avatar: string }[];
   projects: { id: string; title: string; goalId: string | null }[];
@@ -103,10 +104,10 @@ export function GoalCard({ goal, members, projects, expanded, hasChildren, onTog
                 <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
                 <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border z-50 py-1">
                   {can('edit_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setShowMenu(false); }}><Edit2 size={14} /> 编辑目标</button>}
-                  {can('edit_goals') && goal.status !== 'completed' && (
-                    <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_GOAL', payload: { id: goal.id, updates: { status: 'completed' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 标记完成</button>
+                  {can('edit_goals') && goal.status !== 'done' && (
+                    <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_GOAL', payload: { id: goal.id, updates: { status: 'done' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 标记完成</button>
                   )}
-                  {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除目标</button>}
+                  {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此目标？')) return; dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除目标</button>}
                 </div>
               </div>
             )}
@@ -171,9 +172,9 @@ export function GoalCard({ goal, members, projects, expanded, hasChildren, onTog
       </div>
     </div>
   );
-}
+});
 
-export function GoalTreeNode({ goal, filteredGoals, members, projects, expandedGoals, toggleExpand, tags, depth, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect, visited }: {
+export const GoalTreeNode = React.memo(function GoalTreeNode({ goal, filteredGoals, members, projects, expandedGoals, toggleExpand, tags, depth, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect, visited }: {
   goal: Goal; filteredGoals: Goal[]; members: { id: string; name: string; avatar: string }[];
   projects: { id: string; title: string; goalId: string | null }[];
   expandedGoals: Set<string>; toggleExpand: (id: string) => void;
@@ -198,7 +199,7 @@ export function GoalTreeNode({ goal, filteredGoals, members, projects, expandedG
       )}
     </div>
   );
-}
+});
 
 export function GoalListView({ goals, members, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect }: { goals: Goal[]; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }) {
   const { dispatch } = useStore();
@@ -263,58 +264,78 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
     return result;
   }, [treeItems, expandedIds, childrenMap]);
 
-  return (
-    <div className="bg-white rounded-xl border divide-y">
-      {visibleItems.map(item => {
-        const { goal, depth, connector, parentTitle } = item;
-        const leader = members.find(m => m.id === goal.leaderId);
-        const hasKids = (childrenMap.get(goal.id)?.length || 0) > 0;
-        const cc = commentCounts.get(goal.id) || 0;
-        return (
-          <div key={goal.id} className="flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 hover:bg-muted/30 transition-colors group cursor-pointer" style={{ paddingLeft: (16 + depth * 24) + 'px' }} onClick={() => onOpenDetail(goal.id)}>
-            {batchMode && (
-              <button className="flex-shrink-0" onClick={e => { e.stopPropagation(); onToggleSelect(goal.id); }}>
-                <input type="checkbox" checked={selectedIds.has(goal.id)} readOnly className="w-3.5 h-3.5 rounded" />
-              </button>
-            )}
-            {depth > 0 && <span className="text-xs text-primary/40 flex-shrink-0 select-none w-4">{connector}</span>}
-            {hasKids ? (
-              <button className="flex-shrink-0 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); toggle(goal.id); }}>
-                <ChevronRight size={14} className={`transition-transform duration-200 ${expandedIds.has(goal.id) ? 'rotate-90' : ''}`} />
-              </button>
-            ) : <div className="w-3.5 flex-shrink-0" />}
-            <div className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${typeColors[goal.type]}`}><Target size={12} /></div>
-            <span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${statusColors[goal.status]}`}>{statusLabels[goal.status]}</span>
-            <div className="flex-1 min-w-0"><span className="text-xs md:text-sm font-medium truncate block">{goal.title}</span></div>
-            {cc > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 flex-shrink-0"><MessageSquare size={10} />{cc}</span>}
-            {goal.parentId && parentTitle && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 flex-shrink-0 max-w-[120px] truncate hidden sm:inline">子←{parentTitle}</span>}
-            <div className="flex items-center gap-2 w-36 md:w-44 flex-shrink-0">
-              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${progressColor(goal.progress)}`} style={{ width: goal.progress + '%' }} />
+  const LIST_ROW_H = 48;
+  const needsVirtual = visibleItems.length > 50;
+  const virtual = useVirtualScroll({ itemCount: visibleItems.length, rowHeight: LIST_ROW_H });
+
+  const listItem = (item: TreeItem) => {
+    const { goal, depth, connector, parentTitle } = item;
+    const leader = members.find(m => m.id === goal.leaderId);
+    const hasKids = (childrenMap.get(goal.id)?.length || 0) > 0;
+    const cc = commentCounts.get(goal.id) || 0;
+    return (
+      <div key={goal.id} className="flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 hover:bg-muted/30 transition-colors group cursor-pointer border-b border-border/50" style={{ paddingLeft: (16 + depth * 24) + 'px' }} onClick={() => onOpenDetail(goal.id)}>
+        {batchMode && (
+          <button className="flex-shrink-0" onClick={e => { e.stopPropagation(); onToggleSelect(goal.id); }}>
+            <input type="checkbox" checked={selectedIds.has(goal.id)} readOnly className="w-3.5 h-3.5 rounded" />
+          </button>
+        )}
+        {depth > 0 && <span className="text-xs text-primary/40 flex-shrink-0 select-none w-4">{connector}</span>}
+        {hasKids ? (
+          <button className="flex-shrink-0 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); toggle(goal.id); }}>
+            <ChevronRight size={14} className={`transition-transform duration-200 ${expandedIds.has(goal.id) ? 'rotate-90' : ''}`} />
+          </button>
+        ) : <div className="w-3.5 flex-shrink-0" />}
+        <div className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${typeColors[goal.type]}`}><Target size={12} /></div>
+        <span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${statusColors[goal.status]}`}>{statusLabels[goal.status]}</span>
+        <div className="flex-1 min-w-0"><span className="text-xs md:text-sm font-medium truncate block">{goal.title}</span></div>
+        {cc > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 flex-shrink-0"><MessageSquare size={10} />{cc}</span>}
+        {goal.parentId && parentTitle && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 flex-shrink-0 max-w-[120px] truncate hidden sm:inline">子←{parentTitle}</span>}
+        <div className="flex items-center gap-2 w-36 md:w-44 flex-shrink-0">
+          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${progressColor(goal.progress)}`} style={{ width: goal.progress + '%' }} />
+          </div>
+          <span className="text-xs font-medium text-muted-foreground min-w-[32px] text-right">{goal.progress}%</span>
+        </div>
+        {leader && (
+          <div className="flex items-center gap-1 flex-shrink-0 hidden md:flex">
+            <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center"><span className="text-[10px] font-bold text-primary">{leader.name.charAt(0)}</span></div>
+          </div>
+        )}
+        <span className="text-[10px] md:text-xs text-muted-foreground flex-shrink-0 w-20 text-right hidden sm:inline">{goal.endDate}</span>
+        <div className="relative flex-shrink-0">
+          <button className="p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === goal.id ? null : goal.id); }}><MoreHorizontal size={14} /></button>
+          {showMenuId === goal.id && (
+            <div className="relative">
+              <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
+              <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border z-50 py-1">
+                <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); }}><Edit2 size={12} /> 编辑</button>
+                {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此目标？')) return; dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
               </div>
-              <span className="text-xs font-medium text-muted-foreground min-w-[32px] text-right">{goal.progress}%</span>
             </div>
-            {leader && (
-              <div className="flex items-center gap-1 flex-shrink-0 hidden md:flex">
-                <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center"><span className="text-[10px] font-bold text-primary">{leader.name.charAt(0)}</span></div>
-              </div>
-            )}
-            <span className="text-[10px] md:text-xs text-muted-foreground flex-shrink-0 w-20 text-right hidden sm:inline">{goal.endDate}</span>
-            <div className="relative flex-shrink-0">
-              <button className="p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === goal.id ? null : goal.id); }}><MoreHorizontal size={14} /></button>
-              {showMenuId === goal.id && (
-                <div className="relative">
-                  <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
-                  <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border z-50 py-1">
-                    <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); }}><Edit2 size={12} /> 编辑</button>
-                    {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
-                  </div>
-                </div>
-              )}
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  if (needsVirtual) {
+    return (
+      <div className="bg-white rounded-xl border overflow-hidden">
+        <div ref={virtual.scrollRef} className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }} onScroll={virtual.onScroll}>
+          <div style={{ height: virtual.totalHeight, overflow: 'hidden' }}>
+            <div style={{ transform: `translateY(${virtual.startIdx * LIST_ROW_H}px)` }}>
+              {visibleItems.slice(virtual.startIdx, virtual.endIdx).map(listItem)}
             </div>
           </div>
-        );
-      })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl border divide-y">
+      {visibleItems.map(listItem)}
     </div>
   );
 }
@@ -388,11 +409,16 @@ export function GoalTableView({ goals, members, onOpenDetail, commentCounts, bat
     return <span className="text-primary">{sortDir === 'asc' ? '↑' : '↓'}</span>;
   }
 
+  const TABLE_ROW_H = 42;
+  const needsVirtual = sorted.length > 50;
+  const virtual = useVirtualScroll({ itemCount: sorted.length, rowHeight: TABLE_ROW_H });
+  const visibleSorted = needsVirtual ? sorted.slice(virtual.startIdx, virtual.endIdx) : sorted;
+
   return (
     <div className="bg-white rounded-xl border overflow-x-auto">
-      <table className="w-full text-xs md:text-sm">
-        <thead>
-          <tr className="border-b bg-muted/30">
+      <div className={needsVirtual ? 'overflow-y-auto' : ''} style={needsVirtual ? { maxHeight: 'calc(100vh - 220px)' } : undefined} ref={needsVirtual ? virtual.scrollRef : undefined} onScroll={needsVirtual ? virtual.onScroll : undefined}>
+        <table className="w-full text-xs md:text-sm">
+          <thead className={`border-b bg-muted/30${needsVirtual ? ' sticky top-0 z-10' : ''}`}>
             {batchMode && <th className="w-8" />}
             {columns.map(col => (
               <th key={col.key} className="text-left px-3 md:px-4 py-3 font-medium text-muted-foreground whitespace-nowrap cursor-pointer hover:bg-muted/50 select-none" onClick={() => handleSort(col.key)}>
@@ -400,10 +426,10 @@ export function GoalTableView({ goals, members, onOpenDetail, commentCounts, bat
               </th>
             ))}
             <th className="w-10" />
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {sorted.map(({ goal, depth, connector }) => {
+          </thead>
+          <tbody className="divide-y">
+            {needsVirtual && virtual.startIdx > 0 && <tr style={{ height: virtual.startIdx * TABLE_ROW_H }} />}
+            {visibleSorted.map(({ goal, depth, connector }) => {
             const leader = members.find(m => m.id === goal.leaderId);
             const parentGoal = goal.parentId ? goalMap.get(goal.parentId) : null;
             const cc = commentCounts.get(goal.id) || 0;
@@ -447,7 +473,7 @@ export function GoalTableView({ goals, members, onOpenDetail, commentCounts, bat
                           <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
                           <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border z-50 py-1">
                             <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); }}><Edit2 size={12} /> 编辑</button>
-                            {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
+                            {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此目标？')) return; dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
                           </div>
                         </div>
                       )}
@@ -457,13 +483,15 @@ export function GoalTableView({ goals, members, onOpenDetail, commentCounts, bat
               </tr>
             );
           })}
+          {needsVirtual && virtual.endIdx < sorted.length && <tr style={{ height: (sorted.length - virtual.endIdx) * TABLE_ROW_H }} />}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }
 
-function GoalMatrixQuadrantCard({ goal, members, onOpenDetail, commentCounts, dragRef }: { goal: Goal; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
+const GoalMatrixQuadrantCard = React.memo(function GoalMatrixQuadrantCard({ goal, members, onOpenDetail, commentCounts, dragRef }: { goal: Goal; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
   const leader = members.find(m => m.id === goal.leaderId);
   const cc = commentCounts.get(goal.id) || 0;
   const handleDown = (e: React.MouseEvent | React.TouchEvent) => {
@@ -492,7 +520,7 @@ function GoalMatrixQuadrantCard({ goal, members, onOpenDetail, commentCounts, dr
       </div>
     </div>
   );
-}
+});
 
 function GoalMatrixQuadrantBox({ qKey, quadrants, grouped, quadrantBoxRefs, members, onOpenDetail, commentCounts, dragRef }: { qKey: string; quadrants: Record<string, { title: string; accent: string; hoverAccent: string; priorityMap: TaskPriority }>; grouped: Record<string, Goal[]>; quadrantBoxRefs: React.MutableRefObject<Record<string, HTMLElement | null>>; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
   const q = quadrants[qKey];

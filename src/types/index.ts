@@ -2,9 +2,9 @@
 
 export type MemberRole = 'admin' | 'manager' | 'leader' | 'member';
 export type MemberStatus = 'active' | 'inactive';
-export type GoalStatus = 'planning' | 'in_progress' | 'completed' | 'paused' | 'cancelled';
+export type GoalStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
 export type GoalType = 'okr' | 'kpi' | 'milestone';
-export type ProjectStatus = 'planning' | 'in_progress' | 'completed' | 'paused' | 'cancelled';
+export type ProjectStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
 export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type ReviewPeriod = 'day' | 'week' | 'month' | 'quarter' | 'year';
@@ -40,6 +40,7 @@ export interface KeyResult {
   currentValue: number;
   unit: string;
   selected: boolean;
+  confidence?: number;
 }
 
 // ==================== 成员 ====================
@@ -162,6 +163,7 @@ export interface Task {
   supporterIds: string[];
   tags: string[];
   category: string;
+  startDate: string | null;
   dueDate: string | null;
   reminderDate: string | null;
   completedAt: string | null;
@@ -169,6 +171,8 @@ export interface Task {
   attachments: Attachment[];
   trackingRecords: TrackingRecord[];
   repeatCycle: RepeatCycle;
+  blockedBy: string[]; // IDs of prerequisite tasks that must be completed first
+  sprintId: string | null; // ID of the associated sprint
   canvasX?: number;
   canvasY?: number;
   discussionThreadId: string | null;
@@ -190,7 +194,7 @@ export interface ItemLink {
 
 export interface Notification {
   id: string;
-  type: 'reminder' | 'overdue' | 'assigned' | 'completed' | 'goal_update' | 'mentioned' | 'batch_update';
+  type: 'reminder' | 'overdue' | 'assigned' | 'mentioned' | 'sync' | 'error';
   title: string;
   message: string;
   relatedId: string;
@@ -228,7 +232,7 @@ export interface Tag {
   createdAt: string;
 }
 
-export type Permission = 'view_goals' | 'edit_goals' | 'delete_goals' | 'view_projects' | 'edit_projects' | 'delete_projects' | 'view_tasks' | 'edit_tasks' | 'delete_tasks' | 'manage_team' | 'manage_settings' | 'export_data';
+export type Permission = 'view_goals' | 'edit_goals' | 'delete_goals' | 'view_projects' | 'edit_projects' | 'delete_projects' | 'view_tasks' | 'edit_tasks' | 'delete_tasks' | 'manage_team' | 'manage_settings' | 'export_data' | 'delete_own_content';
 
 // ==================== 自定义分类 ====================
 export interface Category {
@@ -280,6 +284,7 @@ export interface Bookmark {
   category: string;
   icon: string;
   order: number;
+  memberId?: string;
   createdAt: string;
 }
 
@@ -301,6 +306,50 @@ export interface Note {
   updatedAt: string;
 }
 
+// ==================== 状态流转规则 ====================
+export interface StatusFlowRule {
+  id: string;
+  fromStatus: string;
+  toStatus: string;
+  allowedRoles: MemberRole[]; // empty = all roles
+  autoActions?: StatusFlowAutoAction[];
+}
+
+export interface StatusFlowAutoAction {
+  type: 'notify' | 'set_field' | 'create_subtask' | 'assign';
+  config: Record<string, string>;  // e.g. { field: 'priority', value: 'high' } or { title: 'Follow-up task' }
+}
+
+// ==================== 自动化规则 ====================
+export type AutomationTrigger = 'status_change' | 'due_arrive' | 'item_created' | 'field_change';
+export type AutomationAction = 'notify' | 'set_field' | 'create_subtask' | 'assign' | 'escalation';
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  itemType: ItemType;
+  trigger: AutomationTrigger;
+  condition: { field: string; operator: 'eq' | 'neq' | 'contains' | 'empty' | 'not_empty'; value: string };
+  actions: { type: AutomationAction; config: Record<string, string> }[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==================== 迭代/Sprint ====================
+export type SprintStatus = 'planning' | 'active' | 'completed';
+
+export interface Sprint {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  goalIds: string[];
+  status: SprintStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ==================== 视图/复盘/备份 ====================
 export interface ViewFilter {
   field: string;
@@ -314,7 +363,9 @@ export interface SavedView {
   type: ItemType;
   filters: ViewFilter[];
   filterLogic: 'and' | 'or';
+  memberId?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface ReviewEntry {
@@ -357,6 +408,12 @@ export interface BackupData {
   scheduleEvents: ScheduleEvent[];
   notes: Note[];
   reviews: ReviewEntry[];
+  comments: Comment[];
+  bookmarks: Bookmark[];
+  savedViews: SavedView[];
+  statusFlowRules: StatusFlowRule[];
+  automationRules: AutomationRule[];
+  sprints: Sprint[];
 }
 
 // ==================== 应用状态 ====================
@@ -378,6 +435,9 @@ export interface AppState {
   comments: Comment[];
   bookmarks: Bookmark[];
   batchOperations: BatchOperation[];
+  statusFlowRules: StatusFlowRule[];
+  automationRules: AutomationRule[];
+  sprints: Sprint[];
   currentUser: Member | null;
   viewingMemberId: string | null;
 }

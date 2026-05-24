@@ -13,6 +13,8 @@ export interface WeChatConfig {
   channel: NotifyChannel;
   workWechat: { webhookUrl: string };
   serverChan: { sendKey: string };
+  autoSend: boolean;
+  autoSendTime: string;
 }
 
 export const defaultWeChatConfig: WeChatConfig = {
@@ -20,6 +22,8 @@ export const defaultWeChatConfig: WeChatConfig = {
   channel: 'server_chan',
   workWechat: { webhookUrl: '' },
   serverChan: { sendKey: '' },
+  autoSend: false,
+  autoSendTime: '08:00',
 };
 
 export function loadWeChatConfig(): WeChatConfig {
@@ -77,24 +81,41 @@ async function sendToWorkWechat(content: string, webhookUrl?: string): Promise<b
   return false;
 }
 
-// Server酱 v3（GET优先，失败POST，再失败放弃）
+// Server酱 v3（优先 Supabase RPC 避免 CORS，再尝试直连）
 async function sendToServerChan(title: string, content: string, sendKey?: string): Promise<boolean> {
   const config = loadWeChatConfig();
   const key = sendKey || config.serverChan.sendKey;
   if (!key) return false;
+  const apiUrl = `https://sctapi.ftqq.com/${key}.send`;
 
-  // 方法1: GET请求（不受CORS限制）
+  // 方法1: 通过 Supabase RPC 调用（服务端代理，无 CORS 限制）
   try {
-    const url = `https://sctapi.ftqq.com/${key}.send?title=${encodeURIComponent(title)}&desp=${encodeURIComponent(content)}`;
+    const sb = getSupabaseClient();
+    if (sb) {
+      const body = JSON.stringify({ title, desp: content });
+      const { error } = await sb.rpc('send_webhook', {
+        p_url: apiUrl,
+        p_body: body,
+      });
+      if (!error) return true;
+      console.warn('RPC send_webhook for Server酱 failed:', error);
+    }
+  } catch (e: any) {
+    console.warn('RPC 调用 Server酱失败:', e.message);
+  }
+
+  // 方法2: 浏览器直接 GET 请求（可能受 CORS 限制）
+  try {
+    const url = `${apiUrl}?title=${encodeURIComponent(title)}&desp=${encodeURIComponent(content)}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.code === 0) return true;
     if (data.code === 40001) throw new Error('SendKey无效，请检查配置');
     if (data.code === 40003) throw new Error('SendKey格式错误，应为SCT开头');
   } catch (e: any) {
-    // 方法2: POST请求
+    if (e.message?.includes('SendKey')) throw e;
+    // 方法3: 浏览器 POST 请求（最后手段）
     try {
-      const apiUrl = `https://sctapi.ftqq.com/${key}.send`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

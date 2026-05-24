@@ -1,8 +1,17 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { AppState, Goal, Project, BackupData, Tag, Permission, Category, Template, ScheduleEvent, Note, ItemType, Comment, Member, Bookmark } from '@/types';
-import { getSupabaseClient, isSupabaseConfigured, initSupabase, resetSupabase } from '@/supabase/client';
+import { getSupabaseClient, initSupabase, resetSupabase } from '@/supabase/client';
 import type { ConnectionMode, SupabaseConfig, Action } from './types';
-import { SUPABASE_CONFIG_KEY } from './types';
+import { SUPABASE_CONFIG_KEY, ensureAppStateDefaults } from './types';
+import { replayFailedWrites } from './supabase';
+
+// Timeout wrapper for fetch operations — prevents infinite "连接中..." when Supabase is down
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} 超时(${ms / 1000}s)`)), ms)),
+  ]);
+}
 import { toCamel } from './types';
 import { reducer, hasPermission } from './reducer';
 import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError } from './supabase';
@@ -31,6 +40,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const realtimeChannels = useRef<any[]>([]);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const offlineWriteCountRef = useRef(0);
+
+  // Dispatch proxy that tracks offline writes for Layout.tsx badge
+  const trackedDispatch = useCallback((action: any) => {
+    dispatch(action);
+    if (action.type && action.type !== 'MERGE_STATE' && action.type !== 'SET_STATE' && action.type !== 'MARK_NOTIFICATION_READ' && action.type !== 'MARK_ALL_NOTIFICATIONS_READ') {
+      try {
+        if (localStorage.getItem('tbh-went-offline-at')) {
+          offlineWriteCountRef.current++;
+          localStorage.setItem('tbh-offline-writes', String(offlineWriteCountRef.current));
+        }
+      } catch {}
+    }
+  }, []);
 
   // Wire up write-error notification (STA-01)
   useEffect(() => {
@@ -83,19 +106,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error('[StoreProvider] failed to load Supabase config:', e);
     }
-    return () => { connectAbortRef.current = true; cleanupRealtime(); };
+    return () => { connectSeqRef.current++; cleanupRealtime(); };
   }, []);
 
-  const connectAbortRef = useRef(false);
+  const connectSeqRef = useRef(0);
   const doConnect = useCallback(async (url: string, anonKey: string): Promise<boolean> => {
-    connectAbortRef.current = false;
+    const mySeq = ++connectSeqRef.current;
     setConnectionMode('loading');
     setConnectionError(null);
     try {
       cleanupRealtime();
       initSupabase(url, anonKey);
-      const data = await fetchAllFromSupabase();
-      if (connectAbortRef.current) return false;
+      const data = await withTimeout(fetchAllFromSupabase(), 15000, '数据加载');
+      if (connectSeqRef.current !== mySeq) return false;
       if (data) {
         const curView = stateRef.current?.viewingMemberId || null;
         const localTags = Array.isArray(stateRef.current?.tags) ? stateRef.current.tags : [];
@@ -105,19 +128,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           for (const tag of unsyncedTags) { await supabaseUpsert('tags', tag); }
           data.tags = [...data.tags, ...unsyncedTags];
         }
-        // DB members is authority — force override to prevent stale local data (role, permissions)
+        // Preserve local-only data + merge with remote
         const curUser = stateRef.current?.currentUser || null;
+        const localBookmarks = stateRef.current?.bookmarks || [];
+        const localSavedViews = stateRef.current?.savedViews || [];
+        // Merge: keep local items not in remote (created offline), plus all remote items
+        const remoteBmIds = new Set((data.bookmarks || []).map((b: any) => b.id));
+        const remoteSvIds = new Set((data.savedViews || []).map((v: any) => v.id));
+        const mergedBookmarks = [...(data.bookmarks || []), ...localBookmarks.filter((b: any) => !remoteBmIds.has(b.id))];
+        const mergedSavedViews = [...(data.savedViews || []), ...localSavedViews.filter((v: any) => !remoteSvIds.has(v.id))];
         const dbUser = curUser ? data.members.find((m: any) => m.id === curUser.id) || null : null;
         const dbMembers = data.members;
-        dispatch({ type: 'MERGE_STATE', payload: { ...data, currentUser: dbUser || curUser, viewingMemberId: curView, members: undefined } });
-        // Force-set members from DB (bypasses MERGE_STATE merge logic)
-        dispatch({ type: 'SET_STATE', payload: { ...stateRef.current, members: dbMembers, currentUser: dbUser || curUser } });
-        localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey }));
+        // Single MERGE_STATE with members already included — no second SET_STATE that would overwrite
+        dispatch({ type: 'MERGE_STATE', payload: { ...data, members: dbMembers, currentUser: dbUser || curUser, viewingMemberId: curView, bookmarks: mergedBookmarks, savedViews: mergedSavedViews } });
+        try { localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey })); } catch {}
         setConnectionMode('supabase');
         setupRealtime();
         return true;
       } else {
-        localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey }));
+        try { localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey })); } catch {}
         setConnectionMode('supabase');
         setupRealtime();
         return true;
@@ -157,12 +186,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await supabaseUpsert('activities', data.activities);
       const fresh = await fetchAllFromSupabase();
       if (fresh) {
-        const curUser = stateRef.current?.currentUser || null;
-        const curView = stateRef.current?.viewingMemberId || null;
-        const localTags = stateRef.current?.tags || [];
-        const localBookmarks = stateRef.current?.bookmarks || [];
-        const localSavedViews = stateRef.current?.savedViews || [];
-        dispatch({ type: 'SET_STATE', payload: { ...fresh, currentUser: curUser, viewingMemberId: curView, tags: localTags, bookmarks: localBookmarks, savedViews: localSavedViews } });
+        const curState = stateRef.current;
+        const curUser = curState?.currentUser || null;
+        const curView = curState?.viewingMemberId || null;
+        // Preserve user-created data that may not have synced to DB yet
+        const preserveKeys = ['tags', 'categories', 'templates', 'comments', 'notes', 'scheduleEvents', 'itemLinks', 'notifications', 'activities', 'reviews', 'bookmarks', 'savedViews'] as const;
+        const preserved: Record<string, any> = {};
+        for (const k of preserveKeys) { const local = (curState as any)?.[k]; if (local?.length) preserved[k] = local; }
+        dispatch({ type: 'SET_STATE', payload: { ...fresh, currentUser: curUser, viewingMemberId: curView, ...preserved } });
       }
       setConnectionMode('supabase');
       return true;
@@ -181,10 +212,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views'];
     let polling = false;
     let pollTimerId: number | null = null;
-    const poll = async () => {
-      if (polling) return; // STA-04: skip if previous poll still in-flight
-      if (document.visibilityState === 'hidden') return;
+    const poll = async (): Promise<boolean> => {
+      if (polling) return false;
+      if (document.visibilityState === 'hidden') return false;
       polling = true;
+      let anySuccess = false;
       try {
         const results = await Promise.allSettled(tables.map(table => {
           const query = table === 'members' ? sb.from(table).select('*').eq('status', 'active') : sb.from(table).select('*');
@@ -194,19 +226,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           });
         }));
         const payload: Record<string, any> = {};
-        results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; } });
-        dispatch({ type: 'MERGE_STATE', payload });
-        try { bc.postMessage('sync'); } catch {}
+        results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; anySuccess = true; } });
+        if (anySuccess) {
+          dispatch({ type: 'MERGE_STATE', payload });
+          try { bc.postMessage({ type: 'MERGE_STATE', payload }); } catch {}
+          // Auto-recover from offline if poll succeeds
+          if (navigator.onLine) setConnectionMode('supabase');
+        }
       } catch (e) {
         console.error('[poll] data sync failed:', e);
       } finally {
         polling = false;
       }
+      return anySuccess;
     };
     // BroadcastChannel for cross-tab instant sync (COL-01)
     let bc: BroadcastChannel | null = null;
     try { bc = new BroadcastChannel('tbh-sync'); } catch (e) { console.warn('[setupRealtime] BroadcastChannel not supported:', e); }
-    const onBcMessage = () => { poll(); };
+    const onBcMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'MERGE_STATE' && e.data.payload) {
+        dispatch({ type: 'MERGE_STATE', payload: e.data.payload });
+      } else {
+        poll();
+      }
+    };
     if (bc) bc.addEventListener('message', onBcMessage);
     poll();
     const timerHolder = { id: window.setInterval(poll, 10000) as number };
@@ -221,9 +264,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
-    // Offline detection: show offline status, auto-recover on reconnect
-    const onOffline = () => setConnectionMode('offline');
-    const onOnline = () => { setConnectionMode('supabase'); poll(); };
+    // Offline detection: show offline status, auto-recover on reconnect (with backoff)
+    let reconnectFailures = 0;
+    const onOffline = () => { setConnectionMode('offline'); reconnectFailures = 0; offlineWriteCountRef.current = 0; try { localStorage.setItem('tbh-went-offline-at', String(Date.now())); try { localStorage.setItem('tbh-offline-writes', '0'); } catch {} } catch {} };
+    const onOnline = () => {
+      const delay = Math.min(100 * Math.pow(2, reconnectFailures), 5000);
+      setTimeout(async () => {
+        const success = await poll();
+        if (success) {
+          reconnectFailures = 0;
+          offlineWriteCountRef.current = 0;
+          setConnectionMode('supabase');
+          try { localStorage.removeItem('tbh-offline-writes'); } catch {}
+          // Replay any writes that failed while offline
+          try { await replayFailedWrites(); } catch {}
+        } else {
+          reconnectFailures++;
+        }
+      }, delay);
+    };
     window.addEventListener('offline', onOffline);
     window.addEventListener('online', onOnline);
     // Store bc listener ref for cleanup (STA-03)
@@ -265,10 +324,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Actions context: stable reference (does NOT include state)
   const actionsValue = useMemo<ActionsContextType>(() => ({
-    dispatch, connectionMode,
+    dispatch: trackedDispatch, connectionMode,
     connectSupabase: doConnect, disconnectSupabase: disconnect,
     initializeSupabaseData: doInitializeData, connectionError, stateRef
-  }), [dispatch, connectionMode, doConnect, disconnect, doInitializeData, connectionError]);
+  }), [trackedDispatch, connectionMode, doConnect, disconnect, doInitializeData, connectionError]);
 
   return (
     <StateContext.Provider value={state}>
@@ -284,18 +343,24 @@ export function useStore() {
   const state = useContext(StateContext);
   const actions = useContext(ActionsContext);
   if (!state || !actions) throw new Error('useStore must be used within StoreProvider');
-  // Runtime safety: ensure critical array fields are always arrays even if corrupted
-  if (!Array.isArray(state.members)) (state as any).members = [];
-  if (!Array.isArray(state.goals)) (state as any).goals = [];
-  if (!Array.isArray(state.projects)) (state as any).projects = [];
-  if (!Array.isArray(state.tasks)) (state as any).tasks = [];
-  return { state, ...actions };
+  // Runtime safety: ensure critical array fields are always arrays (read-only check, no mutation)
+  const safeState = (Array.isArray(state.members) && Array.isArray(state.goals) && Array.isArray(state.projects) && Array.isArray(state.tasks))
+    ? state
+    : ensureAppStateDefaults(state);
+  return { state: safeState, ...actions };
 }
 
 export function useDashboardStats() {
   const { goals, projects, tasks, notifications, currentUser } = useStore().state;
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const now = useMemo(() => new Date(), []);
+  const [todayStr, setTodayStr] = useState(() => new Date().toISOString().split('T')[0]);
+  const now = useMemo(() => new Date(), [todayStr]);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const newToday = new Date().toISOString().split('T')[0];
+      if (newToday !== todayStr) setTodayStr(newToday);
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [todayStr]);
   return useMemo(() => {
     const activeGoals = goals.filter(g => g.status === 'in_progress');
     const activeProjects = projects.filter(p => p.status === 'in_progress');
@@ -320,47 +385,53 @@ export function useDashboardStats() {
 
 export function useGoalTree() {
   const goals = useStore().state.goals;
-  function buildTree(parentId: string | null, visited?: Set<string>): (Goal & { children: Goal[] })[] {
-    const visitedSet = visited || new Set<string>();
-    return goals.filter(g => g.parentId === parentId).map(g => {
-      if (visitedSet.has(g.id)) return { ...g, children: [] }; // cycle detection
-      visitedSet.add(g.id);
-      return { ...g, children: buildTree(g.id, visitedSet) };
-    });
-  }
-  return buildTree(null);
+  return useMemo(() => {
+    function buildTree(parentId: string | null, visited?: Set<string>): (Goal & { children: Goal[] })[] {
+      const visitedSet = visited || new Set<string>();
+      return goals.filter(g => g.parentId === parentId).map(g => {
+        if (visitedSet.has(g.id)) return { ...g, children: [] };
+        visitedSet.add(g.id);
+        return { ...g, children: buildTree(g.id, visitedSet) };
+      });
+    }
+    return buildTree(null);
+  }, [goals]);
 }
 
 export function useProjectTasks(projectId: string) {
   const tasks = useStore().state.tasks;
-  return tasks.filter(t => t.projectId === projectId);
+  return useMemo(() => tasks.filter(t => t.projectId === projectId), [tasks, projectId]);
 }
 
 export function useGoalProjects(goalId: string) {
   const { projects, goals } = useStore().state;
-  function getProjectsForGoal(gid: string): Project[] {
-    return [...projects.filter(p => p.goalId === gid), ...goals.filter(g => g.parentId === gid).flatMap(cg => getProjectsForGoal(cg.id))];
-  }
-  return getProjectsForGoal(goalId);
+  return useMemo(() => {
+    function getProjectsForGoal(gid: string): Project[] {
+      return [...projects.filter(p => p.goalId === gid), ...goals.filter(g => g.parentId === gid).flatMap(cg => getProjectsForGoal(cg.id))];
+    }
+    return getProjectsForGoal(goalId);
+  }, [projects, goals, goalId]);
 }
 
 export function useItemLinks(sourceId: string, sourceType: 'goal' | 'project' | 'task') {
   const itemLinks = useStore().state.itemLinks;
-  return itemLinks.filter(l => l.sourceId === sourceId && l.sourceType === sourceType);
+  return useMemo(() => itemLinks.filter(l => l.sourceId === sourceId && l.sourceType === sourceType), [itemLinks, sourceId, sourceType]);
 }
 
 export function useMemberTasks(memberId: string) {
   const tasks = useStore().state.tasks;
-  return tasks.filter(t => t.leaderId === memberId || (t.supporterIds || []).includes(memberId));
+  return useMemo(() => tasks.filter(t => t.leaderId === memberId || (t.supporterIds || []).includes(memberId)), [tasks, memberId]);
 }
 
 export function useBackupExport(): BackupData {
-  const { members, goals, projects, tasks, notifications, activities, itemLinks, tags, categories, templates, scheduleEvents, notes, reviews } = useStore().state;
+  const { members, goals, projects, tasks, notifications, activities, itemLinks, tags, categories, templates, scheduleEvents, notes, reviews, comments, bookmarks, savedViews, statusFlowRules, automationRules, sprints } = useStore().state;
   return {
     version: '3.0',
     exportedAt: new Date().toISOString(),
     members, goals, projects, tasks, notifications, activities, itemLinks,
     tags, categories, templates, scheduleEvents, notes, reviews,
+    comments: comments || [], bookmarks: bookmarks || [], savedViews: savedViews || [],
+    statusFlowRules: statusFlowRules || [], automationRules: automationRules || [], sprints: sprints || [],
   };
 }
 
@@ -371,7 +442,7 @@ export function usePermissions() {
   return {
     can: (permission: Permission) => user ? hasPermission(state, user.id, permission) : false,
     isAdmin: user?.role === 'admin',
-    isManager: user?.role === 'manager' || user?.role === 'admin',
+    isManager: user?.role === 'manager' || user?.role === 'leader' || user?.role === 'admin',
     setMemberPermissions: (memberId: string, permissions: Permission[]) => {
       dispatch({ type: 'UPDATE_MEMBER', payload: { id: memberId, updates: { permissions } } });
     },

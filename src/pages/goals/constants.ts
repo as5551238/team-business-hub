@@ -6,11 +6,11 @@ import {
 export type ViewMode = 'detail' | 'list' | 'kanban' | 'table' | 'matrix' | 'timeline';
 
 export const statusLabels: Record<GoalStatus, string> = {
-  planning: '规划中', in_progress: '进行中', completed: '已完成', paused: '已暂停', cancelled: '已取消',
+  todo: '待办', in_progress: '进行中', done: '已完成', blocked: '已阻塞', cancelled: '已取消',
 };
 export const statusColors: Record<GoalStatus, string> = {
-  planning: 'bg-gray-100 text-gray-600', in_progress: 'bg-blue-100 text-blue-700',
-  completed: 'bg-green-100 text-green-700', paused: 'bg-amber-100 text-amber-700', cancelled: 'bg-red-100 text-red-600',
+  todo: 'bg-gray-100 text-gray-600', in_progress: 'bg-blue-100 text-blue-700',
+  done: 'bg-green-100 text-green-700', blocked: 'bg-amber-100 text-amber-700', cancelled: 'bg-red-100 text-red-600',
 };
 export const typeLabels: Record<GoalType, string> = { okr: 'OKR', kpi: 'KPI', milestone: '里程碑' };
 export const typeColors: Record<GoalType, string> = {

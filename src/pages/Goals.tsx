@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useStore, useTags, useViewingMember, usePermissions } from '@/store/useStore';
+import { useStore, useTags, useViewingMember, useMemberLookup, usePermissions } from '@/store/useStore';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
 import { Trash2, Edit2, Plus, Target, Filter, ChevronDown, X, FileText, Search } from 'lucide-react';
@@ -8,9 +8,11 @@ import {
   GoalCard, GoalTreeNode, GoalListView, GoalTableView, GoalMatrixView, GoalTimelineView
 } from './goals/views';
 import { viewTabs, statusLabels, statusColors, bizLabels, bizColors, type ViewMode } from './goals/constants';
+import { useDraftSave } from '@/hooks/useDraftSave';
 
 export default function Goals() {
   const { state, dispatch } = useStore();
+  const { getName: getMemberName } = useMemberLookup();
   const { can } = usePermissions();
   const { tags } = useTags();
   const { isTeamView, viewingMember, viewingMemberId, setViewingMember } = useViewingMember();
@@ -18,6 +20,8 @@ export default function Goals() {
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('detail');
   const [detailItem, setDetailItem] = useState<{ type: 'goal'; id: string } | null>(null);
+  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d && d.itemType === 'goal') setDetailItem({ type: 'goal', id: d.itemId }); }; window.addEventListener('tbh-open-detail', h); return () => window.removeEventListener('tbh-open-detail', h); }, []);
+  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (!d || d.page !== 'goals') return; if (d.statuses) setSelectedStatuses(new Set(d.statuses as string[])); }; window.addEventListener('tbh-nav-filter', h); return () => window.removeEventListener('tbh-nav-filter', h); }, []);
 
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [selectedPriorities, setSelectedPriorities] = useState<Set<string>>(new Set());
@@ -113,10 +117,11 @@ export default function Goals() {
     return map;
   }, [state.comments]);
 
-  const topGoals = filteredGoals.filter(g => !g.parentId);
+  const topGoals = useMemo(() => filteredGoals.filter(g => !g.parentId), [filteredGoals]);
+  const goalsByStatus = useMemo(() => { const m: Record<string, Goal[]> = {}; filteredGoals.forEach(g => { (m[g.status] ||= []).push(g); }); return m; }, [filteredGoals]);
   const emptyMessage = filteredGoals.length < state.goals.length ? '没有匹配的目标，试试调整筛选条件' : '暂无目标，点击「新建目标」开始规划';
 
-  const activeFilterCount = [selectedStatuses.size > 0, selectedPriorities.size > 0, selectedLevels.size > 0, selectedCategories.size > 0, selectedTags.size > 0, selectedMembers.size > 0, timeRange !== 'all', searchText.trim().length > 0].filter(Boolean).length;
+  const activeFilterCount = (selectedStatuses.size > 0 ? 1 : 0) + (selectedPriorities.size > 0 ? 1 : 0) + (selectedLevels.size > 0 ? 1 : 0) + (selectedCategories.size > 0 ? 1 : 0) + (selectedTags.size > 0 ? 1 : 0) + (selectedMembers.size > 0 ? 1 : 0) + (timeRange !== 'all' ? 1 : 0) + (searchText.trim().length > 0 ? 1 : 0);
 
   const clearFilters = () => {
     setSelectedStatuses(new Set()); setSelectedPriorities(new Set()); setSelectedLevels(new Set());
@@ -125,6 +130,7 @@ export default function Goals() {
   };
 
   const handleBatchDelete = useCallback(() => {
+    if (!can('delete_goals')) return;
     if (!confirm(`确认删除选中的 ${selectedIds.size} 个目标？`)) return;
     selectedIds.forEach(id => { dispatch({ type: 'DELETE_GOAL', payload: id }); });
     setSelectedIds(new Set());
@@ -158,6 +164,11 @@ export default function Goals() {
     parentId: '', krTitle: '', krTarget: '', krUnit: '', category: '', repeatCycle: 'none' as RepeatCycle,
   });
 
+  // 创建对话框草稿自动保存
+  const goalDraft = useDraftSave('goal-create', formData);
+  useEffect(() => { if (showCreateDialog) { const draft = goalDraft.loadDraft(); if (draft) setFormData(f => ({ ...f, ...draft })); } }, [showCreateDialog]);
+  useEffect(() => { if (showCreateDialog && formData.title) goalDraft.saveDraft(formData); }, [showCreateDialog, formData]);
+
   function handleCreateGoal() {
     if (!formData.title.trim()) return;
     dispatch({
@@ -176,6 +187,7 @@ export default function Goals() {
     });
     setShowCreateDialog(false);
     setShowTemplateDropdown(false);
+    goalDraft.clearDraft();
     setFormData({ title: '', description: '', type: 'okr', priority: 'medium', startDate: new Date().toISOString().split('T')[0], endDate: new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0], parentId: '', krTitle: '', krTarget: '', krUnit: '', category: '', repeatCycle: 'none' });
   }
 
@@ -211,10 +223,11 @@ export default function Goals() {
                </button>
               <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
                 <option value="">改状态</option>
-                <option value="planning">规划中</option>
+                <option value="todo">待办</option>
                 <option value="in_progress">进行中</option>
-                <option value="completed">已完成</option>
-                <option value="paused">已暂停</option>
+                <option value="done">已完成</option>
+                <option value="blocked">已阻塞</option>
+                <option value="cancelled">已取消</option>
               </select>
               {batchStatus && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={handleBatchStatus}>确认</button>}
               <select value={batchAssignee} onChange={e => setBatchAssignee(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
@@ -253,7 +266,7 @@ export default function Goals() {
       <div className="bg-white rounded-xl border p-2.5 md:p-3 flex items-center gap-2 flex-wrap">
         <Filter size={14} className="text-muted-foreground flex-shrink-0" />
         <div className="relative flex-1 min-w-[160px] max-w-[260px]"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><input data-search-input type="text" placeholder="搜索..." value={searchText} onChange={e => setSearchText(e.target.value)} className="w-full pl-8 pr-3 py-1.5 text-xs border border-input rounded-lg bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary/20" /></div>
-        <MultiSelectFilter label="状态" options={[{value:'planning',label:'规划中'},{value:'in_progress',label:'进行中'},{value:'completed',label:'已完成'},{value:'paused',label:'已暂停'}]} selected={selectedStatuses} onToggle={v => setSelectedStatuses(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedStatuses(new Set())} className="!text-xs !px-2 !py-1 !min-w-0" />
+        <MultiSelectFilter label="状态" options={[{value:'todo',label:'待办'},{value:'in_progress',label:'进行中'},{value:'done',label:'已完成'},{value:'blocked',label:'已阻塞'}]} selected={selectedStatuses} onToggle={v => setSelectedStatuses(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedStatuses(new Set())} className="!text-xs !px-2 !py-1 !min-w-0" />
         <MultiSelectFilter label="紧急程度" options={[{value:'urgent',label:'紧急'},{value:'high',label:'高'},{value:'medium',label:'中'},{value:'low',label:'低'}]} selected={selectedPriorities} onToggle={v => setSelectedPriorities(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedPriorities(new Set())} className={selectClass} />
         <MultiSelectFilter label="重要程度" options={[{value:'S',label:'S级'},{value:'A',label:'A级'},{value:'B',label:'B级'},{value:'C',label:'C级'}]} selected={selectedLevels} onToggle={v => setSelectedLevels(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedLevels(new Set())} className={selectClass} />
         <MultiSelectFilter label="分类" options={state.categories.map(c => ({value: c.name, label: c.name}))} selected={selectedCategories} onToggle={v => setSelectedCategories(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedCategories(new Set())} className={selectClass} />
@@ -362,12 +375,12 @@ export default function Goals() {
             <div className="space-y-3">
               <div className="overflow-x-auto -mx-4 px-4 pb-2"><div className="flex gap-4 min-w-max">
                 {[
-                  { key: 'planning' as const, label: '规划中', color: 'border-t-gray-400' },
+                  { key: 'todo' as const, label: '待办', color: 'border-t-gray-400' },
                   { key: 'in_progress' as const, label: '进行中', color: 'border-t-blue-500' },
-                  { key: 'completed' as const, label: '已完成', color: 'border-t-green-500' },
-                  { key: 'paused' as const, label: '已暂停', color: 'border-t-amber-400' },
+                  { key: 'done' as const, label: '已完成', color: 'border-t-green-500' },
+                  { key: 'blocked' as const, label: '已阻塞', color: 'border-t-amber-400' },
                 ].map(col => {
-                  const colGoals = filteredGoals.filter(g => g.status === col.key);
+                  const colGoals = goalsByStatus[col.key] || [];
                   const handleGoalDrop = (e: React.DragEvent) => { e.preventDefault(); e.currentTarget.classList.remove('bg-blue-50'); const goalId = e.dataTransfer.getData('text/plain'); if (!goalId || !can('edit_goals') || !col.key) return; dispatch({ type: 'UPDATE_GOAL', payload: { id: goalId, updates: { status: col.key as GoalStatus } } }); };
                   return (
                     <div key={col.key} className={`w-[280px] sm:w-[320px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={e => { e.preventDefault(); }} onDrop={handleGoalDrop}>
@@ -375,7 +388,7 @@ export default function Goals() {
                       <div className="px-3 pb-3 space-y-2 max-h-[60vh] overflow-y-auto">
                         {colGoals.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">拖入目标</p>}
                         {colGoals.map(goal => {
-                          const leader = state.members.find(m => m.id === goal.leaderId);
+                          const leaderName = getMemberName(goal.leaderId);
                           return (
                             <div key={goal.id} className="bg-white rounded-lg border border-border shadow-sm p-3 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing" draggable="true" onDragStart={e => { e.dataTransfer.setData('text/plain', goal.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => setDetailItem({ type: 'goal', id: goal.id })}>
                               {batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(goal.id)} className="rounded" onChange={() => toggleSelect(goal.id)} /></div>}
@@ -387,7 +400,7 @@ export default function Goals() {
                               </div>
                               <div className="flex items-center justify-between text-xs text-muted-foreground">
                                 <span>{goal.endDate}</span>
-                                {leader && <span>{leader.name}</span>}
+                                {leaderName && leaderName !== '未知' && <span>{leaderName}</span>}
                               </div>
                             </div>
                           );
@@ -524,7 +537,7 @@ export default function Goals() {
         </div>
       )}
 
-      {detailItem && <ItemDetailPanel isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
+      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
     </div>
   );
 }

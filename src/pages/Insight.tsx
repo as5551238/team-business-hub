@@ -43,18 +43,32 @@ function computeMetrics(goals: any[], projects: any[], tasks: any[], start: stri
     if (e && e < start) return false;
     return true;
   };
-  const fg = goals.filter(inRange);
-  const fp = projects.filter(inRange);
-  const ft = tasks.filter(inRange);
+  // Single-pass counting — was 8 .filter() calls, now O(G+P+T) total
+  let goalsCompleted = 0, goalsInProgress = 0;
+  for (const g of goals) {
+    if (!inRange(g)) continue;
+    if (g.status === 'done') goalsCompleted++;
+    else if (g.status === 'in_progress') goalsInProgress++;
+  }
+  let projectsCompleted = 0, projectsInProgress = 0;
+  for (const p of projects) {
+    if (!inRange(p)) continue;
+    if (p.status === 'done') projectsCompleted++;
+    else if (p.status === 'in_progress') projectsInProgress++;
+  }
+  let tasksCompleted = 0, tasksOverdue = 0, tasksTotal = 0;
+  for (const t of tasks) {
+    if (!inRange(t)) continue;
+    if (t.status === 'cancelled') continue;
+    tasksTotal++;
+    if (t.status === 'done') tasksCompleted++;
+    if (t.status !== 'done' && t.dueDate && t.dueDate < end) tasksOverdue++;
+  }
   return {
-    goalsCompleted: fg.filter((g: any) => g.status === 'completed').length,
-    goalsInProgress: fg.filter((g: any) => g.status === 'in_progress').length,
-    projectsCompleted: fp.filter((p: any) => p.status === 'completed').length,
-    projectsInProgress: fp.filter((p: any) => p.status === 'in_progress').length,
-    tasksCompleted: ft.filter((t: any) => t.status === 'done').length,
-    tasksOverdue: ft.filter((t: any) => t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < end).length,
-    tasksTotal: ft.filter((t: any) => t.status !== 'cancelled').length,
-    completionRate: ft.filter((t: any) => t.status !== 'cancelled').length > 0 ? Math.round(ft.filter((t: any) => t.status === 'done').length / ft.filter((t: any) => t.status !== 'cancelled').length * 100) : 0,
+    goalsCompleted, goalsInProgress,
+    projectsCompleted, projectsInProgress,
+    tasksCompleted, tasksOverdue, tasksTotal,
+    completionRate: tasksTotal > 0 ? Math.round(tasksCompleted / tasksTotal * 100) : 0,
   };
 }
 
@@ -146,30 +160,64 @@ export default function Insight() {
   const goalStats = useMemo(() => {
     const statuses = [
       { name: '进行中', status: 'in_progress' as const, color: '#3b82f6' },
-      { name: '已完成', status: 'completed' as const, color: '#10b981' },
-      { name: '规划中', status: 'planning' as const, color: '#f59e0b' },
-      { name: '已暂停', status: 'paused' as const, color: '#ef4444' },
+      { name: '已完成', status: 'done' as const, color: '#10b981' },
+      { name: '规划中', status: 'todo' as const, color: '#f59e0b' },
+      { name: '已暂停', status: 'blocked' as const, color: '#ef4444' },
     ];
     return statuses.map(s => ({ name: s.name, value: activeGoals.filter(g => g.status === s.status).length, color: s.color })).filter(d => d.value > 0);
   }, [activeGoals]);
 
   const memberTaskStats = useMemo(() => {
     const source = isTeamView ? state.members.filter(m => m.status === 'active') : (viewingMember ? [viewingMember] : []);
-    return source.map(m => {
-      const mt = state.tasks.filter(t => t.leaderId === m.id || (t.supporterIds || []).includes(m.id));
-      const done = mt.filter(t => t.status === 'done').length;
-      return { name: m.name, completed: done, inProgress: mt.filter(t => t.status === 'in_progress').length, todo: mt.filter(t => t.status === 'todo').length, total: mt.length };
-    }).filter(d => d.total > 0).slice(0, 10);
+    // Build member->task stats in O(T) single pass instead of O(M×T) nested loops
+    const statsMap = new Map<string, { completed: number; inProgress: number; todo: number; total: number }>();
+    for (const t of state.tasks) {
+      const mids = new Set([t.leaderId, ...(t.supporterIds || [])]);
+      for (const mid of mids) {
+        if (!statsMap.has(mid)) statsMap.set(mid, { completed: 0, inProgress: 0, todo: 0, total: 0 });
+        const s = statsMap.get(mid)!;
+        s.total++;
+        if (t.status === 'done') s.completed++;
+        else if (t.status === 'in_progress') s.inProgress++;
+        else if (t.status === 'todo') s.todo++;
+      }
+    }
+    return source.map(m => ({
+      name: m.name,
+      ...(statsMap.get(m.id) || { completed: 0, inProgress: 0, todo: 0, total: 0 }),
+    })).filter(d => d.total > 0).slice(0, 10);
   }, [state.members, state.tasks, isTeamView, viewingMember]);
 
   const comparisonData = useMemo(() => {
     const source = viewingMemberId ? state.members.filter(m => m.id === viewingMemberId && m.status === 'active') : state.members.filter(m => m.status === 'active');
+    // Build stats maps in O(T+G+P) instead of O(M×(T+G+P))
+    const taskStats = new Map<string, { done: number; overdue: number; total: number }>();
+    for (const t of state.tasks) {
+      const mids = new Set([t.leaderId, ...(t.supporterIds || [])]);
+      for (const mid of mids) {
+        if (!taskStats.has(mid)) taskStats.set(mid, { done: 0, overdue: 0, total: 0 });
+        const s = taskStats.get(mid)!;
+        s.total++;
+        if (t.status === 'done') s.done++;
+        if (t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < todayStr) s.overdue++;
+      }
+    }
+    const goalCounts = new Map<string, number>();
+    for (const g of state.goals) {
+      for (const mid of new Set([g.leaderId, ...(g.supporterIds || [])])) {
+        goalCounts.set(mid, (goalCounts.get(mid) || 0) + 1);
+      }
+    }
+    const projCounts = new Map<string, number>();
+    for (const p of state.projects) {
+      for (const mid of new Set([p.leaderId, ...(p.supporterIds || [])])) {
+        projCounts.set(mid, (projCounts.get(mid) || 0) + 1);
+      }
+    }
     return source.map(m => {
-      const mt = state.tasks.filter(t => t.leaderId === m.id || (t.supporterIds || []).includes(m.id));
-      const done = mt.filter(t => t.status === 'done').length;
-      const overdue = mt.filter(t => t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < todayStr).length;
-      const rate = mt.length > 0 ? Math.round((done / mt.length) * 100) : 0;
-      return { name: m.name, goals: state.goals.filter(g => g.leaderId === m.id || (g.supporterIds || []).includes(m.id)).length, projects: state.projects.filter(p => p.leaderId === m.id || (p.supporterIds || []).includes(m.id)).length, tasks: mt.length, done, rate, overdue };
+      const ts = taskStats.get(m.id) || { done: 0, overdue: 0, total: 0 };
+      const rate = ts.total > 0 ? Math.round((ts.done / ts.total) * 100) : 0;
+      return { name: m.name, goals: goalCounts.get(m.id) || 0, projects: projCounts.get(m.id) || 0, tasks: ts.total, done: ts.done, rate, overdue: ts.overdue };
     }).sort((a, b) => b.rate - a.rate);
   }, [state.members, state.goals, state.projects, state.tasks, todayStr, viewingMemberId]);
 
@@ -186,7 +234,13 @@ export default function Insight() {
   const metrics = useMemo(() => computeMetrics(reviewData.goals, reviewData.projects, reviewData.tasks, rangeStart, rangeEnd), [reviewData, rangeStart, rangeEnd]);
   const suggestions = useMemo(() => generateSuggestions(metrics), [metrics]);
   const allReviews = useReviewList();
-  const filteredReviews = useMemo(() => [...allReviews].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10), [allReviews]);
+  const filteredReviews = useMemo(() => {
+    const userId = state.currentUser?.id;
+    return [...allReviews]
+      .filter(r => !r.memberId || r.memberId === userId) // only own + team reviews
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10);
+  }, [allReviews, state.currentUser?.id]);
 
   function handleSave() {
     if (!content.trim()) return;
@@ -384,7 +438,7 @@ export default function Insight() {
                           <span className="text-xs text-gray-400">{review.periodStart} ~ {review.periodEnd}</span>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => handleEdit(review)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors"><FileText size={14} /></button>
+                          {(!review.memberId || review.memberId === state.currentUser?.id || state.currentUser?.role === 'admin') && <button onClick={() => handleEdit(review)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors"><FileText size={14} /></button>}
                           {can('manage_team') && <button onClick={() => handleDelete(review.id)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Clock size={14} /></button>}
                         </div>
                       </div>

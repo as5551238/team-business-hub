@@ -3,6 +3,7 @@ import { useStore, useTags, useViewingMember, usePermissions } from '@/store/use
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { Project, ProjectStatus, TaskPriority, Comment } from '@/types';
 import { Plus, FolderKanban, Search, Check, Users, Trash2, X, Filter, ChevronDown } from 'lucide-react';
+import { useDraftSave } from '@/hooks/useDraftSave';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import { viewTabs, statusOptions, priorityOptions, bpOptions, timeOptions, priorityFromBp } from './projects/constants';
 import type { ViewMode, BatchProps } from './projects/constants';
@@ -15,6 +16,8 @@ export default function Projects() {
   const { isTeamView, viewingMember, setViewingMember, viewingMemberId } = useViewingMember();
   const currentUser = state.currentUser;
   const [detailItem, setDetailItem] = useState<{ type: 'project'; id: string } | null>(null);
+  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d && d.itemType === 'project') setDetailItem({ type: 'project', id: d.itemId }); }; window.addEventListener('tbh-open-detail', h); return () => window.removeEventListener('tbh-open-detail', h); }, []);
+  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (!d || d.page !== 'projects') return; if (d.statuses) setSelectedStatuses(new Set(d.statuses as string[])); }; window.addEventListener('tbh-nav-filter', h); return () => window.removeEventListener('tbh-nav-filter', h); }, []);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('detail');
@@ -40,8 +43,8 @@ export default function Projects() {
   const categories = useMemo(() => { const cats = new Set<string>(); state.projects.forEach(p => { if (p.category) cats.add(p.category); }); return Array.from(cats).sort(); }, [state.projects]);
   const projectTags = useMemo(() => { const tgs = new Set<string>(); state.projects.forEach(p => (p.tags || []).forEach(t => tgs.add(t))); return Array.from(tgs).sort(); }, [state.projects]);
 
-  const todayStr = new Date().toISOString().split('T')[0];
   const todayDate = useMemo(() => new Date(), []); // stable Date reference, recalculated on mount only
+  const todayStr = useMemo(() => todayDate.toISOString().split('T')[0], [todayDate]);
 
   const commentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -81,19 +84,24 @@ export default function Projects() {
     return result;
   }, [state.projects, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, personFilter, timeFilter, searchQuery, todayStr, todayDate, isTeamView, viewingMember]);
 
-  const topProjects = filteredProjects.filter(p => !p.parentId);
-  const activeFilterCount = [selectedStatuses.size > 0, selectedPriorities.size > 0, selectedLevels.size > 0, selectedCategories.size > 0, selectedTags.size > 0, personFilter.length > 0, timeFilter !== 'all', searchQuery.trim().length > 0].filter(Boolean).length;
+  const topProjects = useMemo(() => filteredProjects.filter(p => !p.parentId), [filteredProjects]);
+  const activeFilterCount = (selectedStatuses.size > 0 ? 1 : 0) + (selectedPriorities.size > 0 ? 1 : 0) + (selectedLevels.size > 0 ? 1 : 0) + (selectedCategories.size > 0 ? 1 : 0) + (selectedTags.size > 0 ? 1 : 0) + (personFilter.length > 0 ? 1 : 0) + (timeFilter !== 'all' ? 1 : 0) + (searchQuery.trim().length > 0 ? 1 : 0);
   const clearFilters = () => { setSelectedStatuses(new Set()); setSelectedPriorities(new Set()); setSelectedLevels(new Set()); setSelectedCategories(new Set()); setSelectedTags(new Set()); setPersonFilter([]); setTimeFilter('all'); setSearchQuery(''); };
 
-  const projectTemplates = state.templates.filter(t => t.type === 'project');
+  const projectTemplates = useMemo(() => state.templates.filter(t => t.type === 'project'), [state.templates]);
   const [useTemplate, setUseTemplate] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [formData, setFormData] = useState({
     title: '', description: '', goalId: '', parentId: '',
     startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(Date.todayDate() + 30 * 86400000).toISOString().split('T')[0],
+    endDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
     leaderId: '', supporterIds: [] as string[], tags: [] as string[], category: '', priority: 'medium' as TaskPriority,
   });
+
+  // 创建对话框草稿自动保存
+  const projectDraft = useDraftSave('project-create', formData);
+  useEffect(() => { if (showCreateDialog) { const draft = projectDraft.loadDraft(); if (draft) setFormData(f => ({ ...f, ...draft })); } }, [showCreateDialog]);
+  useEffect(() => { if (showCreateDialog && formData.title) projectDraft.saveDraft(formData); }, [showCreateDialog, formData]);
 
   const batchProps = useMemo((): BatchProps => ({ batchMode, selectedIds, onToggleSelect: (id: string) => { setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); } }), [batchMode, selectedIds]);
 
@@ -102,15 +110,16 @@ export default function Projects() {
     else setSelectedIds(new Set(filteredProjects.map(p => p.id)));
   }, [selectedIds.size, filteredProjects]);
 
-  const batchDelete = useCallback(() => { if (!confirm(`确认删除选中的 ${selectedIds.size} 个项目？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_PROJECT', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
+  const batchDelete = useCallback(() => { if (!can('delete_projects')) return; if (!confirm(`确认删除选中的 ${selectedIds.size} 个项目？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_PROJECT', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
   const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_projects')) return; if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { status: status as ProjectStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); }, [selectedIds, dispatch]);
   const batchAssign = useCallback((leaderId: string) => { if (!can('edit_projects')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
 
   function handleCreate() {
     if (!formData.title.trim()) return;
-    dispatch({ type: 'ADD_PROJECT', payload: { title: formData.title, description: formData.description, goalId: formData.goalId || null, parentId: formData.parentId || null, status: 'planning', priority: formData.priority, startDate: formData.startDate, endDate: formData.endDate, leaderId: formData.leaderId || state.currentUser?.id || '', supporterIds: formData.supporterIds, tags: formData.tags, category: formData.category, taskCount: 0, attachments: [], trackingRecords: [], repeatCycle: 'none' } });
+    dispatch({ type: 'ADD_PROJECT', payload: { title: formData.title, description: formData.description, goalId: formData.goalId || null, parentId: formData.parentId || null, status: 'todo', priority: formData.priority, startDate: formData.startDate, endDate: formData.endDate, leaderId: formData.leaderId || state.currentUser?.id || '', supporterIds: formData.supporterIds, tags: formData.tags, category: formData.category, taskCount: 0, attachments: [], trackingRecords: [], repeatCycle: 'none' } });
     setShowCreateDialog(false);
-    setFormData({ title: '', description: '', goalId: '', parentId: '', startDate: new Date().toISOString().split('T')[0], endDate: new Date(Date.todayDate() + 30 * 86400000).toISOString().split('T')[0], leaderId: '', supporterIds: [], tags: [], category: '', priority: 'medium' });
+    projectDraft.clearDraft();
+    setFormData({ title: '', description: '', goalId: '', parentId: '', startDate: new Date().toISOString().split('T')[0], endDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0], leaderId: '', supporterIds: [], tags: [], category: '', priority: 'medium' });
     setUseTemplate(false); setSelectedTemplateId('');
   }
 
@@ -139,7 +148,7 @@ export default function Projects() {
                  <Trash2 size={12} /> 删除
                </button>
               <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
-                <option value="">改状态</option><option value="planning">规划中</option><option value="in_progress">进行中</option><option value="completed">已完成</option><option value="paused">已暂停</option><option value="cancelled">已取消</option>
+                <option value="">改状态</option><option value="todo">待办</option><option value="in_progress">进行中</option><option value="done">已完成</option><option value="blocked">已阻塞</option><option value="cancelled">已取消</option>
               </select>
               {batchStatus && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={() => { batchUpdateStatus(batchStatus); }}>确认</button>}
               <select value={batchLeader} onChange={e => setBatchLeader(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
@@ -239,7 +248,7 @@ export default function Projects() {
         </div>
       )}
 
-      {detailItem && <ItemDetailPanel isOpen={!!detailItem} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
+      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={!!detailItem} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-export type AdminTab = 'team' | 'toolbox' | 'schedule' | 'settings';
+export type AdminTab = 'team' | 'toolbox' | 'schedule' | 'notes' | 'settings' | 'flow' | 'automation' | 'sprint' | 'gantt' | 'okr' | 'docs';
 
 export const tabItems: { key: AdminTab; label: string; icon: any }[] = [
   { key: 'team', label: '团队', icon: 'Users' as any },
@@ -7,11 +7,11 @@ export const tabItems: { key: AdminTab; label: string; icon: any }[] = [
   { key: 'settings', label: '设置', icon: 'SettingsIcon' as any },
 ];
 
-export const roleLabels: Record<string, string> = { admin: '管理员', manager: '负责人', member: '成员' };
-export const roleColors: Record<string, string> = { admin: 'bg-red-100 text-red-700', manager: 'bg-blue-100 text-blue-700', member: 'bg-gray-100 text-gray-600' };
-export const permissionDesc: Record<string, string> = { admin: '全部权限', manager: '可管理目标和项目，不可管理团队和设置', member: '仅查看权限' };
-export const allPermissions = ['view_goals', 'edit_goals', 'delete_goals', 'view_projects', 'edit_projects', 'delete_projects', 'view_tasks', 'edit_tasks', 'delete_tasks', 'manage_team', 'manage_settings', 'export_data'] as const;
-export const permLabels: Record<string, string> = { view_goals: '查看目标', edit_goals: '编辑目标', delete_goals: '删除目标', view_projects: '查看项目', edit_projects: '编辑项目', delete_projects: '删除项目', view_tasks: '查看任务', edit_tasks: '编辑任务', delete_tasks: '删除任务', manage_team: '管理团队', manage_settings: '管理设置', export_data: '导出数据' };
+export const roleLabels: Record<string, string> = { admin: '管理员', manager: '负责人', leader: '组长', member: '成员' };
+export const roleColors: Record<string, string> = { admin: 'bg-red-100 text-red-700', manager: 'bg-blue-100 text-blue-700', leader: 'bg-purple-100 text-purple-700', member: 'bg-gray-100 text-gray-600' };
+export const permissionDesc: Record<string, string> = { admin: '全部权限', manager: '可管理目标和项目，不可管理团队和设置', leader: '可管理目标和项目，不可管理团队和设置', member: '可编辑，不可删除/管理团队/管理设置/导出' };
+export const allPermissions = ['view_goals', 'edit_goals', 'delete_goals', 'view_projects', 'edit_projects', 'delete_projects', 'view_tasks', 'edit_tasks', 'delete_tasks', 'manage_team', 'manage_settings', 'export_data', 'delete_own_content'] as const;
+export const permLabels: Record<string, string> = { view_goals: '查看目标', edit_goals: '编辑目标', delete_goals: '删除目标', view_projects: '查看项目', edit_projects: '编辑项目', delete_projects: '删除项目', view_tasks: '查看任务', edit_tasks: '编辑任务', delete_tasks: '删除任务', manage_team: '管理团队', manage_settings: '管理设置', export_data: '导出数据', delete_own_content: '删除个人内容' };
 export const typeLabels: Record<string, string> = { goal: '目标', project: '项目', task: '任务', document: '文档' };
 export const typeColors: Record<string, string> = { goal: 'bg-red-100 text-red-700', project: 'bg-blue-100 text-blue-700', task: 'bg-green-100 text-green-700', document: 'bg-purple-100 text-purple-700' };
 export const PRESET_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'];
@@ -27,8 +27,9 @@ export const primaryBtnCls = 'inline-flex items-center gap-1.5 px-4 py-2 rounded
 
 export function getRoleDefaultPermission(role: string, permission: string): boolean {
   if (role === 'admin') return true;
-  if (role === 'manager') return !['manage_team', 'manage_settings'].includes(permission);
-  return ['view_goals', 'view_projects', 'view_tasks'].includes(permission);
+  if (role === 'manager' || role === 'leader') return !['manage_team', 'manage_settings'].includes(permission);
+  const forbidden = new Set(['manage_team', 'manage_settings', 'delete_goals', 'delete_projects', 'delete_tasks', 'export_data']);
+  return !forbidden.has(permission);
 }
 
 export interface EditForm { name: string; nickname: string; wechatId: string; phone: string; email: string; role: string; department: string; status: string; }
@@ -71,9 +72,24 @@ export function getCalendarDays(year: number, month: number): CalendarDay[] {
   return days;
 }
 
-export interface EmailConfig { enabled: boolean; smtpHost: string; smtpPort: number; smtpUser: string; smtpPass: string; fromEmail: string; }
+export interface EmailConfig { enabled: boolean; resendApiKey: string; fromEmail: string; }
 export function loadEmailConfig(): EmailConfig {
-  try { const s = localStorage.getItem('tbh-email-config'); if (s) return JSON.parse(s); } catch {}
-  return { enabled: false, smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', fromEmail: '' };
+  try { const s = localStorage.getItem('tbh-email-config'); if (s) { const c = JSON.parse(s); return { enabled: c.enabled || false, resendApiKey: c.resendApiKey || c.smtpUser || '', fromEmail: c.fromEmail || '' }; } } catch {}
+  return { enabled: false, resendApiKey: '', fromEmail: '' };
 }
-export function saveEmailConfig(c: EmailConfig) { try { localStorage.setItem('tbh-email-config', JSON.stringify(c)); } catch {} }
+export function saveEmailConfig(c: EmailConfig) {
+  try { localStorage.setItem('tbh-email-config', JSON.stringify(c)); } catch {}
+  // Async sync to database for cron jobs - fire and forget
+  syncEmailConfigToDb(c);
+}
+async function syncEmailConfigToDb(c: EmailConfig) {
+  try {
+    const { getSupabaseClient } = await import('@/supabase/client');
+    const sb = getSupabaseClient();
+    if (sb) {
+      await sb.from('email_settings').upsert({
+        id: 1, enabled: c.enabled, resend_api_key: c.resendApiKey, from_email: c.fromEmail, updated_at: new Date().toISOString()
+      });
+    }
+  } catch {}
+}

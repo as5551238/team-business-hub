@@ -23,7 +23,7 @@ create table if not exists goals (
   title text not null,
   description text,
   type text not null default 'okr' check (type in ('okr', 'kpi', 'milestone')),
-  status text not null default 'in_progress' check (status in ('planning', 'in_progress', 'completed', 'paused', 'cancelled')),
+  status text not null default 'todo' check (status in ('todo', 'in_progress', 'done', 'blocked', 'cancelled')),
   parent_id text references goals(id) on delete cascade,
   level int not null default 0,
   start_date text not null,
@@ -41,7 +41,7 @@ create table if not exists projects (
   title text not null,
   description text,
   goal_id text references goals(id) on delete set null,
-  status text not null default 'planning' check (status in ('planning', 'in_progress', 'completed', 'paused', 'cancelled')),
+  status text not null default 'todo' check (status in ('todo', 'in_progress', 'done', 'blocked', 'cancelled')),
   start_date text not null,
   end_date text not null,
   owner_id text references members(id),
@@ -130,3 +130,12 @@ alter publication supabase_realtime add table projects;
 alter publication supabase_realtime add table tasks;
 alter publication supabase_realtime add table notifications;
 alter publication supabase_realtime add table activities;
+
+-- ==================== 附件存储桶 ====================
+insert into storage.buckets (id, name, public) values ('attachments', 'attachments', true) on conflict (id) do nothing;
+
+-- 附件桶存储策略：允许所有认证上传，公开读取
+create policy "Allow public read on attachments" on storage.objects for select using (bucket_id = 'attachments');
+create policy "Allow upload on attachments" on storage.objects for insert with check (bucket_id = 'attachments');
+create policy "Allow update on attachments" on storage.objects for update using (bucket_id = 'attachments');
+create policy "Allow delete on attachments" on storage.objects for delete using (bucket_id = 'attachments');
