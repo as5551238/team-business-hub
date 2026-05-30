@@ -204,7 +204,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           const key = t.id + ':reminder';
           if (existingKeys.has(key)) continue;
           dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'nrem_' + t.id + '_' + t.reminderDate, type: 'reminder' as const, title: '任务提醒', message: `"${t.title}" 的提醒时间已到 (${t.reminderDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
-          pushTaskEvent('reminder', t, memberLookup);
+          pushTaskEvent('reminder', t, memberLookup.getName);
         }
       }
     };
@@ -228,7 +228,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           const key = t.id + ':overdue';
           if (existingKeys.has(key)) continue;
           dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'novd_' + t.id + '_' + t.dueDate, type: 'overdue' as const, title: '任务已逾期', message: `"${t.title}" 已逾期 (截止 ${t.dueDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
-          pushTaskEvent('overdue', t, memberLookup);
+          pushTaskEvent('overdue', t, memberLookup.getName);
           try { fireAutomationRules(state, t.id, 'task', t.title, 'due_arrive', { dueDate: t.dueDate }, t as any); } catch {}
         }
         // Approaching deadline check (1-3 days)
@@ -239,7 +239,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'napr_' + t.id + '_' + t.dueDate, type: 'sync' as const, title: '任务即将到期', message: `"${t.title}" 将于 ${t.dueDate} 到期（还有${daysLeft}天）`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
           // Also send WeChat/browser push for approaching deadlines
           try { sendBrowserNotification('任务即将到期', `"${t.title}" 将于${t.dueDate}到期（还有${daysLeft}天）`); } catch {}
-          pushTaskEvent('reminder', t, memberLookup);
+          pushTaskEvent('reminder', t, memberLookup.getName);
         }
       }
     };

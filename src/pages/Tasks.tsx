@@ -4,277 +4,17 @@ import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import { useVirtualScroll } from '@/hooks/useVirtualScroll';
 import type { Task, TaskStatus, TaskPriority, Comment } from '@/types';
 import { cn } from '@/lib/utils';
-import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, Ban, GripVertical, FileText, Copy, MessageSquare, Trash2, Check, Filter, Sparkles } from 'lucide-react';
+import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, FileText, Copy, MessageSquare, Trash2, Check, Filter, Sparkles } from 'lucide-react';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import { AIMatchPanel } from '@/components/AIMatchPanel';
-
-function getTodayStr() { return new Date().toISOString().split('T')[0]; }
-
-type ViewMode = 'board' | 'list' | 'table' | 'matrix' | 'timeline';
-type BusinessPriority = 'S' | 'A' | 'B' | 'C';
-
-const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; icon: any }> = {
-  todo: { label: '待处理', color: 'bg-gray-100 text-gray-600', icon: Circle },
-  in_progress: { label: '进行中', color: 'bg-blue-100 text-blue-700', icon: Clock },
-  done: { label: '已完成', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
-  blocked: { label: '已阻塞', color: 'bg-red-100 text-red-700', icon: AlertCircle },
-  cancelled: { label: '已删除', color: 'bg-slate-100 text-slate-500', icon: Ban },
-};
-
-const URGENCY_CONFIG: Record<TaskPriority, { label: string; color: string }> = {
-  urgent: { label: '紧急', color: 'bg-red-100 text-red-700' },
-  high: { label: '高', color: 'bg-orange-100 text-orange-700' },
-  medium: { label: '中', color: 'bg-blue-100 text-blue-700' },
-  low: { label: '低', color: 'bg-slate-100 text-slate-600' },
-};
-
-const IMPORTANCE_CONFIG: Record<BusinessPriority, { label: string; color: string; priority: TaskPriority }> = {
-  S: { label: 'S级', color: 'bg-red-500 text-white', priority: 'urgent' },
-  A: { label: 'A级', color: 'bg-orange-500 text-white', priority: 'high' },
-  B: { label: 'B级', color: 'bg-blue-500 text-white', priority: 'medium' },
-  C: { label: 'C级', color: 'bg-gray-400 text-white', priority: 'low' },
-};
-
-const TIME_OPTIONS = [
-  { key: 'all', label: '全部时间' }, { key: 'overdue', label: '已逾期' }, { key: 'today', label: '今天' }, { key: 'week', label: '本周' },
-  { key: 'month', label: '本月' }, { key: 'quarter', label: '本季度' }, { key: 'custom', label: '自定义' },
-];
-
-const VIEW_TABS: { key: ViewMode; label: string }[] = [
-  { key: 'board', label: '看板' }, { key: 'list', label: '清单' }, { key: 'table', label: '全量' },
-  { key: 'matrix', label: '四象限' }, { key: 'timeline', label: '时间线' },
-];
-
-const BOARD_COLUMNS: { key: TaskStatus; label: string; color: string }[] = [
-  { key: 'todo', label: '待处理', color: 'border-t-gray-400' },
-  { key: 'in_progress', label: '进行中', color: 'border-t-blue-500' },
-  { key: 'done', label: '已完成', color: 'border-t-green-500' },
-];
-
-function priorityToBP(p: TaskPriority): BusinessPriority { if (p === 'urgent') return 'S'; if (p === 'high') return 'A'; if (p === 'medium') return 'B'; return 'C'; }
-
-function getQuadrantForPriority(p: TaskPriority): string { if (p === 'urgent') return '紧急重要'; if (p === 'high') return '重要不紧急'; if (p === 'medium') return '紧急不重要'; return '不紧急不重要'; }
-
-function isOverdue(task: Task): boolean { return task.status !== 'done' && task.status !== 'cancelled' && !!task.dueDate && task.dueDate < getTodayStr(); }
-
-const StatusBadge = React.memo(function StatusBadge({ status }: { status: TaskStatus }) { const c = STATUS_CONFIG[status] || STATUS_CONFIG.todo; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', c.color)}>{c.label}</span>; });
-
-const PriorityBadge = React.memo(function PriorityBadge({ priority }: { priority: TaskPriority }) { const c = URGENCY_CONFIG[priority] || URGENCY_CONFIG.medium; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', c.color)}>{c.label}</span>; });
-
-const BoardColHeader = React.memo(function BoardColHeader({ icon: Icon, label, color, count }: { icon: any; label: string; color: string; count: number }) {
-  return <div className={cn('flex items-center gap-2 px-4 pb-2 border-b-2 mx-3 mb-3', color)}><Icon className="w-4 h-4" /><span className="font-semibold text-sm">{label}</span><span className="text-xs text-muted-foreground ml-auto">{count}</span></div>;
-});
-
-interface TaskCardProps { task: Task; compact?: boolean; tags: any[]; commentCounts: Record<string, number>; batchProps: BatchProps; onOpenDetail: (task: Task) => void; getName: (id: string) => string; getAvatar: (id: string) => string; enableDrag?: boolean; }
-
-const TaskCard = React.memo(function TaskCard({ task, compact, tags, commentCounts, batchProps, onOpenDetail, getName, getAvatar, enableDrag }: TaskCardProps) {
-  const bp = priorityToBP(task.priority);
-  const bpC = IMPORTANCE_CONFIG[bp];
-  const overdue = isOverdue(task);
-  const stDone = (task.subtasks || []).filter(s => s.completed).length;
-  const cc = commentCounts[task.id] || 0;
-  const uniqueTags = (task.tags || []).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
-  return (
-    <div className={cn('bg-white rounded-lg border border-border shadow-sm p-3 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer group', overdue && 'border-l-4 border-l-red-400', compact && 'p-2')} draggable={!!enableDrag} onDragStart={(e: React.DragEvent) => { e.dataTransfer.setData('text/plain', task.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => onOpenDetail(task)}>
-      {batchProps.batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded" onChange={e => { e.stopPropagation(); batchProps.onToggleSelect(task.id); }} /></div>}
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-bold', bpC.color)}>{bpC.label}</span>
-        <PriorityBadge priority={task.priority} />
-        <StatusBadge status={task.status} />
-        {task.parentId && <span className="text-[10px] text-purple-600 bg-purple-50 px-1 py-0.5 rounded">子任务</span>}
-        {cc > 0 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto"><MessageSquare size={11} />{cc}</span>}
-      </div>
-      <h4 className={cn('font-medium text-sm mb-1.5 truncate', task.status === 'done' && 'line-through text-muted-foreground')}>{task.title}</h4>
-      {task.description && !compact && <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{task.description}</p>}
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <div className="flex items-center gap-2"><span className="flex items-center gap-1"><div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-bold">{getAvatar(task.leaderId)}</div>{getName(task.leaderId)}</span></div>
-        <div className="flex items-center gap-2">
-          {task.dueDate && <span className={cn('flex items-center gap-0.5', overdue && 'text-red-500 font-medium')}><Calendar className="w-3 h-3" />{task.dueDate}</span>}
-          {(task.subtasks || []).length > 0 && <span className="flex items-center gap-0.5"><CheckCircle2 className="w-3 h-3" />{stDone}/{(task.subtasks || []).length}</span>}
-        </div>
-      </div>
-      {(uniqueTags.length > 0 || task.category) && (
-        <div className="flex flex-wrap gap-1 mt-2">
-          {task.category && <span className="text-[10px] px-1.5 py-0.5 bg-accent rounded">{task.category}</span>}
-          {uniqueTags.slice(0, 3).map(tag => { const tg = tags.find((t: any) => t.name === tag); return <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: (tg?.color || '#888') + '20', color: tg?.color || '#888' }}>{tag}</span>; })}
-          {uniqueTags.length > 3 && <span className="text-[10px] text-muted-foreground">+{uniqueTags.length - 3}</span>}
-        </div>
-      )}
-    </div>
-  );
-});
-
-interface TaskRowProps { task: Task; depth: number; childMap: Record<string, Task[]>; expandedTask: string | null; commentCounts: Record<string, number>; batchProps: BatchProps; onOpenDetail: (task: Task) => void; onToggleExpand: (id: string) => void; onToggleSubtask: (taskId: string, subtaskId: string) => void; onUpdateStatus: (taskId: string, status: TaskStatus) => void; getName: (id: string) => string; getAvatar: (id: string) => string; getProjectTitle: (id: string | null) => string; }
-
-const TaskRow = React.memo(function TaskRow({ task, depth, childMap, expandedTask, commentCounts, batchProps, onOpenDetail, onToggleExpand, onToggleSubtask, onUpdateStatus, getName, getAvatar, getProjectTitle }: TaskRowProps) {
-  const isExpanded = expandedTask === task.id;
-  const children = childMap[task.id] || [];
-  const overdue = isOverdue(task);
-  const stDone = (task.subtasks || []).filter(s => s.completed).length;
-  const cc = commentCounts[task.id] || 0;
-  return (
-    <div>
-      <div className={cn('flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50', overdue && 'bg-red-50/30')} style={{ paddingLeft: `${12 + depth * 24}px` }} onClick={() => onOpenDetail(task)}>
-        {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded flex-shrink-0" onChange={() => batchProps.onToggleSelect(task.id)} /></span>}
-        {children.length > 0 ? <button className="p-0.5 hover:bg-accent rounded flex-shrink-0" onClick={e => { e.stopPropagation(); onToggleExpand(task.id); }}>{isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}</button> : <span className="w-4 flex-shrink-0" />}
-        <StatusBadge status={task.status} />
-        <h4 className={cn('flex-1 text-sm truncate min-w-0', task.status === 'done' && 'line-through text-muted-foreground')}>{task.title}</h4>
-        {cc > 0 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 flex-shrink-0"><MessageSquare size={10} />{cc}</span>}
-        <PriorityBadge priority={task.priority} />
-        <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">{getProjectTitle(task.projectId)}</span>
-        <div className="flex items-center gap-1 whitespace-nowrap hidden md:flex"><div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-bold flex-shrink-0">{getAvatar(task.leaderId)}</div><span className="text-xs text-muted-foreground">{getName(task.leaderId)}</span></div>
-        {task.dueDate && <span className={cn('text-xs whitespace-nowrap flex items-center gap-0.5 hidden sm:flex', overdue ? 'text-red-500 font-medium' : 'text-muted-foreground')}><Calendar className="w-3 h-3" />{task.dueDate}</span>}
-        {(task.subtasks || []).length > 0 && <span className="text-xs text-muted-foreground whitespace-nowrap hidden lg:inline">{stDone}/{(task.subtasks || []).length}</span>}
-      </div>
-      {isExpanded && (
-        <div className="bg-muted/20 border-b border-border/50 py-3 px-4" style={{ paddingLeft: `${36 + depth * 24}px` }}>
-          {task.description && <p className="text-xs text-muted-foreground mb-2">{task.description}</p>}
-          {children.length > 0 && (
-            <div className="space-y-0.5 mb-2">
-              <span className="text-xs font-medium text-muted-foreground">子任务：</span>
-              {children.map(c => <div key={c.id} className="flex items-center gap-2 py-1 px-2 hover:bg-accent/50 rounded cursor-pointer text-sm" onClick={() => onOpenDetail(c)}><StatusBadge status={c.status} /><span className="truncate flex-1">{c.title}</span><PriorityBadge priority={c.priority} /><span className="text-xs text-muted-foreground">{getName(c.leaderId)}</span></div>)}
-            </div>
-          )}
-          {(task.subtasks || []).length > 0 && (
-            <div className="space-y-1 mb-2">
-              <span className="text-xs font-medium text-muted-foreground">子事项：</span>
-              {(task.subtasks || []).map(st => <label key={st.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-accent/50 px-2 py-0.5 rounded"><input type="checkbox" checked={st.completed} className="rounded border-input" onChange={e => { e.stopPropagation(); onToggleSubtask(task.id, st.id); }} /><span className={cn(st.completed && 'line-through text-muted-foreground')}>{st.title}</span></label>)}
-            </div>
-          )}
-          <div className="flex gap-1.5 flex-wrap">
-            {(['todo', 'in_progress', 'done'] as TaskStatus[]).map(s => <button key={s} className={cn('text-xs px-2 py-0.5 rounded border border-border hover:bg-accent transition-colors', task.status === s && 'bg-primary text-primary-foreground border-primary')} onClick={e => { e.stopPropagation(); onUpdateStatus(task.id, s); }}>{STATUS_CONFIG[s].label}</button>)}
-          </div>
-        </div>
-      )}
-      {children.length > 0 && children.map(c => <TaskRow key={c.id} task={c} depth={depth + 1} childMap={childMap} expandedTask={expandedTask} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={onOpenDetail} onToggleExpand={onToggleExpand} onToggleSubtask={onToggleSubtask} onUpdateStatus={onUpdateStatus} getName={getName} getAvatar={getAvatar} getProjectTitle={getProjectTitle} />)}
-    </div>
-  );
-});
-
-function isInTimeRange(dateStr: string | null, range: string, now?: Date): boolean {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  const today = now || new Date();
-  if (range === 'today') return d.toDateString() === today.toDateString();
-  if (range === 'week') { const ws = new Date(today); ws.setDate(today.getDate() - today.getDay()); ws.setHours(0, 0, 0, 0); return d >= ws; }
-  if (range === 'month') { return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear(); }
-  if (range === 'quarter') { const q = Math.floor(today.getMonth() / 3); return d.getMonth() >= q * 3 && d.getMonth() < (q + 1) * 3 && d.getFullYear() === today.getFullYear(); }
-  return true;
-}
-
-function getTouchPos(e: TouchEvent | MouseEvent) {
-  if ('touches' in e && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  if ('changedTouches' in e && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
-  return { x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY };
-}
-
-interface BatchProps { batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }
-
-function TaskMatrixView({ filteredTasks, setDetailItem, getMemberName, getQuadrantForPriority: _gfq, handleDropToQuadrant, commentCounts, batchProps }: {
-  filteredTasks: Task[];
-  setDetailItem: (item: { type: 'task'; id: string } | null) => void;
-  getMemberName: (id: string) => string;
-  getQuadrantForPriority: (p: TaskPriority) => string;
-  handleDropToQuadrant: (taskId: string, quadrant: string) => void;
-  commentCounts: Record<string, number>;
-  batchProps: BatchProps;
-}) {
-  const gfq = _gfq;
-  const dragRef = useRef<{ id: string; el: HTMLElement } | null>(null);
-  const hoverQRef = useRef<string | null>(null);
-  const quadrantBoxRefs = useRef<Record<string, HTMLElement | null>>({});
-  const quadrantMap: Record<string, { accent: string; hoverAccent: string }> = {
-    '紧急重要': { accent: 'border-red-200 bg-red-50', hoverAccent: 'border-red-300 bg-red-50 ring-2 ring-red-200' },
-    '重要不紧急': { accent: 'border-blue-200 bg-blue-50', hoverAccent: 'border-blue-300 bg-blue-50 ring-2 ring-blue-200' },
-    '紧急不重要': { accent: 'border-yellow-200 bg-yellow-50', hoverAccent: 'border-yellow-300 bg-yellow-50 ring-2 ring-yellow-200' },
-    '不紧急不重要': { accent: 'border-gray-200 bg-gray-50', hoverAccent: 'border-gray-300 bg-gray-50 ring-2 ring-gray-200' },
-  };
-  const quadrantKeys = ['紧急重要', '重要不紧急', '紧急不重要', '不紧急不重要'];
-
-  function resetHover() {
-    const prev = hoverQRef.current;
-    hoverQRef.current = null;
-    if (prev && quadrantBoxRefs.current[prev]) {
-      const box = quadrantBoxRefs.current[prev];
-      if (box) box.className = box.className.replace(quadrantMap[prev].hoverAccent, quadrantMap[prev].accent);
-    }
-  }
-
-  function handlePointerMove(cx: number, cy: number) {
-    if (!dragRef.current) return;
-    let found = false;
-    for (const key of quadrantKeys) {
-      const el = quadrantBoxRefs.current[key];
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      if (cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) {
-        if (hoverQRef.current !== key) {
-          if (hoverQRef.current) {
-            const prevBox = quadrantBoxRefs.current[hoverQRef.current];
-            if (prevBox) prevBox.className = prevBox.className.replace(quadrantMap[hoverQRef.current].hoverAccent, quadrantMap[hoverQRef.current].accent);
-          }
-          hoverQRef.current = key;
-          const box = quadrantBoxRefs.current[key];
-          if (box) box.className = box.className.replace(quadrantMap[key].accent, quadrantMap[key].hoverAccent);
-        }
-        found = true;
-        break;
-      }
-    }
-    if (!found && hoverQRef.current) resetHover();
-  }
-
-  function handlePointerUp() {
-    if (dragRef.current) {
-      if (dragRef.current.el) dragRef.current.el.classList.remove('opacity-30', 'scale-95');
-      if (hoverQRef.current) handleDropToQuadrant(dragRef.current.id, hoverQRef.current);
-      resetHover();
-      dragRef.current = null;
-    }
-  }
-
-  const mmHandler = useCallback((e: MouseEvent) => handlePointerMove(e.clientX, e.clientY), []);
-  const muHandler = useCallback(() => handlePointerUp(), [handleDropToQuadrant]);
-  const tmHandler = useCallback((e: TouchEvent) => { const pos = getTouchPos(e); handlePointerMove(pos.x, pos.y); }, []);
-  const teHandler = useCallback(() => handlePointerUp(), [handleDropToQuadrant]);
-
-  useEffect(() => {
-    document.addEventListener('mousemove', mmHandler);
-    document.addEventListener('mouseup', muHandler);
-    document.addEventListener('touchmove', tmHandler, { passive: true });
-    document.addEventListener('touchend', teHandler);
-    return () => { document.removeEventListener('mousemove', mmHandler); document.removeEventListener('mouseup', muHandler); document.removeEventListener('touchmove', tmHandler); document.removeEventListener('touchend', teHandler); };
-  }, [mmHandler, muHandler, tmHandler, teHandler]);
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-h-[500px] select-none">
-      {quadrantKeys.map(key => {
-        const q = quadrantMap[key];
-        const qTasks = filteredTasks.filter(t => gfq(t.priority) === key);
-        return (
-          <div key={key} data-qk={key} ref={el => { quadrantBoxRefs.current[key] = el; }} className={`rounded-xl border-2 p-4 min-h-[240px] transition-all duration-150 ${q.accent}`}>
-            <div className="flex items-center gap-2 mb-3"><span className="text-sm font-bold">{key}</span><span className="text-xs text-muted-foreground ml-auto">{qTasks.length} 项</span></div>
-            <div className="space-y-2 max-h-[calc(100vh-380px)] overflow-y-auto">
-              {qTasks.length === 0 && <p className="text-xs text-muted-foreground text-center py-8 opacity-60">拖入任务</p>}
-              {qTasks.map(task => (
-                <div key={task.id} className="bg-white/80 rounded-lg border border-border/50 shadow-sm p-2.5 hover:shadow-md transition-all cursor-pointer" onMouseDown={e => { if (e.button !== 0) return; e.preventDefault(); dragRef.current = { id: task.id, el: e.currentTarget }; e.currentTarget.classList.add('opacity-30', 'scale-95'); }} onTouchStart={e => { const t = e.touches[0]; if (!t) return; dragRef.current = { id: task.id, el: e.currentTarget as HTMLElement }; (e.currentTarget as HTMLElement).classList.add('opacity-30', 'scale-95'); }} onClick={() => { if (!dragRef.current) setDetailItem({ type: 'task', id: task.id }); }}>
-                  {batchProps.batchMode && <div className="mb-1" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded" onChange={() => batchProps.onToggleSelect(task.id)} /></div>}
-                  <div className="flex items-center gap-2 mb-1">
-                    <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0" />
-                    <StatusBadge status={task.status} />
-                    <span className="text-xs text-muted-foreground ml-auto">{getMemberName(task.leaderId)}</span>
-                  </div>
-                  <p className="text-sm font-medium truncate pl-5">{task.title}</p>
-                  {(commentCounts[task.id] || 0) > 0 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 pl-5 mt-0.5"><MessageSquare size={10} />{commentCounts[task.id]}</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+import { TaskCard, TaskRow, StatusBadge, PriorityBadge } from './tasks/TasksComponents';
+import { TaskMatrixView } from './tasks/TasksMatrix';
+import { TaskTimelineView } from './tasks/TasksTimeline';
+import {
+  STATUS_CONFIG, BOARD_COLUMNS, VIEW_TABS, TIME_OPTIONS,
+  getTodayStr, priorityToBP, getQuadrantForPriority, isOverdue, isInTimeRange,
+  type ViewMode, type BusinessPriority, type BatchProps, type KanbanGroupBy
+} from './tasks/constants';
 
 export default function Tasks() {
   const { state, dispatch } = useStore();
@@ -317,7 +57,6 @@ export default function Tasks() {
   const KANBAN_LS_KEY = 'tbh-tasks-kanban';
   const [kanbanCustomMode, setKanbanCustomMode] = useState(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).customMode || false; } catch { return false; } });
   const [customColumns, setCustomColumns] = useState<string[]>(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).columns || ['待处理', '进行中', '已完成']; } catch { return ['待处理', '进行中', '已完成']; } });
-  type KanbanGroupBy = 'status' | 'tag' | 'priority' | 'category' | 'level' | 'person' | 'time';
   const [kanbanGroupBy, setKanbanGroupBy] = useState<KanbanGroupBy>(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).groupBy || 'status'; } catch { return 'status'; } });
   const [newColName, setNewColName] = useState('');
   const [fromTemplate, setFromTemplate] = useState(false);  useEffect(() => { try { localStorage.setItem(KANBAN_LS_KEY, JSON.stringify({ customMode: kanbanCustomMode, columns: customColumns, groupBy: kanbanGroupBy })); } catch {} }, [kanbanCustomMode, customColumns, kanbanGroupBy]);
@@ -687,44 +426,6 @@ export default function Tasks() {
     );
   }
 
-  function renderTimeline() {
-    return (
-      <div className="space-y-4">
-        {timelineBuckets.length === 0 && <div className="bg-white rounded-xl border border-border px-5 py-12 text-center"><Calendar className="w-9 h-9 mx-auto text-muted-foreground/30 mb-3" /><p className="text-sm text-muted-foreground">暂无匹配任务</p></div>}
-        {timelineBuckets.map(([dateKey, tasks]) => {
-          const isOverdue = dateKey !== '无截止日期' && dateKey < getTodayStr();
-          const isToday = dateKey === getTodayStr();
-          return (
-            <div key={dateKey}>
-              <div className={cn('flex items-center gap-2 px-3 py-2 rounded-lg mb-2', isToday && 'bg-primary/10', isOverdue && 'bg-red-50')}>
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className={cn('text-xs font-semibold', isToday && 'text-primary', isOverdue && 'text-red-600')}>{isToday ? '今天' : isOverdue ? `已逾期 - ${dateKey}` : dateKey}</span>
-                <span className="text-xs text-muted-foreground">({tasks.length})</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                {tasks.map(task => (
-                  <div key={task.id} className="bg-white rounded-lg border border-border shadow-sm p-3 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer" onClick={() => setDetailItem({ type: 'task', id: task.id })}>
-      {batchProps.batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded" onChange={() => batchProps.onToggleSelect(task.id)} /></div>}
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <PriorityBadge priority={task.priority} />
-                      <StatusBadge status={task.status} />
-                      {(commentCounts[task.id] || 0) > 0 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto"><MessageSquare size={10} />{commentCounts[task.id]}</span>}
-                    </div>
-                    <h4 className={cn('text-sm font-medium truncate mb-1', task.status === 'done' && 'line-through text-muted-foreground')}>{task.title}</h4>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-bold">{getAvatar(task.leaderId)}</div>{getName(task.leaderId)}</span>
-                      {getProjectTitleFn(task.projectId) && <span className="truncate max-w-[80px]">{getProjectTitleFn(task.projectId)}</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
   const activeFilterCount = (selectedStatuses.size > 0 ? 1 : 0) + (selectedPriorities.size > 0 ? 1 : 0) + (selectedLevels.size > 0 ? 1 : 0) + (selectedCategories.size > 0 ? 1 : 0) + (selectedTags.size > 0 ? 1 : 0) + (selectedPersons.size > 0 ? 1 : 0) + (timeFilter !== 'all' ? 1 : 0);
 
   const toggleSelectAll = useCallback(() => {
@@ -805,7 +506,7 @@ export default function Tasks() {
           {viewMode === 'list' && renderList()}
           {viewMode === 'table' && renderTable()}
           {viewMode === 'matrix' && <TaskMatrixView filteredTasks={filteredTasks} setDetailItem={setDetailItem} getMemberName={getName} getQuadrantForPriority={getQuadrantForPriority} handleDropToQuadrant={handleDropToQuadrant} commentCounts={commentCounts} batchProps={batchProps} />}
-          {viewMode === 'timeline' && renderTimeline()}
+          {viewMode === 'timeline' && <TaskTimelineView timelineBuckets={timelineBuckets} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={(task: Task) => setDetailItem({ type: 'task', id: task.id })} getName={getName} getAvatar={getAvatar} getProjectTitle={getProjectTitleFn} />}
         </div>
       </div>
 
