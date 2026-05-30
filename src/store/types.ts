@@ -1,4 +1,4 @@
-import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark, StatusFlowRule, AutomationRule, Sprint } from '@/types';
+import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark, StatusFlowRule, AutomationRule, Sprint, Knowledge, Team, TeamMember, Subscription, ApprovalAudit } from '@/types';
 
 export const STORAGE_KEY = 'tbh-data';
 const LEGACY_STORAGE_KEY = 'team-business-hub-data';
@@ -17,6 +17,7 @@ export type Action =
   | { type: 'MERGE_STATE'; payload: Partial<AppState> }
   | { type: 'SET_CURRENT_USER'; payload: string | null }
   | { type: 'SET_VIEWING_MEMBER'; payload: string | null }
+  | { type: 'SET_CURRENT_TEAM'; payload: string | null }
   | { type: 'ADD_GOAL'; payload: Omit<Goal, 'id' | 'createdAt' | 'updatedAt' | 'progress'> }
   | { type: 'UPDATE_GOAL'; payload: { id: string; updates: Partial<Goal> } }
   | { type: 'DELETE_GOAL'; payload: string }
@@ -80,10 +81,18 @@ export type Action =
   | { type: 'DELETE_AUTOMATION_RULE'; payload: string }
   | { type: 'ADD_SPRINT'; payload: Omit<Sprint, 'id' | 'createdAt' | 'updatedAt'> }
   | { type: 'UPDATE_SPRINT'; payload: { id: string; updates: Partial<Sprint> } }
-  | { type: 'DELETE_SPRINT'; payload: string };
+  | { type: 'DELETE_SPRINT'; payload: string }
+  | { type: 'ADD_KNOWLEDGE'; payload: Omit<Knowledge, 'id' | 'createdAt' | 'updatedAt'> }
+  | { type: 'UPDATE_KNOWLEDGE'; payload: { id: string; updates: Partial<Knowledge> } }
+  | { type: 'DELETE_KNOWLEDGE'; payload: string }
+  | { type: 'SUBMIT_GOAL_APPROVAL'; payload: string }
+  | { type: 'APPROVE_GOAL'; payload: { id: string; comment: string } }
+  | { type: 'REJECT_GOAL'; payload: { id: string; comment: string } }
+  | { type: 'RECALL_GOAL_APPROVAL'; payload: string }
+  | { type: 'UPDATE_SUBSCRIPTION'; payload: { teamId: string; updates: Partial<Subscription> } };
 
-export function toCamel(row: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = {};
+export function toCamel(row: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
   for (const key of Object.keys(row)) {
     const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
     result[camel] = row[key];
@@ -91,19 +100,20 @@ export function toCamel(row: Record<string, any>): Record<string, any> {
   return result;
 }
 
-export function toSnake(obj: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = {};
+export function toSnake(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
   for (const key of Object.keys(obj)) {
-    // Handle consecutive uppercase abbreviations (e.g., selectedKRIds → selected_kr_ids not selected_k_r_ids)
     const snake = key.replace(/[A-Z]{2,}/g, m => `_${m.toLowerCase()}`).replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
     result[snake] = obj[key];
   }
   return result;
 }
 
-const arr = (v: any) => Array.isArray(v) ? v : [];
+function arr<T>(v: T[] | undefined): T[] {
+  return Array.isArray(v) ? v : [];
+}
 
-export function ensureAppStateDefaults(data: Partial<AppState> & { members: any[] }): AppState {
+export function ensureAppStateDefaults(data: Partial<AppState> & { members: Member[] }): AppState {
   const result: AppState = {
     members: arr(data.members),
     goals: arr(data.goals),
@@ -117,18 +127,24 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: any[
     templates: arr(data.templates),
     scheduleEvents: arr(data.scheduleEvents),
     notes: arr(data.notes),
+    knowledge: arr(data.knowledge),
     savedViews: arr(data.savedViews),
-    reviews: arr((data as any).reviews),
-    comments: arr((data as any).comments),
-    bookmarks: arr((data as any).bookmarks),
+    reviews: arr(data.reviews),
+    comments: arr(data.comments),
+    bookmarks: arr(data.bookmarks),
     currentUser: data.currentUser ?? null,
-    viewingMemberId: (data as any).viewingMemberId || null,
-    batchOperations: arr((data as any).batchOperations),
-    statusFlowRules: arr((data as any).statusFlowRules),
-    automationRules: arr((data as any).automationRules),
-    sprints: arr((data as any).sprints),
+    viewingMemberId: data.viewingMemberId || null,
+    batchOperations: arr(data.batchOperations),
+    statusFlowRules: arr(data.statusFlowRules),
+    automationRules: arr(data.automationRules),
+    sprints: arr(data.sprints),
+    teams: arr(data.teams),
+    teamMembers: arr(data.teamMembers),
+    subscriptions: arr(data.subscriptions),
+    approvalAudits: arr(data.approvalAudits),
+    currentTeamId: data.currentTeamId || null,
   };
-  result.goals = result.goals.map((g: any) => ({
+  result.goals = result.goals.map((g: Goal) => ({
     ...g, tags: g.tags ?? [], keyResults: g.keyResults ?? [],
     attachments: g.attachments ?? [], trackingRecords: g.trackingRecords ?? [],
     supporterIds: g.supporterIds ?? [], priority: g.priority ?? 'medium',
@@ -138,8 +154,9 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: any[
     parentId: g.parentId ?? null, level: g.level ?? 0,
     startDate: g.startDate ?? '', endDate: g.endDate ?? '',
     description: g.description ?? '', type: g.type ?? 'okr',
+    approvalStatus: g.approvalStatus ?? 'draft',
   }));
-  result.projects = result.projects.map((p: any) => ({
+  result.projects = result.projects.map((p: Project) => ({
     ...p, tags: p.tags ?? [], attachments: p.attachments ?? [],
     trackingRecords: p.trackingRecords ?? [], supporterIds: p.supporterIds ?? [],
     priority: p.priority ?? 'medium', status: p.status ?? 'todo',
@@ -149,7 +166,7 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: any[
     startDate: p.startDate ?? '', endDate: p.endDate ?? '',
     taskCount: p.taskCount ?? 0, description: p.description ?? '',
   }));
-  result.tasks = result.tasks.map((t: any) => ({
+  result.tasks = result.tasks.map((t: Task) => ({
     ...t, tags: t.tags ?? [], subtasks: t.subtasks ?? [],
     attachments: t.attachments ?? [], trackingRecords: t.trackingRecords ?? [],
     supporterIds: t.supporterIds ?? [], priority: t.priority ?? 'medium',
@@ -163,54 +180,58 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: any[
     sprintId: t.sprintId ?? null,
     description: t.description ?? '',
   }));
-  result.members = result.members.map((m: any) => ({
+  result.members = result.members.map((m: Member) => ({
     ...m, permissions: m.permissions ?? [], role: m.role ?? 'member',
     avatar: m.avatar ?? '', status: m.status ?? 'active',
+    teamId: m.teamId ?? '__default__',
   }));
-  result.notifications = result.notifications.map((n: any) => ({
+  result.notifications = result.notifications.map((n: Notification) => ({
     ...n, read: n.read ?? false,
   }));
-  result.categories = result.categories.map((c: any) => ({
+  result.categories = result.categories.map((c: Category) => ({
     ...c, appliesTo: c.appliesTo ?? [], color: c.color ?? '#6366f1',
     icon: c.icon ?? 'tag',
   }));
-  result.tags = result.tags.map((t: any) => ({
+  result.tags = result.tags.map((t: Tag) => ({
     ...t, color: t.color || '#6366f1',
   }));
-  result.notes = result.notes.map((n: any) => ({
+  result.notes = result.notes.map((n: Note) => ({
     ...n, tags: n.tags ?? [], category: n.category ?? '',
   }));
-  result.comments = result.comments.map((c: any) => ({
+  result.comments = result.comments.map((c: Comment) => ({
     ...c, mentionedMemberIds: c.mentionedMemberIds ?? [],
     isRead: c.isRead ?? false, followUpRequired: c.followUpRequired ?? false,
     followUpStatus: c.followUpStatus ?? 'none',
   }));
-  result.scheduleEvents = result.scheduleEvents.map((e: any) => ({
+  result.scheduleEvents = result.scheduleEvents.map((e: ScheduleEvent) => ({
     ...e, repeatCycle: e.repeatCycle ?? 'none', allDay: e.allDay ?? true, memberId: e.memberId ?? '',
   }));
-  result.bookmarks = result.bookmarks.map((b: any) => ({
+  result.bookmarks = result.bookmarks.map((b: Bookmark) => ({
     ...b, icon: b.icon ?? 'file', category: b.category ?? '默认', order: b.order ?? 0, memberId: b.memberId ?? '',
   }));
-  result.savedViews = result.savedViews.map((v: any) => ({
+  result.savedViews = result.savedViews.map((v: SavedView) => ({
     ...v, filters: v.filters ?? [], filterLogic: v.filterLogic ?? 'and', memberId: v.memberId ?? '', updatedAt: v.updatedAt || v.createdAt || '',
   }));
-  result.templates = result.templates.map((t: any) => ({
+  result.templates = result.templates.map((t: Template) => ({
     ...t, isPublic: t.isPublic ?? true, category: t.category ?? '',
   }));
-  result.activities = result.activities.map((a: any) => ({
+  result.activities = result.activities.map((a: Activity) => ({
     ...a, details: a.details ?? '',
   }));
-  result.reviews = result.reviews.map((r: any) => ({
+  result.reviews = result.reviews.map((r: ReviewEntry) => ({
     ...r, content: r.content ?? '', improvements: Array.isArray(r.improvements) ? r.improvements : [], metrics: r.metrics && typeof r.metrics === 'object' ? r.metrics : { goalsCompleted: 0, goalsInProgress: 0, projectsCompleted: 0, projectsInProgress: 0, tasksCompleted: 0, tasksOverdue: 0, tasksTotal: 0, completionRate: 0 },
   }));
-  result.statusFlowRules = result.statusFlowRules.map((r: any) => ({
-    ...r, id: r.id ?? '', allowedRoles: r.allowedRoles ?? r.allowed_roles ?? [], autoActions: r.autoActions ?? r.auto_actions ?? [],
+  result.statusFlowRules = result.statusFlowRules.map((r: StatusFlowRule & Record<string, unknown>) => ({
+    ...r, id: r.id ?? '', allowedRoles: r.allowedRoles ?? (r.allowed_roles as MemberRole[]) ?? [], autoActions: r.autoActions ?? (r.auto_actions as StatusFlowRule['autoActions']) ?? [],
   }));
-  result.automationRules = result.automationRules.map((r: any) => ({
+  result.automationRules = result.automationRules.map((r: AutomationRule) => ({
     ...r, condition: r.condition ?? {}, actions: r.actions ?? [],
   }));
-  result.sprints = result.sprints.map((sp: any) => ({
-    ...sp, goalIds: sp.goalIds ?? sp.goal_ids ?? [], status: sp.status ?? 'planning',
+  result.sprints = result.sprints.map((sp: Sprint & Record<string, unknown>) => ({
+    ...sp, goalIds: sp.goalIds ?? (sp.goal_ids as string[]) ?? [], status: sp.status ?? 'planning',
+  }));
+  result.knowledge = result.knowledge.map((k: Knowledge & Record<string, unknown>) => ({
+    ...k, tags: k.tags ?? [], relatedItems: k.relatedItems ?? (k.related_items as Knowledge['relatedItems']) ?? [], content: k.content ?? '',
   }));
   return result;
 }

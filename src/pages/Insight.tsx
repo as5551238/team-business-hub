@@ -1,12 +1,17 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, Suspense, lazy } from 'react';
 import { useStore, useViewingMember, useReviewList, usePermissions } from '@/store/useStore';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { BarChart3, Target, CheckCircle2, Clock, TrendingUp, Users, FolderKanban, FileText, Lightbulb, Save, Calendar } from 'lucide-react';
+import { BarChart3, Target, CheckCircle2, Clock, TrendingUp, Users, FolderKanban, FileText, Lightbulb, Save, Calendar, Brain, Sparkles } from 'lucide-react';
+import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
+import ViewModeSwitch from '@/components/ViewModeSwitch';
 import type { ReviewPeriod, ReviewMetrics } from '@/types';
+
+const AIAnalysisTab = lazy(() => import('@/pages/admin/AIAnalysisTab'));
+const AIReviewPanel = lazy(() => import('@/components/AIReviewPanel').then(m => ({ default: m.AIReviewPanel })));
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
-type InsightTab = 'dashboard' | 'review' | 'compare';
+type InsightTab = 'dashboard' | 'review' | 'compare' | 'ai';
 
 const periodLabels: Record<string, string> = { day: '日', week: '周', month: '月', quarter: '季', year: '年', custom: '自定义' };
 
@@ -86,6 +91,7 @@ function generateSuggestions(metrics: ReviewMetrics): string[] {
 
 const tabItems: { key: InsightTab; label: string; icon: typeof BarChart3 }[] = [
   { key: 'dashboard', label: '数据看板', icon: BarChart3 },
+  { key: 'ai', label: 'AI 洞察', icon: Brain },
   { key: 'review', label: '改进复盘', icon: FileText },
   { key: 'compare', label: '成员对比', icon: Users },
 ];
@@ -109,13 +115,14 @@ export default function Insight() {
   const [customEnd, setCustomEnd] = useState('');
   const [content, setContent] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAIReview, setShowAIReview] = useState(false);
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const mid = viewingMember?.id || null;
   const memberFilter = useCallback((items: any[], field: string) => {
     if (isTeamView || !mid) return items;
-    return items.filter((it: any) => it[field] === mid || (it.supporterIds || []).includes(mid));
+    return items.filter((it: any) => it[field] === mid || (it.supporterIds ?? []).includes(mid));
   }, [isTeamView, mid]);
 
   const activeGoals = useMemo(() => memberFilter(state.goals, 'leaderId'), [memberFilter, state.goals]);
@@ -172,7 +179,7 @@ export default function Insight() {
     // Build member->task stats in O(T) single pass instead of O(M×T) nested loops
     const statsMap = new Map<string, { completed: number; inProgress: number; todo: number; total: number }>();
     for (const t of state.tasks) {
-      const mids = new Set([t.leaderId, ...(t.supporterIds || [])]);
+      const mids = new Set([t.leaderId, ...(t.supporterIds ?? [])]);
       for (const mid of mids) {
         if (!statsMap.has(mid)) statsMap.set(mid, { completed: 0, inProgress: 0, todo: 0, total: 0 });
         const s = statsMap.get(mid)!;
@@ -193,7 +200,7 @@ export default function Insight() {
     // Build stats maps in O(T+G+P) instead of O(M×(T+G+P))
     const taskStats = new Map<string, { done: number; overdue: number; total: number }>();
     for (const t of state.tasks) {
-      const mids = new Set([t.leaderId, ...(t.supporterIds || [])]);
+      const mids = new Set([t.leaderId, ...(t.supporterIds ?? [])]);
       for (const mid of mids) {
         if (!taskStats.has(mid)) taskStats.set(mid, { done: 0, overdue: 0, total: 0 });
         const s = taskStats.get(mid)!;
@@ -204,13 +211,13 @@ export default function Insight() {
     }
     const goalCounts = new Map<string, number>();
     for (const g of state.goals) {
-      for (const mid of new Set([g.leaderId, ...(g.supporterIds || [])])) {
+      for (const mid of new Set([g.leaderId, ...(g.supporterIds ?? [])])) {
         goalCounts.set(mid, (goalCounts.get(mid) || 0) + 1);
       }
     }
     const projCounts = new Map<string, number>();
     for (const p of state.projects) {
-      for (const mid of new Set([p.leaderId, ...(p.supporterIds || [])])) {
+      for (const mid of new Set([p.leaderId, ...(p.supporterIds ?? [])])) {
         projCounts.set(mid, (projCounts.get(mid) || 0) + 1);
       }
     }
@@ -225,9 +232,9 @@ export default function Insight() {
 
   const reviewData = useMemo(() => {
     if (isTeamView || !viewingMemberId) return { goals: state.goals, projects: state.projects, tasks: state.tasks };
-    const mg = state.goals.filter(g => g.leaderId === viewingMemberId || (g.supporterIds || []).includes(viewingMemberId));
-    const mp = state.projects.filter(p => p.leaderId === viewingMemberId || (p.supporterIds || []).includes(viewingMemberId));
-    const mt = state.tasks.filter(t => t.leaderId === viewingMemberId || (t.supporterIds || []).includes(viewingMemberId));
+    const mg = state.goals.filter(g => g.leaderId === viewingMemberId || (g.supporterIds ?? []).includes(viewingMemberId));
+    const mp = state.projects.filter(p => p.leaderId === viewingMemberId || (p.supporterIds ?? []).includes(viewingMemberId));
+    const mt = state.tasks.filter(t => t.leaderId === viewingMemberId || (t.supporterIds ?? []).includes(viewingMemberId));
     return { goals: mg, projects: mp, tasks: mt };
   }, [isTeamView, viewingMemberId, state.goals, state.projects, state.tasks]);
 
@@ -254,21 +261,16 @@ export default function Insight() {
   function handleDelete(id: string) { dispatch({ type: 'DELETE_REVIEW', payload: id }); if (editingId === id) { setEditingId(null); setContent(''); } }
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div><h2 className="text-lg font-bold">数据洞察</h2><p className="text-sm text-muted-foreground mt-0.5">全局数据洞察，驱动决策优化</p></div>
-        {tab === 'review' && editingId && <button onClick={() => { setEditingId(null); setContent(''); }} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-muted/50 transition-colors">新建复盘</button>}
+    <div className="h-full flex flex-col p-4 md:p-6 space-y-4 animate-fade-in">
+      <div>
+        <h1 className="text-xl font-bold">数据洞察</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">多维度分析团队数据，驱动决策优化</p>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {tabItems.map(t => {
-          const Icon = t.icon;
-          return (
-            <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2 text-sm rounded-lg border border-border transition-colors flex items-center gap-1.5 whitespace-nowrap ${tab === t.key ? 'bg-primary text-primary-foreground font-medium' : 'bg-white hover:bg-muted/50'}`}>
-              <Icon size={16} />{t.label}
-            </button>
-          );
-        })}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <ViewModeSwitch items={tabItems.map(t => ({ value: t.key, label: t.label, icon: t.icon }))} value={tab} onChange={v => setTab(v as InsightTab)} />
+        {tab === 'review' && editingId && <button onClick={() => { setEditingId(null); setContent(''); }} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-muted/50 transition-colors">新建复盘</button>}
+        {tab === 'review' && <button onClick={() => setShowAIReview(v => !v)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"><Sparkles size={14} />AI 智能复盘</button>}
         {!isTeamView && viewingMember && (
           <span className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground whitespace-nowrap">
             <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{viewingMember.name[0]}</div>
@@ -277,8 +279,11 @@ export default function Insight() {
         )}
       </div>
 
+      <div key={tab} className="animate-fade-in">
       {tab === 'dashboard' && (
-        <>
+        <TabErrorBoundary name="数据看板">
+          <Suspense fallback={<TabLoader />}>
+        <div className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { icon: <Target size={20} className="text-blue-600" />, label: '目标总数', value: activeGoals.length, sub: `${activeGoals.filter(g => g.status === 'in_progress').length} 进行中`, color: 'bg-blue-50' },
@@ -359,13 +364,25 @@ export default function Insight() {
                   </div>
                 ))}
               </div>
+              </div>
             </div>
-          </div>
-        </>
-      )}
+           </div>
+         </Suspense>
+       </TabErrorBoundary>
+        )}
 
       {tab === 'review' && (
-        <>
+        <TabErrorBoundary name="改进复盘">
+          <Suspense fallback={<TabLoader />}>
+        <div className="space-y-6">
+          {/* AI 智能复盘 */}
+          {showAIReview && (
+            <div className="bg-white rounded-xl border border-purple-200 shadow-sm p-4 md:p-6">
+              <Suspense fallback={<TabLoader />}>
+                <AIReviewPanel onClose={() => setShowAIReview(false)} />
+              </Suspense>
+            </div>
+          )}
           <div className="bg-white rounded-xl border border-border shadow-sm p-4 md:p-6 space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1.5">复盘周期</label>
@@ -439,7 +456,7 @@ export default function Insight() {
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           {(!review.memberId || review.memberId === state.currentUser?.id || state.currentUser?.role === 'admin') && <button onClick={() => handleEdit(review)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors"><FileText size={14} /></button>}
-                          {can('manage_team') && <button onClick={() => handleDelete(review.id)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Clock size={14} /></button>}
+                          {can('team_manage') && <button onClick={() => handleDelete(review.id)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Clock size={14} /></button>}
                         </div>
                       </div>
                       {review.content && <p className="text-sm text-gray-700 whitespace-pre-wrap mb-2">{review.content}</p>}
@@ -455,11 +472,15 @@ export default function Insight() {
               </div>
             )}
           </div>
-        </>
-      )}
+        </div>
+        </Suspense>
+        </TabErrorBoundary>
+        )}
 
       {tab === 'compare' && (
-        <>
+        <TabErrorBoundary name="成员对比">
+          <Suspense fallback={<TabLoader />}>
+        <div className="space-y-6">
           <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-border">
               <h3 className="font-semibold text-sm flex items-center gap-2"><BarChart3 size={16} className="text-primary" />成员对比分析</h3>
@@ -521,8 +542,19 @@ export default function Insight() {
               </div>
             </div>
           </div>
-        </>
+        </div>
+         </Suspense>
+         </TabErrorBoundary>
+       )}
+
+      {tab === 'ai' && (
+        <TabErrorBoundary name="AI洞察">
+          <Suspense fallback={<TabLoader />}>
+            <AIAnalysisTab viewingMemberId={viewingMemberId} isTeamView={isTeamView} />
+          </Suspense>
+        </TabErrorBoundary>
       )}
+      </div>
     </div>
   );
 }

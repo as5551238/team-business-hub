@@ -1,18 +1,24 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useStore, useViewingMember, useMemberLookup, useActiveMembers } from '@/store/useStore';
 import { hasPermission } from '@/store/reducer';
-import type { Permission } from '@/types';
+import type { Permission, ItemType } from '@/types';
 import type { Notification } from '@/types';
+import { QuickCreateModal } from '@/components/QuickCreateModal';
+import { CommandPalette } from '@/components/CommandPalette';
+import { OnboardingWizard, shouldShowOnboarding } from '@/components/OnboardingWizard';
+import { pushTaskEvent, pushGoalEvent, pushRiskAlert } from '@/lib/pushEventEngine';
 import { requestNotificationPermission, sendBrowserNotification, isNotificationSupported } from '@/lib/browserNotify';
+import { isWeChatEnabled, sendWeChatMessage } from '@/supabase/wechat';
+import { setWeChatNotify, fireAutomationRules } from '@/store/shared';
 import {
   LayoutDashboard, Target, FolderKanban, CheckSquare, StickyNote,
   BarChart3, Users, Bell, Search, Menu, X, ChevronDown,
   Settings, Cloud, CloudOff, Loader2, FileText, Eye, Users2,
-  LogOut
+  LogOut, BookOpen, Building2
 } from 'lucide-react';
 import { CURRENT_USER_KEY } from '@/store/types';
 
-type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'admin';
+type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'knowledge' | 'admin';
 
 interface LayoutProps {
   currentPage: Page;
@@ -27,7 +33,8 @@ const navItems: { page: Page; label: string; icon: React.ReactNode; requirePermi
   { page: 'projects', label: '项目中心', icon: <FolderKanban size={20} /> },
   { page: 'tasks', label: '任务中心', icon: <CheckSquare size={20} /> },
   { page: 'insight', label: '数据洞察', icon: <BarChart3 size={20} /> },
-  { page: 'admin', label: '管理中心', icon: <Settings size={20} />, requirePermission: 'manage_settings' as Permission },
+  { page: 'knowledge', label: '知识库', icon: <BookOpen size={20} /> },
+  { page: 'admin', label: '管理中心', icon: <Settings size={20} />, requirePermission: 'settings_manage' },
 ];
 
 // --- Extracted React.memo sub-components ---
@@ -147,14 +154,34 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMemberFilter, setShowMemberFilter] = useState(false);
+  const [showTeamSelector, setShowTeamSelector] = useState(false);
   const [offlineWrites, setOfflineWrites] = useState(0);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [quickCreateType, setQuickCreateType] = useState<'task' | 'goal' | 'project'>('task');
+  const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding());
   const user = state.currentUser;
   const isAdmin = user?.role === 'admin';
   const unreadCount = useMemo(() => state.notifications.filter(n => !n.read).length, [state.notifications]);
-  const overdueCount = useMemo(() => { const today = new Date().toISOString().split('T')[0]; return state.tasks.filter(t => (t.leaderId === user?.id || (t.supporterIds || []).includes(user?.id || '')) && t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today).length; }, [state.tasks, user?.id]);
+  const overdueCount = useMemo(() => { const today = new Date().toISOString().split('T')[0]; return state.tasks.filter(t => (t.leaderId === user?.id || (t.supporterIds ?? []).includes(user?.id || '')) && t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today).length; }, [state.tasks, user?.id]);
   const visibleMembers = isAdmin ? activeMembers : activeMembers.filter(m => m.id === currentUser?.id);
   // Memoize visibleMembers for React.memo props comparison
   const visibleMembersMemo = useMemo(() => visibleMembers, [isAdmin, activeMembers, currentUser?.id]);
+
+  // Team switcher: compute user's teams
+  const userTeams = useMemo(() => {
+    if (!user) return [];
+    const teamIds = state.teamMembers.filter(tm => tm.memberId === user.id).map(tm => tm.teamId);
+    return state.teams.filter(t => teamIds.includes(t.id));
+  }, [state.teams, state.teamMembers, user?.id]);
+  const currentTeam = useMemo(() => state.teams.find(t => t.id === state.currentTeamId), [state.teams, state.currentTeamId]);
+  const handleSwitchTeam = useCallback((teamId: string) => {
+    dispatch({ type: 'SET_CURRENT_TEAM', payload: teamId });
+    setShowTeamSelector(false);
+    // Reload data for the new team
+    window.location.reload();
+  }, [dispatch]);
 
   // Track offline write count from localStorage (COL: offline indicator)
   useEffect(() => {
@@ -172,11 +199,12 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
       const existingKeys = new Set(state.notifications.map(n => n.relatedId + ':' + n.type));
       for (const t of state.tasks) {
         if (!t.reminderDate || t.status === 'done' || t.status === 'cancelled') continue;
-        if (t.leaderId !== user?.id && !(t.supporterIds || []).includes(user?.id || '')) continue;
+        if (t.leaderId !== user?.id && !(t.supporterIds ?? []).includes(user?.id || '')) continue;
         if (t.reminderDate <= today) {
           const key = t.id + ':reminder';
           if (existingKeys.has(key)) continue;
           dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'nrem_' + t.id + '_' + t.reminderDate, type: 'reminder' as const, title: '任务提醒', message: `"${t.title}" 的提醒时间已到 (${t.reminderDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
+          pushTaskEvent('reminder', t, memberLookup);
         }
       }
     };
@@ -185,28 +213,48 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
     return () => clearInterval(id);
   }, [state.tasks, state.notifications, dispatch, currentUser?.id]);
 
-  // Auto-rule 2: Overdue task detection — notify responsible users
+  // Auto-rule 2: Overdue + approaching deadline detection — notify responsible users
   useEffect(() => {
-    const checkOverdue = () => {
+    const checkDeadlines = () => {
       const today = new Date().toISOString().split('T')[0];
+      const threeDaysLater = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0];
       const existingKeys = new Set(state.notifications.map(n => n.relatedId + ':' + n.type));
       for (const t of state.tasks) {
         if (t.status === 'done' || t.status === 'cancelled') continue;
-        if (!t.dueDate || t.dueDate >= today) continue;
-        if (t.leaderId !== user?.id && !(t.supporterIds || []).includes(user?.id || '')) continue;
-        const key = t.id + ':overdue';
-        if (existingKeys.has(key)) continue;
-        dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'novd_' + t.id + '_' + t.dueDate, type: 'overdue' as const, title: '任务已逾期', message: `"${t.title}" 已逾期 (截止 ${t.dueDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
+        if (!t.dueDate) continue;
+        if (t.leaderId !== user?.id && !(t.supporterIds ?? []).includes(user?.id || '')) continue;
+        // Overdue check
+        if (t.dueDate < today) {
+          const key = t.id + ':overdue';
+          if (existingKeys.has(key)) continue;
+          dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'novd_' + t.id + '_' + t.dueDate, type: 'overdue' as const, title: '任务已逾期', message: `"${t.title}" 已逾期 (截止 ${t.dueDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
+          pushTaskEvent('overdue', t, memberLookup);
+          try { fireAutomationRules(state, t.id, 'task', t.title, 'due_arrive', { dueDate: t.dueDate }, t as any); } catch {}
+        }
+        // Approaching deadline check (1-3 days)
+        else if (t.dueDate <= threeDaysLater) {
+          const daysLeft = Math.ceil((new Date(t.dueDate).getTime() - new Date(today).getTime()) / 86400000);
+          const key = t.id + ':approaching';
+          if (existingKeys.has(key)) continue;
+          dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'napr_' + t.id + '_' + t.dueDate, type: 'sync' as const, title: '任务即将到期', message: `"${t.title}" 将于 ${t.dueDate} 到期（还有${daysLeft}天）`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
+          // Also send WeChat/browser push for approaching deadlines
+          try { sendBrowserNotification('任务即将到期', `"${t.title}" 将于${t.dueDate}到期（还有${daysLeft}天）`); } catch {}
+          pushTaskEvent('reminder', t, memberLookup);
+        }
       }
     };
-    checkOverdue();
-    const id = setInterval(checkOverdue, 60000);
+    checkDeadlines();
+    const id = setInterval(checkDeadlines, 60000);
     return () => clearInterval(id);
   }, [state.tasks, state.notifications, dispatch, currentUser?.id]);
 
   // Request browser notification permission on mount
   useEffect(() => {
     if (isNotificationSupported()) requestNotificationPermission();
+    // Register WeChat bridge for automation engine
+    setWeChatNotify((title, message) => {
+      if (isWeChatEnabled()) sendWeChatMessage(`**${title}**\n${message}`).catch(() => {});
+    });
   }, []);
 
   // When new notifications arrive while page is hidden, show browser notification
@@ -224,7 +272,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
     prevNotificationCountRef.current = currCount;
   }, [state.notifications]);
 
-  const closeAllDropdowns = useCallback(() => { setShowNotifications(false); setShowUserMenu(false); setShowMemberFilter(false); }, []);
+  const closeAllDropdowns = useCallback(() => { setShowNotifications(false); setShowUserMenu(false); setShowMemberFilter(false); setShowTeamSelector(false); }, []);
 
   // Global keyboard shortcuts
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -236,16 +284,43 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
         if (e.key === 'Escape') { (e.target as HTMLElement).blur(); closeAllDropdowns(); }
         return;
       }
-      // Cmd/Ctrl+K: focus search
+      // Cmd/Ctrl+K: open command palette
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        setCommandPaletteOpen(true);
+        return;
+      }
+      // Cmd/Ctrl+N: quick create task
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'n') {
+        e.preventDefault();
+        setQuickCreateType('task');
+        setQuickCreateOpen(true);
+        return;
+      }
+      // Cmd/Ctrl+Shift+N: quick create goal
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'N') {
+        e.preventDefault();
+        setQuickCreateType('goal');
+        setQuickCreateOpen(true);
+        return;
+      }
+      // Cmd/Ctrl+Shift+P: quick create project
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'P') {
+        e.preventDefault();
+        setQuickCreateType('project');
+        setQuickCreateOpen(true);
+        return;
+      }
+      // Cmd/Ctrl+G: open Gantt modal
+      if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('tbh-open-gantt'));
         return;
       }
       // Escape: close dropdowns
       if (e.key === 'Escape') { closeAllDropdowns(); return; }
       // Number keys 1-6: quick navigation
-      const navMap: Record<string, Page> = { '1': 'dashboard', '2': 'goals', '3': 'projects', '4': 'tasks', '5': 'insight', '6': 'admin' };
+      const navMap: Record<string, Page> = { '1': 'dashboard', '2': 'goals', '3': 'projects', '4': 'tasks', '5': 'insight', '6': 'ai', '7': 'admin' };
       if (navMap[e.key]) { onPageChange(navMap[e.key]); return; }
     };
     window.addEventListener('keydown', handler);
@@ -301,7 +376,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
         </div>
 
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {navItems.filter(item => !item.requirePermission || (user && hasPermission(state, user.id, item.requirePermission))).map((item, idx) => (
+          {navItems.filter(item => !item.requirePermission || (user && (user.role === 'admin' || hasPermission(state, user.id, item.requirePermission)))).map((item, idx) => (
             <button key={item.page} onClick={() => handlePageClick(item.page)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 text-left ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'}`}>
               {item.icon}
@@ -352,6 +427,28 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
             {(currentPage === 'settings' ? '系统设置' : navItems.find(n => n.page === currentPage)?.label)}
           </h1>
 
+          {userTeams.length > 1 && (
+            <div className="relative">
+              <button onClick={() => { setShowTeamSelector(!showTeamSelector); setShowMemberFilter(false); setShowUserMenu(false); setShowNotifications(false); }} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:bg-muted transition-colors">
+                <Building2 size={14} />
+                <span className="hidden sm:inline max-w-[100px] truncate">{currentTeam?.name || '选择团队'}</span>
+                <ChevronDown size={12} />
+              </button>
+              {showTeamSelector && (
+                <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-border z-50 animate-slide-up">
+                  <div className="px-3 py-2 border-b border-border text-xs font-semibold text-muted-foreground">切换团队</div>
+                  {userTeams.map(t => (
+                    <button key={t.id} onClick={() => handleSwitchTeam(t.id)} className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left transition-colors ${t.id === state.currentTeamId ? 'bg-primary/5 text-primary font-medium' : ''}`}>
+                      <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{(t.name || '?').slice(0, 2)}</div>
+                      <span className="truncate">{t.name}</span>
+                      {t.id === state.currentTeamId && <span className="ml-auto text-[10px] text-primary">当前</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="relative">
             <button onClick={() => { setShowMemberFilter(!showMemberFilter); setShowUserMenu(false); setShowNotifications(false); }} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!isTeamView ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>{isTeamView ? <><Eye size={14} /> <span className="hidden sm:inline">团队视图</span></> : <><Users2 size={14} /> <span className="hidden sm:inline">{viewingMember?.name || '个人'}</span></>}<ChevronDown size={12} className="text-muted-foreground" /></button>
             {showMemberFilter && (
@@ -387,6 +484,20 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
         <main className="flex-1 overflow-y-auto bg-muted/30">{children}</main>
       </div>
       {(showNotifications || showUserMenu || showMemberFilter) && <div className="fixed inset-0 z-40" onClick={closeAllDropdowns} />}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onPageChange={onPageChange}
+        onNavigateItem={(id, type) => { window.dispatchEvent(new CustomEvent('tbh-nav-item', { detail: { id, type } })); }}
+        onCreateItem={(type) => {
+          if (type === 'task') { onPageChange('tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'task' } })), 200); }
+          else if (type === 'project') { onPageChange('projects'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'project' } })), 200); }
+          else { onPageChange('goals'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'goal' } })), 200); }
+        }}
+      />
+      <CommandPalette open={cmdPaletteOpen} onClose={() => setCmdPaletteOpen(false)} onPageChange={onPageChange} />
+      <QuickCreateModal open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} initialType={quickCreateType} />
+      {showOnboarding && <OnboardingWizard onComplete={() => setShowOnboarding(false)} />}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from '@giszhc/xlsx/dist/xlsx.mini.min';
 import type { BackupData, Member, Goal, Project, Task, Notification, Activity, ItemLink, Tag, Category, Template, ScheduleEvent, Note, ReviewEntry, Comment, Bookmark, SavedView } from '@/types';
 
 interface FlatMember extends Omit<Member, 'permissions'> { permissions: string; }
@@ -103,8 +103,8 @@ export function importFromExcel(buffer: ArrayBuffer): BackupData | null {
       ...g, tags: parseArr(g.tags), keyResults: parseArr(g.keyResults),
       supporterIds: parseArr(g.supporterIds), attachments: parseArr(g.attachments),
       trackingRecords: parseArr(g.trackingRecords), selectedKRIds: parseArr(g.selectedKRIds),
-      parentId: g.parentId || null, progress: g.progress || 0, level: g.level || 0,
-      repeatCycle: g.repeatCycle || 'none', discussionThreadId: g.discussionThreadId || null,
+      parentId: g.parentId ?? null, progress: g.progress ?? 0, level: g.level ?? 0,
+      repeatCycle: g.repeatCycle ?? 'none', discussionThreadId: g.discussionThreadId ?? null,
       summary: g.summary || '', priority: g.priority || 'medium', status: g.status || 'todo',
     }));
 

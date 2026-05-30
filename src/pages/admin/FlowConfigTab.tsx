@@ -1,12 +1,49 @@
 import { useState } from 'react';
 import { useStore } from '@/store/useStore';
-import type { StatusFlowRule, StatusFlowAutoAction } from '@/types';
-import { Plus, Trash2, Bell, Edit2, UserPlus, ArrowRight } from 'lucide-react';
+import type { StatusFlowRule, StatusFlowAutoAction, MemberRole } from '@/types';
+import { getDefaultStatusFlowRules } from '@/store/shared';
+import { Plus, Trash2, Bell, Edit2, UserPlus, ArrowRight, Download } from 'lucide-react';
 
 const STATUSES = ['todo', 'in_progress', 'done', 'blocked', 'cancelled'];
 const STATUS_LABELS: Record<string, string> = { todo: '待办', in_progress: '进行中', done: '已完成', blocked: '阻塞', cancelled: '已取消' };
 const ROLES = ['admin', 'manager', 'leader', 'member'] as const;
 const ROLE_LABELS: Record<string, string> = { admin: '管理员', manager: '负责人', leader: '组长', member: '成员' };
+
+// 预设流转模板
+const FLOW_PRESETS: Record<string, { label: string; desc: string; rules: StatusFlowRule[] }> = {
+  standard: {
+    label: '标准流', desc: '待办→进行中→完成，含阻塞处理',
+    rules: [
+      { id: 'std_1', itemType: 'task', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: ['admin', 'manager', 'leader', 'member'] as MemberRole[], autoActions: [], enabled: true, name: '开始任务' },
+      { id: 'std_2', itemType: 'task', fromStatus: 'in_progress', toStatus: 'done', allowedRoles: ['admin', 'manager', 'leader', 'member'] as MemberRole[], autoActions: [], enabled: true, name: '完成任务' },
+      { id: 'std_3', itemType: 'task', fromStatus: 'in_progress', toStatus: 'blocked', allowedRoles: ['admin', 'manager', 'leader', 'member'] as MemberRole[], autoActions: [{ type: 'notify' as const, config: { title: '任务被阻塞', message: '任务状态已变更为阻塞' } }], enabled: true, name: '阻塞任务' },
+      { id: 'std_4', itemType: 'task', fromStatus: 'blocked', toStatus: 'in_progress', allowedRoles: ['admin', 'manager', 'leader'] as MemberRole[], autoActions: [], enabled: true, name: '解除阻塞' },
+      { id: 'std_5', itemType: 'project', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: ['admin', 'manager', 'leader', 'member'] as MemberRole[], autoActions: [], enabled: true, name: '启动项目' },
+      { id: 'std_6', itemType: 'project', fromStatus: 'in_progress', toStatus: 'done', allowedRoles: ['admin', 'manager', 'leader'] as MemberRole[], autoActions: [], enabled: true, name: '完成项目' },
+      { id: 'std_7', itemType: 'goal', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: ['admin', 'manager', 'leader'] as MemberRole[], autoActions: [], enabled: true, name: '启动目标' },
+      { id: 'std_8', itemType: 'goal', fromStatus: 'in_progress', toStatus: 'done', allowedRoles: ['admin'] as MemberRole[], autoActions: [{ type: 'notify' as const, config: { title: '目标已完成', message: '恭喜！目标已达成' } }], enabled: true, name: '完成目标' },
+    ],
+  },
+  agile: {
+    label: '敏捷流', desc: '含取消/回归，支持敏捷短迭代',
+    rules: [
+      { id: 'ag_1', itemType: 'task', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: ['admin', 'manager', 'leader', 'member'] as MemberRole[], autoActions: [], enabled: true, name: '开始' },
+      { id: 'ag_2', itemType: 'task', fromStatus: 'in_progress', toStatus: 'done', allowedRoles: ['admin', 'manager', 'leader', 'member'] as MemberRole[], autoActions: [], enabled: true, name: '完成' },
+      { id: 'ag_3', itemType: 'task', fromStatus: 'in_progress', toStatus: 'blocked', allowedRoles: ['admin', 'manager', 'leader', 'member'] as MemberRole[], autoActions: [{ type: 'notify' as const, config: { title: '阻塞', message: '任务被阻塞' } }], enabled: true, name: '阻塞' },
+      { id: 'ag_4', itemType: 'task', fromStatus: 'blocked', toStatus: 'in_progress', allowedRoles: ['admin', 'manager', 'leader'] as MemberRole[], autoActions: [], enabled: true, name: '解除阻塞' },
+      { id: 'ag_5', itemType: 'task', fromStatus: 'in_progress', toStatus: 'todo', allowedRoles: ['admin', 'manager'] as MemberRole[], autoActions: [], enabled: true, name: '回归待办' },
+      { id: 'ag_6', itemType: 'task', fromStatus: 'todo', toStatus: 'cancelled', allowedRoles: ['admin', 'manager'] as MemberRole[], autoActions: [], enabled: true, name: '取消' },
+      { id: 'ag_7', itemType: 'task', fromStatus: 'done', toStatus: 'in_progress', allowedRoles: ['admin', 'manager'] as MemberRole[], autoActions: [{ type: 'notify' as const, config: { title: '重开', message: '已完成任务被重新打开' } }], enabled: true, name: '重开' },
+    ],
+  },
+  simple: {
+    label: '极简流', desc: '仅待办→完成两步，适合轻度管理',
+    rules: [
+      { id: 'sm_1', itemType: 'task', fromStatus: 'todo', toStatus: 'done', allowedRoles: [] as MemberRole[], autoActions: [], enabled: true, name: '完成' },
+      { id: 'sm_2', itemType: 'project', fromStatus: 'todo', toStatus: 'done', allowedRoles: [] as MemberRole[], autoActions: [], enabled: true, name: '完成' },
+    ],
+  },
+};
 
 export function FlowConfigTab() {
   const { state, dispatch } = useStore();
@@ -60,11 +97,17 @@ export function FlowConfigTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-sm">状态流转规则</h3>
-        <button onClick={() => { setForm({ fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [] }); setEditingIdx(rules.length); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"><Plus size={14} /> 新增规则</button>
+        <div className="flex items-center gap-2">
+          {rules.length > 0 && (<select className="border border-input rounded px-2 py-1 text-xs" onChange={e => { if (e.target.value) { const preset = FLOW_PRESETS[e.target.value]; if (preset) dispatch({ type: 'SET_STATUS_FLOW_RULES', payload: preset.rules }); e.target.value = ''; } }} defaultValue="">
+            <option value="" disabled>重置为预设模板...</option>
+            {Object.entries(FLOW_PRESETS).map(([key, preset]) => (<option key={key} value={key}>{preset.label}—{preset.desc}</option>))}
+          </select>)}
+          <button onClick={() => { setForm({ fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [] }); setEditingIdx(rules.length); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"><Plus size={14} /> 新增规则</button>
+        </div>
       </div>
       <p className="text-xs text-muted-foreground">定义项目/任务状态之间的流转约束。留空角色列表 = 所有角色可转。状态变更时自动执行配置的动作。</p>
 
-      {rules.length === 0 && <p className="text-xs text-muted-foreground py-4 text-center">暂无流转规则（默认：任意角色可转任意状态）</p>}
+      {rules.length === 0 && <div className="text-center py-6 space-y-3"><p className="text-xs text-muted-foreground">暂无流转规则（默认：任意角色可转任意状态）</p><div className="flex items-center justify-center gap-2">{Object.entries(FLOW_PRESETS).map(([key, preset]) => (<button key={key} onClick={() => dispatch({ type: 'SET_STATUS_FLOW_RULES', payload: preset.rules })} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"><Download size={12} /> {preset.label}<span className="text-muted-foreground group-hover:text-primary-foreground/80">— {preset.desc}</span></button>))}</div></div>}
 
       <div className="space-y-2">
         {rules.map((rule, idx) => (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore, useBackupExport } from '@/store/useStore';
 import { loadWeChatConfig, saveWeChatConfig, sendWeChatMessage, testChannel, formatDailyDigest, type WeChatConfig, type NotifyChannel, getLastTestError, setLastTestError } from '@/supabase/wechat';
 import { generateAllData } from '@/data/dataGenerator';
@@ -12,6 +12,7 @@ import {
 import { inputCls, loadEmailConfig, saveEmailConfig } from './constants';
 import type { EmailConfig } from './constants';
 import { sendTestEmail, isEmailEnabled, getLastEmailError, setLastEmailError } from '@/supabase/email';
+import { AISettingsSection } from './AISettingsSection';
 
 function SupabaseSection() {
   const store = useStore();
@@ -27,8 +28,8 @@ function SupabaseSection() {
   const statusConfig: Record<string, { color: string; label: string }> = { local: { color: 'text-gray-500', label: '本地模式（数据仅存本机）' }, supabase: { color: 'text-green-600', label: '云端同步中（团队成员实时共享）' }, loading: { color: 'text-amber-500', label: '连接中...' } };
   const st = statusConfig[connectionMode];
 
-  async function handleConnect() { if (!url.trim() || !anonKey.trim()) return; setConnecting(true); try { const success = await doConnect(url.trim(), anonKey.trim()); if (success) setStep(2); } catch (e: any) { console.error('连接失败:', e); } setConnecting(false); }
-  async function handleInitData() { setInitializing(true); try { await initializeSupabaseData(); setStep(3); } catch (e: any) { console.error('初始化失败:', e); } setInitializing(false); }
+  async function handleConnect() { if (!url.trim() || !anonKey.trim()) return; setConnecting(true); try { const success = await doConnect(url.trim(), anonKey.trim()); if (success) setStep(2); } catch (e: unknown) { console.error('连接失败:', e); } setConnecting(false); }
+  async function handleInitData() { setInitializing(true); try { await initializeSupabaseData(); setStep(3); } catch (e: unknown) { console.error('初始化失败:', e); } setInitializing(false); }
   function handleDisconnect() { disconnectSupabase(); setStep(1); setUrl(''); setAnonKey(''); }
   function handleCopy() { const el = document.getElementById('admin-schema-text'); if (el) { navigator.clipboard.writeText(el.textContent || ''); setCopied(true); setTimeout(() => setCopied(false), 2000); } }
 
@@ -144,7 +145,7 @@ function WeChatSection() {
 
   async function handleTest() {
     setTestResult('sending');
-    try { const ok = await testChannel(config.channel, config); setTestResult(ok ? 'success' : 'error'); if (!ok) setLastTestError('发送失败，请检查配置'); } catch (e: any) { setTestResult('error'); setLastTestError(e.message || '发送失败'); }
+    try { const ok = await testChannel(config.channel, config); setTestResult(ok ? 'success' : 'error'); if (!ok) setLastTestError('发送失败，请检查配置'); } catch (e: unknown) { setTestResult('error'); setLastTestError(e instanceof Error ? e.message : '发送失败'); }
     setTimeout(() => setTestResult('idle'), 5000);
   }
 
@@ -156,9 +157,9 @@ function WeChatSection() {
       const todayDueTasks = tasks.filter(t => t.status !== 'done' && t.dueDate === today).map(t => ({ title: t.title, assignee: members.find(m => m.id === t.leaderId)?.name || '未知' }));
       const ok = await sendWeChatMessage(formatDailyDigest({ overdueTasks, todayDueTasks, todayCompleted: tasks.filter(t => t.completedAt && t.completedAt.startsWith(today)).length, totalActive: tasks.filter(t => t.status === 'in_progress').length }));
       setDigestResult(ok ? 'success' : 'error');
-    } catch (e: any) {
+    } catch (e: unknown) {
       setDigestResult('error');
-      setLastTestError(e.message || '发送失败');
+      setLastTestError(e instanceof Error ? e.message : '发送失败');
     }
     setTimeout(() => setDigestResult('idle'), 3000);
   }
@@ -236,9 +237,9 @@ function EmailSection() {
       const ok = await sendTestEmail(config.fromEmail);
       if (ok) { setTestResult('success'); setLastEmailError(''); }
       else { setTestResult('error'); setLastEmailError('邮件发送请求已提交但未确认成功，请检查邮箱'); }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setTestResult('error');
-      setLastEmailError(e.message || '邮件发送失败');
+      setLastEmailError(e instanceof Error ? e.message : '邮件发送失败');
     } finally {
       setTesting(false);
     }
@@ -319,7 +320,7 @@ function BackupSection() {
         const date = new Date().toISOString().split('T')[0];
         a.href = url; a.download = `team-business-hub-backup-${date}.xlsx`;
         a.click(); URL.revokeObjectURL(url);
-      } catch (e: any) { setErrorMsg('导出失败: ' + e.message); setImportStatus('error'); setTimeout(() => setImportStatus('idle'), 3000); }
+      } catch (e: unknown) { setErrorMsg('导出失败: ' + (e instanceof Error ? e.message : String(e))); setImportStatus('error'); setTimeout(() => setImportStatus('idle'), 3000); }
       setExporting(false);
     }, 50);
   }, []);
@@ -379,7 +380,7 @@ function BackupSection() {
 
 function TagsCategoriesSection() {
   const { state, dispatch } = useStore();
-  const tags = state.tags || [];
+  const tags = state.tags ?? [];
   const categories = state.categories || [];
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
@@ -442,6 +443,9 @@ export function SettingsTab() {
         <WeChatSection />
       </div>
       <EmailSection />
+      <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+        <AISettingsSection />
+      </div>
       <TagsCategoriesSection />
       <DataStatsSection />
       <BackupSection />

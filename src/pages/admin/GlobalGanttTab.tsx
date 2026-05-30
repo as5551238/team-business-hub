@@ -1,21 +1,26 @@
 import { useMemo, useState } from 'react';
-import { useStore } from '@/store/useStore';
+import { useStore, usePermissions, useViewingMember } from '@/store/useStore';
 import type { Task } from '@/types';
 
 const STATUS_COLORS: Record<string, string> = { todo: '#94a3b8', in_progress: '#3b82f6', done: '#22c55e', blocked: '#f59e0b', cancelled: '#ef4444' };
 
 export function GlobalGanttView() {
   const { state } = useStore();
+  const { isAdmin } = usePermissions();
+  const { viewingMemberId } = useViewingMember();
   const [filter, setFilter] = useState<'all' | 'project'>('all');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
 
   const tasks = useMemo(() => {
     let filtered = state.tasks.filter(t => t.status !== 'cancelled');
+    if (!isAdmin && viewingMemberId) {
+      filtered = filtered.filter(t => t.leaderId === viewingMemberId || (t.supporterIds ?? []).includes(viewingMemberId));
+    }
     if (filter === 'project' && selectedProjectId) {
       filtered = filtered.filter(t => t.projectId === selectedProjectId);
     }
     return filtered.filter(t => t.startDate || t.dueDate);
-  }, [state.tasks, filter, selectedProjectId]);
+  }, [state.tasks, filter, selectedProjectId, isAdmin, viewingMemberId]);
 
   // Calculate date range
   const dateRange = useMemo(() => {
@@ -25,11 +30,18 @@ export function GlobalGanttView() {
       if (t.dueDate) dates.push(new Date(t.dueDate));
     });
     if (dates.length === 0) return { start: new Date(), end: new Date(), days: 1 };
-    const min = new Date(Math.min(...dates.map(d => d.getTime())));
-    const max = new Date(Math.max(...dates.map(d => d.getTime())));
+    let minTs = dates[0].getTime();
+    let maxTs = minTs;
+    for (let i = 1; i < dates.length; i++) {
+      const ts = dates[i].getTime();
+      if (ts < minTs) minTs = ts;
+      if (ts > maxTs) maxTs = ts;
+    }
+    const min = new Date(minTs);
+    const max = new Date(maxTs);
     min.setDate(min.getDate() - 2);
     max.setDate(max.getDate() + 2);
-    const days = Math.ceil((max.getTime() - min.getTime()) / 86400000) + 1;
+    const days = Math.min(Math.ceil((max.getTime() - min.getTime()) / 86400000) + 1, 365);
     return { start: min, end: max, days: Math.max(days, 1) };
   }, [tasks]);
 

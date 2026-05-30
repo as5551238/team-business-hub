@@ -1,10 +1,47 @@
 import path from "path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
+
+// CDN加速：静态资源从jsDelivr加载（国内有节点），HTML从GitHub Pages加载
+// jsDelivr格式：https://cdn.jsdelivr.net/gh/{user}/{repo}@{branch}/{path}
+const CDN_BASE = process.env.CDN === '1'
+  ? 'https://cdn.jsdelivr.net/gh/as5551238/team-business-hub@main/'
+  : './';
 
 export default defineConfig({
-  base: "./",
-  plugins: [react()],
+  base: CDN_BASE,
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'icons.svg'],
+      manifest: {
+        name: '团队业务中台',
+        short_name: 'TBH',
+        description: '中小团队AI目标中台',
+        theme_color: '#1E40AF',
+        background_color: '#ffffff',
+        display: 'standalone',
+        scope: '/',
+        start_url: '/',
+        icons: [
+          { src: '/icons.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'cdn-cache', expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 } },
+          },
+        ],
+      },
+      devOptions: { enabled: false },
+    }),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -23,6 +60,8 @@ export default defineConfig({
             if (id.includes('xlsx')) return 'xlsx';
             if (id.includes('react/') || id.includes('react-dom/') || id.includes('scheduler')) return 'vendor';
             if (id.includes('@radix-ui')) return 'radix';
+            if (id.includes('dompurify')) return 'vendor';
+            if (id.includes('@dnd-kit') || id.includes('date-fns')) return 'vendor';
           }
         },
       },

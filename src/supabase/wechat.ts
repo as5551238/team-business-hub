@@ -74,9 +74,9 @@ async function sendToWorkWechat(content: string, webhookUrl?: string): Promise<b
       console.error('RPC send_webhook failed:', error);
       throw new Error('RPC 调用失败: ' + (error.message || JSON.stringify(error)));
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('RPC 调用失败:', e);
-    throw new Error('发送失败: ' + (e.message || '未知错误'));
+    throw new Error('发送失败: ' + (e instanceof Error ? e.message : '未知错误'));
   }
   return false;
 }
@@ -100,8 +100,8 @@ async function sendToServerChan(title: string, content: string, sendKey?: string
       if (!error) return true;
       console.warn('RPC send_webhook for Server酱 failed:', error);
     }
-  } catch (e: any) {
-    console.warn('RPC 调用 Server酱失败:', e.message);
+  } catch (e: unknown) {
+    console.warn('RPC 调用 Server酱失败:', e instanceof Error ? e.message : String(e));
   }
 
   // 方法2: 浏览器直接 GET 请求（可能受 CORS 限制）
@@ -112,8 +112,8 @@ async function sendToServerChan(title: string, content: string, sendKey?: string
     if (data.code === 0) return true;
     if (data.code === 40001) throw new Error('SendKey无效，请检查配置');
     if (data.code === 40003) throw new Error('SendKey格式错误，应为SCT开头');
-  } catch (e: any) {
-    if (e.message?.includes('SendKey')) throw e;
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message?.includes('SendKey')) throw e;
     // 方法3: 浏览器 POST 请求（最后手段）
     try {
       const res = await fetch(apiUrl, {
@@ -142,7 +142,7 @@ export async function sendWeChatMessage(content: string): Promise<boolean> {
       return await sendToWorkWechat(content);
     }
     return false;
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('通知发送失败:', e);
     return false;
   }
@@ -158,7 +158,7 @@ export async function testChannel(channel: NotifyChannel, config: WeChatConfig):
     }
     const content = `### 团队业务中台 - 测试消息\n\n> 这是一条测试消息，如果你看到了说明配置正确！\n> 当前时间：${now}\n> 来自：团队业务中台`;
     return await sendToWorkWechat(content, config.workWechat.webhookUrl);
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('测试发送失败:', e);
     throw e;
   }

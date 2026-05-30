@@ -6,6 +6,10 @@
 import { getSupabaseClient } from './client';
 import { loadEmailConfig, type EmailConfig } from '@/pages/admin/constants';
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 const EMAIL_LAST_ERROR_KEY = 'tbh-email-last-error';
 
 export function isEmailEnabled(): boolean {
@@ -58,7 +62,7 @@ export function formatDailyDigestEmail(params: {
   const { memberName, overdueTasks, todayDueTasks, todayCompleted, totalActive } = params;
   const now = new Date().toLocaleDateString('zh-CN');
   let html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">`;
-  html += `<h2 style="color:#4f46e5;">${memberName}，你好！</h2>`;
+  html += `<h2 style="color:#4f46e5;">${escapeHtml(memberName)}，你好！</h2>`;
   html += `<p style="color:#666;">${now} 每日业务现况</p>`;
   html += `<div style="display:flex;gap:12px;margin:16px 0;">`;
   html += `<div style="flex:1;background:#f0f0ff;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:24px;font-weight:bold;color:#4f46e5;">${totalActive}</div><div style="font-size:12px;color:#666;">进行中</div></div>`;
@@ -69,7 +73,7 @@ export function formatDailyDigestEmail(params: {
     html += `<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">`;
     overdueTasks.slice(0, 10).forEach(t => {
       const badge = t.priority === 'urgent' ? '<span style="color:#dc2626;font-weight:bold;">[紧急]</span> ' : '';
-      html += `<tr><td style="padding:6px 0;border-bottom:1px solid #eee;">${badge}${t.title}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;color:#888;">截止 ${t.dueDate}</td></tr>`;
+      html += `<tr><td style="padding:6px 0;border-bottom:1px solid #eee;">${badge}${escapeHtml(t.title)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;color:#888;">截止 ${escapeHtml(t.dueDate)}</td></tr>`;
     });
     if (overdueTasks.length > 10) html += `<tr><td colspan="2" style="padding:6px;color:#888;">...还有 ${overdueTasks.length - 10} 项</td></tr>`;
     html += `</table>`;
@@ -77,7 +81,7 @@ export function formatDailyDigestEmail(params: {
   if (todayDueTasks.length > 0) {
     html += `<h3 style="color:#ea580c;">今日到期 (${todayDueTasks.length})</h3>`;
     html += `<ul style="padding-left:20px;margin-bottom:16px;">`;
-    todayDueTasks.slice(0, 10).forEach(t => { html += `<li style="padding:4px 0;">${t.title}</li>`; });
+    todayDueTasks.slice(0, 10).forEach(t => { html += `<li style="padding:4px 0;">${escapeHtml(t.title)}</li>`; });
     if (todayDueTasks.length > 10) html += `<li style="color:#888;">...还有 ${todayDueTasks.length - 10} 项</li>`;
     html += `</ul>`;
   }

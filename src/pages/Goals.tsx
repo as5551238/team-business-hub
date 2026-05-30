@@ -1,14 +1,19 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore, useTags, useViewingMember, useMemberLookup, usePermissions } from '@/store/useStore';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
-import { Trash2, Edit2, Plus, Target, Filter, ChevronDown, X, FileText, Search } from 'lucide-react';
+import { Trash2, Edit2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check } from 'lucide-react';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
+import { FilterChipSelect } from '@/components/FilterChipSelect';
+import { cn } from '@/lib/utils';
+import ViewModeSwitch from '@/components/ViewModeSwitch';
 import {
-  GoalCard, GoalTreeNode, GoalListView, GoalTableView, GoalMatrixView, GoalTimelineView
+  GoalCard, GoalTreeNode, GoalListView, GoalMatrixView
 } from './goals/views';
-import { viewTabs, statusLabels, statusColors, bizLabels, bizColors, type ViewMode } from './goals/constants';
+import { viewTabs, statusLabels, statusColors, bizLabels, bizColors, type ViewMode, VALID_VIEW_MODES } from './goals/constants';
 import { useDraftSave } from '@/hooks/useDraftSave';
+import { OKRAlignmentView } from './admin/OKRAlignmentTab';
+import { AIItemFlow } from '@/components/AIItemFlow';
 
 export default function Goals() {
   const { state, dispatch } = useStore();
@@ -17,6 +22,7 @@ export default function Goals() {
   const { tags } = useTags();
   const { isTeamView, viewingMember, viewingMemberId, setViewingMember } = useViewingMember();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showAIFlow, setShowAIFlow] = useState(false);
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('detail');
   const [detailItem, setDetailItem] = useState<{ type: 'goal'; id: string } | null>(null);
@@ -29,7 +35,6 @@ export default function Goals() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
-  const [showPersonPicker, setShowPersonPicker] = useState(false);
   const [timeRange, setTimeRange] = useState<string>('all');
   const [searchText, setSearchText] = useState('');
 
@@ -57,14 +62,6 @@ export default function Goals() {
     });
   }, []);
 
-  const toggleMember = (id: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedMembers(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -79,8 +76,8 @@ export default function Goals() {
     if (selectedPriorities.size > 0) result = result.filter(g => selectedPriorities.has(g.priority));
     if (selectedLevels.size > 0) { const bpOf = (p: TaskPriority) => p === 'urgent' ? 'S' : p === 'high' ? 'A' : p === 'medium' ? 'B' : 'C'; result = result.filter(g => selectedLevels.has(bpOf(g.priority))); }
     if (selectedCategories.size > 0) result = result.filter(g => selectedCategories.has(g.category));
-    if (selectedTags.size > 0) result = result.filter(g => (g.tags || []).some(t => selectedTags.has(t)));
-    if (selectedMembers.size > 0) result = result.filter(g => selectedMembers.has(g.leaderId) || (g.supporterIds || []).some(s => selectedMembers.has(s)));
+    if (selectedTags.size > 0) result = result.filter(g => (g.tags ?? []).some(t => selectedTags.has(t)));
+    if (selectedMembers.size > 0) result = result.filter(g => selectedMembers.has(g.leaderId) || (g.supporterIds ?? []).some(s => selectedMembers.has(s)));
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       result = result.filter(g => g.title.toLowerCase().includes(q) || (g.description || '').toLowerCase().includes(q));
@@ -102,7 +99,7 @@ export default function Goals() {
       result = result.filter(g => g.startDate <= qe && g.endDate >= qs);
     }
     if (!isTeamView && viewingMember) {
-      result = result.filter(g => g.leaderId === viewingMember.id || (g.supporterIds || []).includes(viewingMember.id));
+      result = result.filter(g => g.leaderId === viewingMember.id || (g.supporterIds ?? []).includes(viewingMember.id));
     }
     return result;
   }, [state.goals, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, selectedMembers, searchText, timeRange, todayStr, isTeamView, viewingMember]);
@@ -130,7 +127,7 @@ export default function Goals() {
   };
 
   const handleBatchDelete = useCallback(() => {
-    if (!can('delete_goals')) return;
+    if (!can('goals_delete')) return;
     if (!confirm(`确认删除选中的 ${selectedIds.size} 个目标？`)) return;
     selectedIds.forEach(id => { dispatch({ type: 'DELETE_GOAL', payload: id }); });
     setSelectedIds(new Set());
@@ -138,7 +135,7 @@ export default function Goals() {
   }, [selectedIds, dispatch]);
 
   const handleBatchStatus = useCallback(() => {
-    if (!can('edit_goals')) return;
+    if (!can('goals_edit')) return;
     if (!batchStatus) return;
     selectedIds.forEach(id => {
       dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: batchStatus as GoalStatus } } });
@@ -148,7 +145,7 @@ export default function Goals() {
   }, [selectedIds, dispatch, batchStatus]);
 
   const handleBatchAssign = useCallback(() => {
-    if (!can('edit_goals')) return;
+    if (!can('goals_edit')) return;
     if (!batchAssignee) return;
     selectedIds.forEach(id => {
       dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { leaderId: batchAssignee } } });
@@ -205,20 +202,21 @@ export default function Goals() {
     setShowTemplateDropdown(false);
   }
 
-  const selectClass = "border border-border rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary/20";
+  const TIME_LABELS: Record<string, string> = { all: '时间', today: '今天', this_week: '本周', this_month: '本月', this_quarter: '本季度' };
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-fade-in">
+    <div className={cn('h-full animate-fade-in transition-all duration-300', detailItem ? 'flex' : 'flex flex-col p-4 md:p-6 space-y-6')}>
+      <div className={cn(detailItem ? 'flex-1 min-w-0 overflow-y-auto p-4 md:p-6 space-y-6' : '')}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold">目标管理</h2>
+          <h1 className="text-xl font-bold">目标管理</h1>
           <p className="text-sm text-muted-foreground mt-0.5">管理团队目标，确保业务方向一致性</p>
         </div>
         <div className="flex items-center gap-2">
           {batchMode && selectedIds.size > 0 && (
             <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 mr-2">
               <span className="text-xs font-medium">已选 {selectedIds.size} 项</span>
-               <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (!can('delete_goals')) return; handleBatchDelete(); }}>
+               <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (!can('goals_delete')) return; handleBatchDelete(); }}>
                  <Trash2 size={12} /> 删除
                </button>
               <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
@@ -238,65 +236,33 @@ export default function Goals() {
               <button className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground" onClick={() => setSelectedIds(new Set())}>清空</button>
             </div>
           )}
-          <button onClick={() => { setBatchMode(!batchMode); setSelectedIds(new Set()); setBatchStatus(''); setBatchAssignee(''); }} className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}>
-            <Edit2 size={14} />
+          <button onClick={() => { setBatchMode(!batchMode); setSelectedIds(new Set()); setBatchStatus(''); setBatchAssignee(''); }} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted'}`}>
+            <Check size={14} />
             <span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span>
           </button>
           <button onClick={() => setShowCreateDialog(true)} className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
             <Plus size={16} /> 新建目标
           </button>
+          <button onClick={() => setShowAIFlow(true)} className="inline-flex items-center gap-2 border border-primary/30 bg-primary/5 text-primary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/10 transition-colors">
+            <Sparkles size={16} /> AI 拆解
+          </button>
         </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
-          {viewTabs.map(tab => {
-            const Icon = tab.icon;
-            const active = viewMode === tab.value;
-            return (
-              <button key={tab.value} onClick={() => setViewMode(tab.value)} className={`flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${active ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                <Icon size={14} />
-                <span className="hidden sm:inline">{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        <ViewModeSwitch items={viewTabs.map(t => ({ value: t.value, label: t.label, icon: t.icon }))} value={viewMode} onChange={v => setViewMode(v as ViewMode)} />
       </div>
 
-      <div className="bg-white rounded-xl border p-2.5 md:p-3 flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap py-2">
         <Filter size={14} className="text-muted-foreground flex-shrink-0" />
-        <div className="relative flex-1 min-w-[160px] max-w-[260px]"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><input data-search-input type="text" placeholder="搜索..." value={searchText} onChange={e => setSearchText(e.target.value)} className="w-full pl-8 pr-3 py-1.5 text-xs border border-input rounded-lg bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary/20" /></div>
+        <div className="relative flex-1 min-w-[140px] max-w-[220px]"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><input data-search-input type="text" placeholder="搜索..." value={searchText} onChange={e => setSearchText(e.target.value)} className="w-full pl-8 pr-3 py-1 text-xs border border-input rounded-full bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary/20" /></div>
         <MultiSelectFilter label="状态" options={[{value:'todo',label:'待办'},{value:'in_progress',label:'进行中'},{value:'done',label:'已完成'},{value:'blocked',label:'已阻塞'}]} selected={selectedStatuses} onToggle={v => setSelectedStatuses(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedStatuses(new Set())} className="!text-xs !px-2 !py-1 !min-w-0" />
-        <MultiSelectFilter label="紧急程度" options={[{value:'urgent',label:'紧急'},{value:'high',label:'高'},{value:'medium',label:'中'},{value:'low',label:'低'}]} selected={selectedPriorities} onToggle={v => setSelectedPriorities(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedPriorities(new Set())} className={selectClass} />
-        <MultiSelectFilter label="重要程度" options={[{value:'S',label:'S级'},{value:'A',label:'A级'},{value:'B',label:'B级'},{value:'C',label:'C级'}]} selected={selectedLevels} onToggle={v => setSelectedLevels(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedLevels(new Set())} className={selectClass} />
-        <MultiSelectFilter label="分类" options={state.categories.map(c => ({value: c.name, label: c.name}))} selected={selectedCategories} onToggle={v => setSelectedCategories(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedCategories(new Set())} className={selectClass} />
-        <MultiSelectFilter label="标签" options={tags.map(t => ({value: t.id, label: t.name}))} selected={selectedTags} onToggle={v => setSelectedTags(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedTags(new Set())} className={selectClass} />
-        <div className="relative">
-          <button onClick={() => setShowPersonPicker(!showPersonPicker)} className="text-xs px-2 py-1 rounded-md bg-muted/50 text-muted-foreground hover:text-foreground border border-border flex items-center gap-1">
-            人员筛选 ({selectedMembers.size || '全部'}) <ChevronDown size={12} />
-          </button>
-          {showPersonPicker && (
-            <div className="absolute z-20 bg-white border rounded-lg shadow-lg p-2 max-h-48 overflow-y-auto min-w-[160px]">
-              <label className="flex items-center gap-2 py-0.5 cursor-pointer text-xs">
-                <input type="checkbox" checked={selectedMembers.size === 0} onChange={() => setSelectedMembers(new Set())} />
-                全部人员
-              </label>
-              {activeMembers.map(m => (
-                <label key={m.id} className="flex items-center gap-2 py-0.5 cursor-pointer text-xs">
-                  <input type="checkbox" checked={selectedMembers.has(m.id)} onChange={toggleMember(m.id)} />
-                  {m.name}
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        <select value={timeRange} onChange={e => setTimeRange(e.target.value)} className={selectClass}>
-          <option value="all">全部时间</option>
-          <option value="today">今天</option>
-          <option value="this_week">本周</option>
-          <option value="this_month">本月</option>
-          <option value="this_quarter">本季度</option>
-        </select>
+        <MultiSelectFilter label="紧急程度" options={[{value:'urgent',label:'紧急'},{value:'high',label:'高'},{value:'medium',label:'中'},{value:'low',label:'低'}]} selected={selectedPriorities} onToggle={v => setSelectedPriorities(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedPriorities(new Set())} />
+        <MultiSelectFilter label="重要程度" options={[{value:'S',label:'S级'},{value:'A',label:'A级'},{value:'B',label:'B级'},{value:'C',label:'C级'}]} selected={selectedLevels} onToggle={v => setSelectedLevels(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedLevels(new Set())} />
+        <MultiSelectFilter label="分类" options={state.categories.map(c => ({value: c.name, label: c.name}))} selected={selectedCategories} onToggle={v => setSelectedCategories(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedCategories(new Set())} />
+        <MultiSelectFilter label="标签" options={tags.map(t => ({value: t.id, label: t.name}))} selected={selectedTags} onToggle={v => setSelectedTags(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedTags(new Set())} />
+        <FilterChipSelect label="人员" options={activeMembers.map(m => ({value: m.id, label: m.name}))} selected={selectedMembers} onSelect={v => setSelectedMembers(new Set(v as string[]))} onClear={() => setSelectedMembers(new Set())} multiple />
+        <FilterChipSelect label={timeRange === 'all' ? '时间' : TIME_LABELS[timeRange] || '时间'} options={[{value:'all',label:'全部时间'},{value:'today',label:'今天'},{value:'this_week',label:'本周'},{value:'this_month',label:'本月'},{value:'this_quarter',label:'本季度'}]} selected={timeRange} onSelect={v => setTimeRange(v as string)} onClear={() => setTimeRange('all')} />
         {activeFilterCount > 0 && (
           <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1"><X size={12} /> 清除 ({activeFilterCount})</button>
         )}
@@ -330,87 +296,10 @@ export default function Goals() {
         </div>
       )}
 
-      {viewMode === 'table' && (
-        <div>
-          {filteredGoals.length > 0 ? (
-            <GoalTableView goals={filteredGoals} members={state.members} onOpenDetail={id => setDetailItem({ type: 'goal', id })} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
-          ) : (
-            <div className="bg-white rounded-xl border p-12 text-center">
-              <Target size={40} className="mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-muted-foreground">{emptyMessage}</p>
-            </div>
-          )}
-        </div>
-      )}
-
       {viewMode === 'matrix' && (
         <div>
           {filteredGoals.length > 0 ? (
             <GoalMatrixView goals={filteredGoals} members={state.members} onOpenDetail={id => setDetailItem({ type: 'goal', id })} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
-          ) : (
-            <div className="bg-white rounded-xl border p-12 text-center">
-              <Target size={40} className="mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-muted-foreground">{emptyMessage}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {viewMode === 'timeline' && (
-        <div>
-          {filteredGoals.length > 0 ? (
-            <GoalTimelineView goals={filteredGoals} members={state.members} onOpenDetail={id => setDetailItem({ type: 'goal', id })} commentCounts={commentCounts} />
-          ) : (
-            <div className="bg-white rounded-xl border p-12 text-center">
-              <Target size={40} className="mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-muted-foreground">{emptyMessage}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {viewMode === 'kanban' && (
-        <div>
-          {filteredGoals.length > 0 ? (
-            <div className="space-y-3">
-              <div className="overflow-x-auto -mx-4 px-4 pb-2"><div className="flex gap-4 min-w-max">
-                {[
-                  { key: 'todo' as const, label: '待办', color: 'border-t-gray-400' },
-                  { key: 'in_progress' as const, label: '进行中', color: 'border-t-blue-500' },
-                  { key: 'done' as const, label: '已完成', color: 'border-t-green-500' },
-                  { key: 'blocked' as const, label: '已阻塞', color: 'border-t-amber-400' },
-                ].map(col => {
-                  const colGoals = goalsByStatus[col.key] || [];
-                  const handleGoalDrop = (e: React.DragEvent) => { e.preventDefault(); e.currentTarget.classList.remove('bg-blue-50'); const goalId = e.dataTransfer.getData('text/plain'); if (!goalId || !can('edit_goals') || !col.key) return; dispatch({ type: 'UPDATE_GOAL', payload: { id: goalId, updates: { status: col.key as GoalStatus } } }); };
-                  return (
-                    <div key={col.key} className={`w-[280px] sm:w-[320px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={e => { e.preventDefault(); }} onDrop={handleGoalDrop}>
-                      <div className={`flex items-center gap-2 px-4 pb-2 border-b-2 mx-3 mb-3 ${col.color}`}><span className="font-semibold text-sm">{col.label}</span><span className="text-xs text-muted-foreground ml-auto">{colGoals.length}</span></div>
-                      <div className="px-3 pb-3 space-y-2 max-h-[60vh] overflow-y-auto">
-                        {colGoals.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">拖入目标</p>}
-                        {colGoals.map(goal => {
-                          const leaderName = getMemberName(goal.leaderId);
-                          return (
-                            <div key={goal.id} className="bg-white rounded-lg border border-border shadow-sm p-3 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing" draggable="true" onDragStart={e => { e.dataTransfer.setData('text/plain', goal.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => setDetailItem({ type: 'goal', id: goal.id })}>
-                              {batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(goal.id)} className="rounded" onChange={() => toggleSelect(goal.id)} /></div>}
-                              <div className="font-medium text-sm mb-1.5 truncate">{goal.title}</div>
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${bizColors[goal.priority]}`}>{bizLabels[goal.priority]}</span>
-                                <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${goal.progress}%` }} /></div>
-                                <span className="text-[10px] font-medium text-muted-foreground">{goal.progress}%</span>
-                              </div>
-                              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span>{goal.endDate}</span>
-                                {leaderName && leaderName !== '未知' && <span>{leaderName}</span>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div></div>
-            </div>
           ) : (
             <div className="bg-white rounded-xl border p-12 text-center">
               <Target size={40} className="mx-auto text-muted-foreground/30 mb-3" />
@@ -533,11 +422,15 @@ export default function Goals() {
               <button className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-muted transition-colors" onClick={() => { setShowCreateDialog(false); setShowTemplateDropdown(false); }}>取消</button>
               <button className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors" onClick={handleCreateGoal}>创建目标</button>
             </div>
-          </div>
-        </div>
-      )}
+           </div>
+         </div>
+       )}
 
-      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
+      {viewMode === 'okr' && <OKRAlignmentView />}
+      </div>
+      {detailItem && <div className="flex-shrink-0 border-l border-border bg-white" style={{ width: 480 }}><ItemDetailPanel key={detailItem.id} inline isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} /></div>}
+
+      {showAIFlow && <AIItemFlow onClose={() => setShowAIFlow(false)} />}
     </div>
   );
 }

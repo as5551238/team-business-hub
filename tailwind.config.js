@@ -16,6 +16,16 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          50: '#EFF6FF',
+          100: '#DBEAFE',
+          200: '#BFDBFE',
+          300: '#93C5FD',
+          400: '#60A5FA',
+          500: '#3B82F6',
+          600: '#2563EB',
+          700: '#1D4ED8',
+          800: '#1E40AF',
+          900: '#1E3A8A',
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -24,6 +34,28 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+          light: '#F0FDF4',
+          dark: '#15803D',
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+          light: '#FFFBEB',
+          dark: '#D97706',
+        },
+        danger: {
+          DEFAULT: '#DC2626',
+          light: '#FEF2F2',
+          dark: '#B91C1C',
+        },
+        neutral: {
+          DEFAULT: '#6B7280',
+          light: '#F9FAFB',
+          dark: '#374151',
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -46,14 +78,16 @@ export default {
           foreground: "hsl(var(--sidebar-foreground))",
           accent: "hsl(var(--sidebar-accent))",
         },
-        success: {
-          DEFAULT: "hsl(var(--success))",
-          foreground: "hsl(var(--success-foreground))",
-        },
-        warning: {
-          DEFAULT: "hsl(var(--warning))",
-          foreground: "hsl(var(--warning-foreground))",
-        },
+      },
+      spacing: {
+        '1': '4px',
+        '2': '8px',
+        '3': '12px',
+        '4': '16px',
+        '6': '24px',
+        '8': '32px',
+        '12': '48px',
+        '16': '64px',
       },
       borderRadius: {
         lg: "var(--radius)",

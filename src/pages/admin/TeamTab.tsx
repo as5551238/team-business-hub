@@ -1,9 +1,9 @@
 // TeamTab 组件 - 团队管理
 import { useState, useMemo } from 'react';
 import { useStore, usePermissions } from '@/store/useStore';
-import { Users, Plus, Shield, Briefcase, Mail, Calendar, Trash2, ChevronDown, ChevronUp, Edit2, Save, X, Phone, MessageCircle, User } from 'lucide-react';
-import type { MemberRole } from '@/types';
-import { inputCls, roleLabels, roleColors, permissionDesc, allPermissions, permLabels, getRoleDefaultPermission, memberToEditForm, type EditForm } from './constants';
+import { Users, Plus, Shield, Briefcase, Mail, Calendar, Trash2, ChevronDown, ChevronUp, Edit2, Save, X, Phone, MessageCircle, User, Copy, RefreshCw, Check } from 'lucide-react';
+import type { MemberRole, Permission, PermissionModule } from '@/types';
+import { inputCls, roleLabels, roleColors, permissionDesc, allPermissions, getRoleDefaultPermission, memberToEditForm, type EditForm } from './constants';
 
 export function TeamTab() {
   const { state, dispatch } = useStore();
@@ -14,6 +14,32 @@ export function TeamTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({ name: '', nickname: '', wechatId: '', phone: '', email: '', role: 'member', department: '', status: 'active' });
   const [addForm, setAddForm] = useState({ name: '', nickname: '', wechatId: '', phone: '', email: '', role: 'member' as MemberRole, department: '' });
+  const [copied, setCopied] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+
+  const currentTeam = state.teams.find(t => t.id === state.currentTeamId);
+
+  async function copyInviteCode() {
+    if (!currentTeam?.inviteCode) return;
+    try { await navigator.clipboard.writeText(currentTeam.inviteCode); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
+  }
+
+  async function regenerateInviteCode() {
+    if (!currentTeam || !isAdmin) return;
+    if (!confirm('确定要重新生成邀请码？旧邀请码将失效。')) return;
+    setRegenerating(true);
+    try {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const newCode = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      const { getSupabaseClient } = await import('@/supabase/client');
+      const sb = getSupabaseClient();
+      if (sb) {
+        await sb.from('teams').update({ invite_code: newCode, updated_at: new Date().toISOString() }).eq('id', currentTeam.id);
+        dispatch({ type: 'MERGE_STATE', payload: { teams: state.teams.map(t => t.id === currentTeam.id ? { ...t, inviteCode: newCode } : t) } });
+      }
+    } catch (e) { console.error('Failed to regenerate invite code:', e); }
+    setRegenerating(false);
+  }
 
   const activeMembers = members.filter(m => m.status === 'active');
   const inactiveMembers = members.filter(m => m.status === 'inactive');
@@ -23,12 +49,12 @@ export function TeamTab() {
     const map = new Map<string, { total: number; done: number; active: number; rate: number; lead: number; support: number }>();
     for (const m of members) {
       const leadTasks = tasks.filter(t => t.leaderId === m.id);
-      const supportTasks = tasks.filter(t => (t.supporterIds || []).includes(m.id) && t.leaderId !== m.id);
+      const supportTasks = tasks.filter(t => (t.supporterIds ?? []).includes(m.id) && t.leaderId !== m.id);
       const all = [...leadTasks, ...supportTasks];
       const done = all.filter(t => t.status === 'done').length;
       const active = all.filter(t => t.status !== 'done' && t.status !== 'cancelled').length;
       const lead = projects.filter(p => p.leaderId === m.id && p.status !== 'done' && p.status !== 'cancelled').length;
-      const support = projects.filter(p => (p.supporterIds || []).includes(m.id) && p.leaderId !== m.id && p.status !== 'done' && p.status !== 'cancelled').length;
+      const support = projects.filter(p => (p.supporterIds ?? []).includes(m.id) && p.leaderId !== m.id && p.status !== 'done' && p.status !== 'cancelled').length;
       map.set(m.id, { total: all.length, done, active, rate: all.length > 0 ? Math.round((done / all.length) * 100) : 0, lead, support });
     }
     return map;
@@ -57,11 +83,14 @@ export function TeamTab() {
     setEditingId(null);
   }
 
+  const PERM_MOD_LABELS: Record<string, string> = { goals: '目标', projects: '项目', tasks: '任务', team: '团队', settings: '设置', export: '导出', knowledge: '知识库' };
+  const ACTION_LABELS: Record<string, string> = { view: '查看', create: '创建', edit: '编辑', delete: '删除', manage: '管理' };
+
   function renderMemberCard(member: any, isActive: boolean) {
     const stats = getMemberTaskStats(member.id);
     const projCount = getMemberProjectCount(member.id);
     const isSelected = selectedMember === member.id;
-    const canEdit = currentUser?.id === member.id || hasPermission('manage_team');
+    const canEdit = currentUser?.id === member.id || hasPermission('team_manage');
     const isEditing = editingId === member.id;
     return (
       <div key={member.id} className={`hover:bg-muted/30 transition-colors ${!isActive ? 'opacity-60' : ''}`}>
@@ -133,21 +162,40 @@ export function TeamTab() {
                 </div>
                 <div><div className="text-xs font-medium text-muted-foreground mb-1">权限说明</div><span className={`text-xs px-1.5 py-0.5 rounded ${roleColors[member.role]}`}><Shield size={10} className="inline mr-1" />{permissionDesc[member.role]}</span></div>
                 {canEdit && <button onClick={() => startEditing(member)} className="text-xs px-3 py-1.5 rounded-lg border border-primary text-primary hover:bg-primary/5 font-medium flex items-center gap-1"><Edit2 size={12} /> 编辑信息</button>}
-                {hasPermission('manage_team') && <button onClick={e => { e.stopPropagation(); handleDeleteMember(member.id, member.name); }} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1"><Trash2 size={12} /> 删除成员</button>}
+                {hasPermission('team_manage') && <button onClick={e => { e.stopPropagation(); handleDeleteMember(member.id, member.name); }} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1"><Trash2 size={12} /> 删除成员</button>}
               </div>
             )}
             {isAdmin && selectedMember === member.id && member.role !== 'admin' && (
               <div className="pt-3 border-t border-border">
-                <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1"><Shield size={12} /> 权限管理</h4>
-                <div className="space-y-1">
-                  {allPermissions.map(perm => (
-                    <label key={perm} className="flex items-center gap-2 py-0.5 cursor-pointer text-xs">
-                      <input type="checkbox" className="rounded" checked={member.permissions?.length ? (member.permissions || []).includes(perm) : getRoleDefaultPermission(member.role, perm)} onChange={e => { e.stopPropagation(); const effectivePerms = member.permissions?.length ? [...member.permissions] : allPermissions.filter(p => getRoleDefaultPermission(member.role, p)); const newP = effectivePerms.includes(perm) ? effectivePerms.filter((p: any) => p !== perm) : [...effectivePerms, perm]; dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: newP } } }); }} />
-                      <span>{permLabels[perm] || perm}</span>
-                    </label>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-semibold text-muted-foreground flex items-center gap-1"><Shield size={12} /> 权限管理</h4>
+                  <button onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: [] } } }); }} className="text-[10px] text-muted-foreground hover:text-foreground">恢复默认</button>
                 </div>
-                <button onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: [] } } }); }} className="mt-1 text-[10px] text-muted-foreground hover:text-foreground">恢复为角色默认权限</button>
+                {(['goals', 'projects', 'tasks', 'team', 'settings', 'export', 'knowledge'] as PermissionModule[]).map(mod => {
+                  const modPerms = (allPermissions as readonly string[]).filter(p => p.startsWith(mod + '_'));
+                  const effectivePerms = member.permissions?.length ? member.permissions : (allPermissions as readonly string[]).filter(p => getRoleDefaultPermission(member.role, p));
+                  const allChecked = modPerms.every(p => effectivePerms.includes(p as Permission));
+                  const noneChecked = modPerms.every(p => !effectivePerms.includes(p as Permission));
+                  return (
+                    <div key={mod} className="mb-2 border border-border/50 rounded-lg p-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <input type="checkbox" className="rounded" ref={el => { if (el) el.indeterminate = !allChecked && !noneChecked; }} checked={allChecked} onChange={e => { e.stopPropagation(); const current = member.permissions?.length ? [...member.permissions] : (allPermissions as readonly string[]).filter(p => getRoleDefaultPermission(member.role, p)); const newP = allChecked ? current.filter((p: any) => !modPerms.includes(p)) : [...new Set([...current, ...modPerms])]; dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: newP } } }); }} />
+                        <span className="text-xs font-semibold">{PERM_MOD_LABELS[mod] || mod}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 ml-5">
+                        {modPerms.map(perm => {
+                          const action = perm.split('_')[1];
+                          return (
+                            <label key={perm} className="flex items-center gap-1 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                              <input type="checkbox" className="rounded" checked={effectivePerms.includes(perm as Permission)} onChange={e => { e.stopPropagation(); const cur = member.permissions?.length ? [...member.permissions] : (allPermissions as readonly string[]).filter(p => getRoleDefaultPermission(member.role, p)); const newP = cur.includes(perm as Permission) ? cur.filter((p: any) => p !== perm) : [...cur, perm]; dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: newP } } }); }} />
+                              <span>{ACTION_LABELS[action] || action}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -162,6 +210,29 @@ export function TeamTab() {
         <div><h2 className="text-lg font-bold">团队管理</h2><p className="text-sm text-muted-foreground mt-0.5">管理团队成员与协作分工</p></div>
         {isAdmin && <button onClick={() => setShowAddDialog(true)} className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90"><Plus size={16} /> 添加成员</button>}
       </div>
+
+      {isAdmin && currentTeam && (
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><Shield size={18} className="text-primary" /></div>
+              <div>
+                <div className="text-sm font-semibold">{currentTeam.name} - 邀请码</div>
+                <div className="flex items-center gap-2 mt-1">
+                  <code className="text-lg font-mono font-bold tracking-widest text-primary bg-white px-3 py-0.5 rounded border border-primary/20">{currentTeam.inviteCode || '未生成'}</code>
+                  <button onClick={copyInviteCode} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="复制">
+                    {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} className="text-muted-foreground" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button onClick={regenerateInviteCode} disabled={regenerating} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50">
+              <RefreshCw size={12} className={regenerating ? 'animate-spin' : ''} /> 重新生成
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm"><p className="text-sm text-muted-foreground">团队总人数</p><p className="text-2xl font-bold mt-1">{members.length}</p></div>
         <div className="bg-white rounded-xl p-5 border border-border shadow-sm"><p className="text-sm text-muted-foreground">活跃成员</p><p className="text-2xl font-bold mt-1 text-green-600">{activeMembers.length}</p></div>

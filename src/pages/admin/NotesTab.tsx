@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore, useNotes } from '@/store/useStore';
 import {
-  Plus, Trash2, Tag, Search, Pin, PinOff, Palette, StickyNote
+  Plus, Trash2, Tag, Search, Pin, PinOff, Palette, StickyNote, Eye, Edit3
 } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { NOTE_COLORS, FOLDERS } from './constants';
+import { renderMarkdown } from './MarkdownDocTab';
 
 export function NotesTab() {
   const { state } = useStore();
@@ -17,6 +19,7 @@ export function NotesTab() {
   const [editingContent, setEditingContent] = useState('');
   const [editingColor, setEditingColor] = useState(NOTE_COLORS[0]);
   const [editingCategory, setEditingCategory] = useState('');
+  const [markdownPreview, setMarkdownPreview] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const noteCategories = useMemo(() => { const cats = new Set<string>(); notes.forEach(n => { if (n.category) cats.add(n.category); }); return Array.from(cats); }, [notes]);
@@ -73,6 +76,7 @@ export function NotesTab() {
               <>
                 <div className="flex items-center gap-2 p-3 border-b border-border">
                   <input className="flex-1 text-base font-semibold border-none outline-none bg-transparent" placeholder="笔记标题" value={editingTitle} onChange={e => { setEditingTitle(e.target.value); handleNoteSave(); }} onBlur={handleNoteSave} />
+                  <button className={`p-1.5 rounded-lg hover:bg-muted ${markdownPreview ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`} onClick={() => setMarkdownPreview(!markdownPreview)} title={markdownPreview ? '编辑模式' : 'Markdown预览'}>{markdownPreview ? <Edit3 size={16} /> : <Eye size={16} />}</button>
                   <button className="p-1.5 rounded-lg hover:bg-muted" onClick={() => togglePin(selectedNote.id, selectedNote.isPinned)}>{selectedNote.isPinned ? <PinOff size={16} className="text-primary" /> : <Pin size={16} className="text-muted-foreground" />}</button>
                   <button className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600" onClick={() => handleDeleteNote(selectedNote.id, selectedNote.title)}><Trash2 size={16} /></button>
                 </div>
@@ -80,7 +84,11 @@ export function NotesTab() {
                   <Palette size={12} className="text-muted-foreground" />{NOTE_COLORS.map(c => <button key={c} className="w-5 h-5 rounded-full border transition-transform hover:scale-110" style={{ backgroundColor: c, borderColor: editingColor === c ? '#6366f1' : '#e5e7eb' }} onClick={() => { setEditingColor(c); updateNote(selectedNote.id, { color: c }); }} />)}<span className="mx-1 text-border">|</span>
                   <Tag size={12} className="text-muted-foreground flex-shrink-0" /><input className="text-xs border border-border rounded px-1.5 py-0.5 w-20 focus:outline-none focus:ring-1 focus:ring-primary/20" placeholder="分类" value={editingCategory} onChange={e => { setEditingCategory(e.target.value); handleNoteSave(); }} onBlur={handleNoteSave} />
                 </div>
-                <textarea className="flex-1 w-full p-4 text-sm border-none outline-none resize-none bg-transparent" placeholder="开始书写..." value={editingContent} onChange={e => { setEditingContent(e.target.value); handleNoteSave(); }} onBlur={handleNoteSave} />
+                {markdownPreview ? (
+                  <div className="flex-1 w-full p-4 text-sm overflow-y-auto prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: renderMarkdown(editingContent) }} />
+                ) : (
+                  <textarea className="flex-1 w-full p-4 text-sm border-none outline-none resize-none bg-transparent" placeholder="开始书写... (支持Markdown)" value={editingContent} onChange={e => { setEditingContent(e.target.value); handleNoteSave(); }} onBlur={handleNoteSave} />
+                )}
               </>
             ) : <div className="flex-1 flex items-center justify-center text-muted-foreground"><div className="text-center"><StickyNote size={48} className="mx-auto mb-2 opacity-30" /><p className="text-sm">选择或新建一条笔记</p></div></div>}
           </div>

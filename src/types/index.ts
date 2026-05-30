@@ -1,15 +1,23 @@
-// ==================== 团队业务中台 - 类型定义 V3 ====================
+// ==================== 团队业务中台 - 类型定义 V4 (Multi-tenant) ====================
 
 export type MemberRole = 'admin' | 'manager' | 'leader' | 'member';
 export type MemberStatus = 'active' | 'inactive';
 export type GoalStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
+export type GoalApprovalStatus = 'draft' | 'pending' | 'approved' | 'rejected';
 export type GoalType = 'okr' | 'kpi' | 'milestone';
+export type PlanTier = 'free' | 'pro' | 'enterprise';
+export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing';
 export type ProjectStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
 export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type ReviewPeriod = 'day' | 'week' | 'month' | 'quarter' | 'year';
 export type RepeatCycle = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
 export type ItemType = 'goal' | 'project' | 'task';
+
+// ==================== 模块权限 (V4 矩阵化) ====================
+export type PermissionModule = 'goals' | 'projects' | 'tasks' | 'team' | 'settings' | 'export' | 'knowledge';
+export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'manage';
+export type Permission = `${PermissionModule}_${PermissionAction}`;
 
 // ==================== 附件 ====================
 export interface Attachment {
@@ -32,7 +40,10 @@ export interface TrackingRecord {
   createdAt: string;
 }
 
-// ==================== 关键结果（支持多项选择） ====================
+// ==================== 关键结果（OKR+KPI 双轨融合） ====================
+export type KrTrack = 'okr' | 'kpi' | 'both';
+export type KpiStatus = 'red' | 'yellow' | 'green';
+
 export interface KeyResult {
   id: string;
   title: string;
@@ -41,6 +52,27 @@ export interface KeyResult {
   unit: string;
   selected: boolean;
   confidence?: number;
+  // --- KPI 双轨扩展（可选，向后兼容）---
+  track?: KrTrack;
+  weight?: number;
+  kpiBaseline?: number;
+  kpiTarget?: number;
+  kpiScore?: number;
+}
+
+export interface DualTrackSummary {
+  okr: {
+    progress: number;
+    avgConfidence: number;
+    stretchRate: number | null;
+  };
+  kpi: {
+    weightedScore: number;
+    overallStatus: KpiStatus;
+    redCount: number;
+    yellowCount: number;
+    greenCount: number;
+  };
 }
 
 // ==================== 成员 ====================
@@ -57,6 +89,7 @@ export interface Member {
   status: MemberStatus;
   joinDate: string;
   permissions: Permission[];
+  teamId: string;
 }
 
 // ==================== 目标 ====================
@@ -66,6 +99,7 @@ export interface Goal {
   description: string;
   type: GoalType;
   status: GoalStatus;
+  approvalStatus?: GoalApprovalStatus;
   priority: TaskPriority;
   parentId: string | null;
   level: number;
@@ -81,10 +115,12 @@ export interface Goal {
   trackingRecords: TrackingRecord[];
   repeatCycle: RepeatCycle;
   progress: number;
+  dualTrack?: DualTrackSummary;
   canvasX?: number;
   canvasY?: number;
   discussionThreadId: string | null;
   summary: string;
+  teamId: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,6 +149,7 @@ export interface Project {
   canvasY?: number;
   discussionThreadId: string | null;
   summary: string;
+  teamId: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -173,6 +210,8 @@ export interface Task {
   repeatCycle: RepeatCycle;
   blockedBy: string[]; // IDs of prerequisite tasks that must be completed first
   sprintId: string | null; // ID of the associated sprint
+  krId?: string; // 关联的关键结果ID（任务完成时自动更新该KR的currentValue）
+  teamId: string;
   canvasX?: number;
   canvasY?: number;
   discussionThreadId: string | null;
@@ -232,7 +271,30 @@ export interface Tag {
   createdAt: string;
 }
 
-export type Permission = 'view_goals' | 'edit_goals' | 'delete_goals' | 'view_projects' | 'edit_projects' | 'delete_projects' | 'view_tasks' | 'edit_tasks' | 'delete_tasks' | 'manage_team' | 'manage_settings' | 'export_data' | 'delete_own_content';
+// (Permission defined above as template literal type)
+
+// ==================== 团队 ====================
+export interface Team {
+  id: string;
+  name: string;
+  description: string;
+  avatar: string;
+  inviteCode: string;
+  ownerId: string;
+  settings: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==================== 团队成员关系 ====================
+export interface TeamMember {
+  id: string;
+  teamId: string;
+  memberId: string;
+  role: MemberRole;
+  permissions: Permission[];
+  joinedAt: string;
+}
 
 // ==================== 自定义分类 ====================
 export interface Category {
@@ -288,6 +350,19 @@ export interface Bookmark {
   createdAt: string;
 }
 
+// ==================== 个人知识库 ====================
+export interface Knowledge {
+  id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  memberId: string;
+  relatedItems: { itemId: string; itemType: 'goal' | 'project' | 'task' }[];
+  color?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ==================== 记事本 ====================
 export interface Note {
   id: string;
@@ -309,10 +384,13 @@ export interface Note {
 // ==================== 状态流转规则 ====================
 export interface StatusFlowRule {
   id: string;
+  itemType: ItemType;
   fromStatus: string;
   toStatus: string;
   allowedRoles: MemberRole[]; // empty = all roles
   autoActions?: StatusFlowAutoAction[];
+  enabled?: boolean;
+  name?: string;
 }
 
 export interface StatusFlowAutoAction {
@@ -407,6 +485,7 @@ export interface BackupData {
   templates: Template[];
   scheduleEvents: ScheduleEvent[];
   notes: Note[];
+  knowledge: Knowledge[];
   reviews: ReviewEntry[];
   comments: Comment[];
   bookmarks: Bookmark[];
@@ -414,6 +493,51 @@ export interface BackupData {
   statusFlowRules: StatusFlowRule[];
   automationRules: AutomationRule[];
   sprints: Sprint[];
+  batchOperations?: BatchOperation[];
+  teams?: Team[];
+  teamMembers?: TeamMember[];
+  subscriptions?: Subscription[];
+  approvalAudits?: ApprovalAudit[];
+}
+
+// ==================== 定价与订阅 ====================
+export interface PlanLimit {
+  maxMembers: number;
+  maxAutomations: number;
+  cloudAiPerDay: number;
+  agentAutomation: boolean;
+  approvalFlow: boolean;
+  advancedPermissions: boolean;
+  agentMarketplace: boolean;
+}
+
+export const PLAN_LIMITS: Record<PlanTier, PlanLimit> = {
+  free: { maxMembers: 5, maxAutomations: 5, cloudAiPerDay: 10, agentAutomation: false, approvalFlow: false, advancedPermissions: false, agentMarketplace: false },
+  pro: { maxMembers: 50, maxAutomations: 100, cloudAiPerDay: 1000, agentAutomation: true, approvalFlow: true, advancedPermissions: true, agentMarketplace: false },
+  enterprise: { maxMembers: 999, maxAutomations: 9999, cloudAiPerDay: 99999, agentAutomation: true, approvalFlow: true, advancedPermissions: true, agentMarketplace: true },
+};
+
+export interface Subscription {
+  id: string;
+  teamId: string;
+  tier: PlanTier;
+  status: SubscriptionStatus;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  trialEndsAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApprovalAudit {
+  id: string;
+  goalId: string;
+  action: 'submit' | 'approve' | 'reject' | 'recall';
+  actorId: string;
+  comment: string;
+  createdAt: string;
 }
 
 // ==================== 应用状态 ====================
@@ -429,6 +553,7 @@ export interface AppState {
   categories: Category[];
   templates: Template[];
   scheduleEvents: ScheduleEvent[];
+  knowledge: Knowledge[];
   notes: Note[];
   savedViews: SavedView[];
   reviews: ReviewEntry[];
@@ -438,6 +563,11 @@ export interface AppState {
   statusFlowRules: StatusFlowRule[];
   automationRules: AutomationRule[];
   sprints: Sprint[];
+  teams: Team[];
+  teamMembers: TeamMember[];
+  subscriptions: Subscription[];
+  approvalAudits: ApprovalAudit[];
   currentUser: Member | null;
   viewingMemberId: string | null;
+  currentTeamId: string | null;
 }

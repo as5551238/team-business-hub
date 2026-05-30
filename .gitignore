@@ -27,3 +27,8 @@ dist-ssr
 .parcel-cache/
 bundle.html
 index.html''
+
+# Environment variables
+.env
+.env.*
+.env.local

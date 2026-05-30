@@ -26,18 +26,42 @@ export function AutomationTab() {
   const { state, dispatch } = useStore();
   const rules = state.automationRules || [];
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<{ name: string; enabled: boolean; itemType: ItemType; trigger: AutomationTrigger; conditionField: string; conditionOperator: string; conditionValue: string; actions: { type: AutomationAction; config: Record<string, string> }[] }>({
     name: '', enabled: true, itemType: 'task', trigger: 'status_change', conditionField: 'status', conditionOperator: 'eq', conditionValue: 'done', actions: [],
   });
 
-  function handleAdd() {
-    dispatch({ type: 'ADD_AUTOMATION_RULE', payload: {
-      name: form.name, enabled: form.enabled, itemType: form.itemType, trigger: form.trigger,
-      condition: { field: form.conditionField, operator: form.conditionOperator as any, value: form.conditionValue },
-      actions: form.actions,
-    }});
-    setShowForm(false);
+  function resetForm() {
     setForm({ name: '', enabled: true, itemType: 'task', trigger: 'status_change', conditionField: 'status', conditionOperator: 'eq', conditionValue: 'done', actions: [] });
+    setEditingId(null);
+  }
+
+  function startEdit(rule: AutomationRule) {
+    setForm({
+      name: rule.name, enabled: rule.enabled, itemType: rule.itemType, trigger: rule.trigger,
+      conditionField: rule.condition.field, conditionOperator: rule.condition.operator, conditionValue: rule.condition.value,
+      actions: [...rule.actions],
+    });
+    setEditingId(rule.id);
+    setShowForm(true);
+  }
+
+  function handleSave() {
+    if (editingId) {
+      dispatch({ type: 'UPDATE_AUTOMATION_RULE', payload: { id: editingId, updates: {
+        name: form.name, enabled: form.enabled, itemType: form.itemType, trigger: form.trigger,
+        condition: { field: form.conditionField, operator: form.conditionOperator as any, value: form.conditionValue },
+        actions: form.actions,
+      }}});
+    } else {
+      dispatch({ type: 'ADD_AUTOMATION_RULE', payload: {
+        name: form.name, enabled: form.enabled, itemType: form.itemType, trigger: form.trigger,
+        condition: { field: form.conditionField, operator: form.conditionOperator as any, value: form.conditionValue },
+        actions: form.actions,
+      }});
+    }
+    setShowForm(false);
+    resetForm();
   }
 
   function toggleEnabled(id: string, enabled: boolean) {
@@ -85,6 +109,7 @@ export function AutomationTab() {
             <button onClick={() => toggleEnabled(rule.id, rule.enabled)} className="cursor-pointer">
               {rule.enabled ? <ToggleRight size={20} className="text-primary" /> : <ToggleLeft size={20} className="text-gray-400" />}
             </button>
+            <button onClick={() => startEdit(rule)} className="text-muted-foreground hover:text-primary cursor-pointer"><Edit2 size={14} /></button>
             <button onClick={() => dispatch({ type: 'DELETE_AUTOMATION_RULE', payload: rule.id })} className="text-muted-foreground hover:text-destructive cursor-pointer"><Trash2 size={14} /></button>
           </div>
         ))}
@@ -92,7 +117,7 @@ export function AutomationTab() {
 
       {showForm && (
         <div className="border border-border rounded-lg p-4 space-y-3 bg-white">
-          <h4 className="text-xs font-semibold">新建自动化规则</h4>
+          <h4 className="text-xs font-semibold">{editingId ? '编辑自动化规则' : '新建自动化规则'}</h4>
           <div>
             <label className="text-xs text-muted-foreground">规则名称</label>
             <input className="w-full border border-input rounded px-2 py-1 text-sm mt-1" placeholder="如：任务完成时通知" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
@@ -142,8 +167,8 @@ export function AutomationTab() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={handleAdd} disabled={!form.name.trim()} className="px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">添加</button>
-            <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs font-medium border border-border rounded-lg hover:bg-muted">取消</button>
+            <button onClick={handleSave} disabled={!form.name.trim()} className="px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">{editingId ? '保存' : '添加'}</button>
+            <button onClick={() => { setShowForm(false); resetForm(); }} className="px-3 py-1.5 text-xs font-medium border border-border rounded-lg hover:bg-muted">取消</button>
           </div>
         </div>
       )}

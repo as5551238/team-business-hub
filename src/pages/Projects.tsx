@@ -5,6 +5,7 @@ import type { Project, ProjectStatus, TaskPriority, Comment } from '@/types';
 import { Plus, FolderKanban, Search, Check, Users, Trash2, X, Filter, ChevronDown } from 'lucide-react';
 import { useDraftSave } from '@/hooks/useDraftSave';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
+import ViewModeSwitch from '@/components/ViewModeSwitch';
 import { viewTabs, statusOptions, priorityOptions, bpOptions, timeOptions, priorityFromBp } from './projects/constants';
 import type { ViewMode, BatchProps } from './projects/constants';
 import { ProjectTreeNode, ProjectListView, ProjectTableView, ProjectKanbanView, ProjectMatrixView, ProjectTimelineView } from './projects/views';
@@ -163,11 +164,7 @@ export default function Projects() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
-          {viewTabs.map(tab => { const Icon = tab.icon; const active = viewMode === tab.value; return <button key={tab.value} onClick={() => setViewMode(tab.value)} className={`flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${active ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}><Icon size={14} /><span className="hidden sm:inline">{tab.label}</span></button>; })}
-        </div>
-      </div>
+      <ViewModeSwitch items={viewTabs.map(t => ({ value: t.value, label: t.label, icon: t.icon }))} value={viewMode} onChange={v => setViewMode(v as ViewMode)} />
 
       <div className="bg-white rounded-xl border p-2.5 md:p-3 flex items-center gap-2 flex-wrap">
         <Filter size={14} className="text-muted-foreground flex-shrink-0" />

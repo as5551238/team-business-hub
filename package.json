@@ -6,25 +6,33 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@giszhc/xlsx": "^0.20.4",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-progress": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@supabase/supabase-js": "^2.104.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dompurify": "^3.4.5",
     "lucide-react": "^1.8.0",
+    "marked": "^18.0.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "recharts": "^3.8.1",
-    "tailwind-merge": "^3.5.0",
-    "xlsx": "^0.18.5"
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/dompurify": "^3.2.0",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -35,11 +43,23 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
+    "jsdom": "^25.0.1",
     "postcss": "^8.5.10",
     "tailwindcss": "3.4.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
-    "vite": "5.4.11"
+    "vite": "5.4.21",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^2.1.9"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion": ">=5.0.6",
+      "ws": ">=8.20.1"
+    },
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

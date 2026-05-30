@@ -1,15 +1,15 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { useStore, useMemberLookup, usePermissions } from '@/store/useStore';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useStore, usePermissions } from '@/store/useStore';
 import type { Goal, TaskPriority } from '@/types';
 import { useVirtualScroll } from '@/hooks/useVirtualScroll';
 import {
-  Target, TrendingUp, Calendar, MoreHorizontal, Edit2, Trash2,
-  FolderKanban, GripVertical, ChevronRight, Clock, CheckCircle2,
-  ListTodo, LayoutGrid, ArrowUpDown, MessageSquare
+  Target, Calendar, MoreHorizontal, Edit2, Trash2,
+  FolderKanban, GripVertical, ChevronRight, CheckCircle2,
+  MessageSquare
 } from 'lucide-react';
 import {
-  type ViewMode, statusLabels, statusColors, typeLabels, typeColors,
-  bizLabels, bizColors, progressColor, progressTextColor
+  statusLabels, statusColors, typeLabels, typeColors,
+  bizLabels, bizColors, progressColor
 } from './constants';
 
 export const GoalCard = React.memo(function GoalCard({ goal, members, projects, expanded, hasChildren, onToggle, tags, onOpenDetail, commentCount, batchMode, selected, onToggleSelect }: {
@@ -31,9 +31,9 @@ export const GoalCard = React.memo(function GoalCard({ goal, members, projects, 
   const [showMenu, setShowMenu] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const leader = members.find(m => m.id === goal.leaderId);
-  const supporters = [...new Set(goal.supporterIds || [])].map(id => members.find(m => m.id === id)).filter(Boolean) as typeof members;
+  const supporters = [...new Set(goal.supporterIds ?? [])].map(id => members.find(m => m.id === id)).filter(Boolean) as typeof members;
   const relatedProjects = projects.filter(p => p.goalId === goal.id);
-  const goalTags = tags.filter(t => (goal.tags || []).includes(t.id) || goal.description?.includes(t.name) || goal.title.includes(t.name));
+  const goalTags = tags.filter(t => (goal.tags ?? []).includes(t.id) || goal.description?.includes(t.name) || goal.title.includes(t.name));
 
   function handleDragStart(e: React.DragEvent) {
     e.dataTransfer.setData('text/plain', goal.id);
@@ -103,11 +103,11 @@ export const GoalCard = React.memo(function GoalCard({ goal, members, projects, 
               <div className="relative">
                 <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
                 <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border z-50 py-1">
-                  {can('edit_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setShowMenu(false); }}><Edit2 size={14} /> 编辑目标</button>}
-                  {can('edit_goals') && goal.status !== 'done' && (
+                  {can('goals_edit') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setShowMenu(false); }}><Edit2 size={14} /> 编辑目标</button>}
+                  {can('goals_edit') && goal.status !== 'done' && (
                     <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_GOAL', payload: { id: goal.id, updates: { status: 'done' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 标记完成</button>
                   )}
-                  {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此目标？')) return; dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除目标</button>}
+                  {can('goals_delete') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此目标？')) return; dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除目标</button>}
                 </div>
               </div>
             )}
@@ -118,6 +118,13 @@ export const GoalCard = React.memo(function GoalCard({ goal, members, projects, 
             <div className={`h-full rounded-full transition-all ${progressColor(goal.progress)}`} style={{ width: goal.progress + '%' }} />
           </div>
           <span className="text-sm font-bold min-w-[40px] text-right">{goal.progress}%</span>
+          {goal.dualTrack && (
+            <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+              goal.dualTrack.kpi.overallStatus === 'green' ? 'text-green-600 bg-green-50 border-green-200' :
+              goal.dualTrack.kpi.overallStatus === 'yellow' ? 'text-amber-600 bg-amber-50 border-amber-200' :
+              'text-red-600 bg-red-50 border-red-200'
+            }`}>KPI {goal.dualTrack.kpi.weightedScore}分</span>
+          )}
         </div>
         {goal.keyResults.length > 0 && (
           <div className="space-y-2 mb-3">
@@ -310,7 +317,7 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
               <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
               <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border z-50 py-1">
                 <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); }}><Edit2 size={12} /> 编辑</button>
-                {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此目标？')) return; dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
+                {can('goals_delete') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此目标？')) return; dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
               </div>
             </div>
           )}
@@ -336,157 +343,6 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
   return (
     <div className="bg-white rounded-xl border divide-y">
       {visibleItems.map(listItem)}
-    </div>
-  );
-}
-
-export function GoalTableView({ goals, members, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect }: { goals: Goal[]; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }) {
-  const { dispatch } = useStore();
-  const { can } = usePermissions();
-  const [showMenuId, setShowMenuId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<string>('createdAt');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-
-  function handleSort(key: string) {
-    if (sortKey === key) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); } else { setSortKey(key); setSortDir('asc'); }
-  }
-
-  const goalMap = useMemo(() => {
-    const m = new Map<string, Goal>();
-    goals.forEach(g => m.set(g.id, g));
-    return m;
-  }, [goals]);
-
-  const treeSorted = useMemo(() => {
-    const roots: Goal[] = [];
-    const childMap = new Map<string, Goal[]>();
-    goals.forEach(g => {
-      if (g.parentId && goalMap.has(g.parentId)) {
-        if (!childMap.has(g.parentId)) childMap.set(g.parentId, []);
-        const arr = childMap.get(g.parentId);
-        if (arr) arr.push(g);
-      } else {
-        roots.push(g);
-      }
-    });
-    const result: Array<{ goal: Goal; depth: number; connector: string }> = [];
-    function walk(goal: Goal, depth: number, connector: string) {
-      result.push({ goal, depth, connector });
-      const kids = childMap.get(goal.id) || [];
-      kids.forEach((child, i) => {
-        walk(child, depth + 1, i === kids.length - 1 ? '└ ' : '├ ');
-      });
-    }
-    roots.forEach(r => walk(r, 0, ''));
-    return result;
-  }, [goals, goalMap]);
-
-  const sorted = useMemo(() => {
-    const sortableKeys = ['title', 'status', 'priority', 'progress', 'leaderId', 'endDate', 'category', 'type'];
-    if (sortableKeys.includes(sortKey)) {
-      const arr = [...treeSorted];
-      arr.sort((a, b) => {
-        let va: any = a.goal[sortKey as keyof Goal];
-        let vb: any = b.goal[sortKey as keyof Goal];
-        if (typeof va === 'string') { va = va.toLowerCase(); vb = (vb as string).toLowerCase(); }
-        if (va < vb) return sortDir === 'asc' ? -1 : 1;
-        if (va > vb) return sortDir === 'asc' ? 1 : -1;
-        return 0;
-      });
-      return arr;
-    }
-    return treeSorted;
-  }, [treeSorted, sortKey, sortDir]);
-
-  const columns: Array<{ key: string; label: string }> = [
-    { key: 'title', label: '目标名称' }, { key: 'level', label: '层级' }, { key: 'type', label: '类型' }, { key: 'status', label: '状态' },
-    { key: 'priority', label: '重要程度' }, { key: 'progress', label: '进度' }, { key: 'leaderId', label: '主导人' },
-    { key: 'endDate', label: '截止日期' }, { key: 'category', label: '分类' },
-  ];
-
-  function SortIcon({ col }: { col: string }) {
-    if (sortKey !== col) return <ArrowUpDown size={12} className="text-muted-foreground/50" />;
-    return <span className="text-primary">{sortDir === 'asc' ? '↑' : '↓'}</span>;
-  }
-
-  const TABLE_ROW_H = 42;
-  const needsVirtual = sorted.length > 50;
-  const virtual = useVirtualScroll({ itemCount: sorted.length, rowHeight: TABLE_ROW_H });
-  const visibleSorted = needsVirtual ? sorted.slice(virtual.startIdx, virtual.endIdx) : sorted;
-
-  return (
-    <div className="bg-white rounded-xl border overflow-x-auto">
-      <div className={needsVirtual ? 'overflow-y-auto' : ''} style={needsVirtual ? { maxHeight: 'calc(100vh - 220px)' } : undefined} ref={needsVirtual ? virtual.scrollRef : undefined} onScroll={needsVirtual ? virtual.onScroll : undefined}>
-        <table className="w-full text-xs md:text-sm">
-          <thead className={`border-b bg-muted/30${needsVirtual ? ' sticky top-0 z-10' : ''}`}>
-            {batchMode && <th className="w-8" />}
-            {columns.map(col => (
-              <th key={col.key} className="text-left px-3 md:px-4 py-3 font-medium text-muted-foreground whitespace-nowrap cursor-pointer hover:bg-muted/50 select-none" onClick={() => handleSort(col.key)}>
-                <span className="inline-flex items-center gap-1">{col.label}<SortIcon col={col.key} /></span>
-              </th>
-            ))}
-            <th className="w-10" />
-          </thead>
-          <tbody className="divide-y">
-            {needsVirtual && virtual.startIdx > 0 && <tr style={{ height: virtual.startIdx * TABLE_ROW_H }} />}
-            {visibleSorted.map(({ goal, depth, connector }) => {
-            const leader = members.find(m => m.id === goal.leaderId);
-            const parentGoal = goal.parentId ? goalMap.get(goal.parentId) : null;
-            const cc = commentCounts.get(goal.id) || 0;
-            return (
-              <tr key={goal.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => onOpenDetail(goal.id)}>
-                {batchMode && (
-                  <td className="px-2 py-2" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => onToggleSelect(goal.id)}><input type="checkbox" checked={selectedIds.has(goal.id)} readOnly className="w-3.5 h-3.5 rounded" /></button>
-                  </td>
-                )}
-                <td className="px-3 md:px-4 py-2.5 font-medium max-w-[200px]" style={{ paddingLeft: (16 + depth * 20) + 'px' }}>
-                  <span className="truncate block">
-                    {depth > 0 && <span className="text-xs text-primary/40 mr-1 select-none">{connector}</span>}
-                    {goal.title}
-                  </span>
-                </td>
-                <td className="px-3 md:px-4 py-2.5 text-xs hidden md:table-cell">
-                  {parentGoal ? <span className="text-muted-foreground truncate block max-w-[120px]">子←{parentGoal.title}</span> : <span className="text-muted-foreground/50">顶级</span>}
-                </td>
-                <td className="px-3 md:px-4 py-2.5"><span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded ${typeColors[goal.type]}`}>{typeLabels[goal.type]}</span></td>
-                <td className="px-3 md:px-4 py-2.5"><span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded ${statusColors[goal.status]}`}>{statusLabels[goal.status]}</span></td>
-                <td className="px-3 md:px-4 py-2.5 hidden sm:table-cell"><span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded ${bizColors[goal.priority]}`}>{bizLabels[goal.priority]}</span></td>
-                <td className="px-3 md:px-4 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-12 md:w-16 h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full bg-primary" style={{ width: goal.progress + '%' }} /></div>
-                    <span className={`text-xs font-semibold ${progressTextColor(goal.progress)}`}>{goal.progress}%</span>
-                  </div>
-                </td>
-                <td className="px-3 md:px-4 py-2.5 hidden lg:table-cell">
-                  {leader ? <div className="flex items-center gap-1"><div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center"><span className="text-[10px] font-bold text-primary">{leader.name.charAt(0)}</span></div><span className="text-xs">{leader.name}</span></div> : <span className="text-xs text-muted-foreground">-</span>}
-                </td>
-                <td className="px-3 md:px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap hidden md:table-cell">{goal.endDate}</td>
-                <td className="px-3 md:px-4 py-2.5 text-xs text-muted-foreground hidden lg:table-cell">{goal.category || '-'}</td>
-                <td className="px-3 md:px-4 py-2.5">
-                  <div className="flex items-center gap-1">
-                    {cc > 0 && <span className="text-[10px] bg-blue-50 text-blue-600 px-1 py-0.5 rounded-full">{cc}</span>}
-                    <div className="relative">
-                      <button className="p-1 rounded hover:bg-muted" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === goal.id ? null : goal.id); }}><MoreHorizontal size={14} /></button>
-                      {showMenuId === goal.id && (
-                        <div className="relative">
-                          <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
-                          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border z-50 py-1">
-                            <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); }}><Edit2 size={12} /> 编辑</button>
-                            {can('delete_goals') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此目标？')) return; dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-          {needsVirtual && virtual.endIdx < sorted.length && <tr style={{ height: (sorted.length - virtual.endIdx) * TABLE_ROW_H }} />}
-        </tbody>
-      </table>
-    </div>
     </div>
   );
 }
@@ -618,7 +474,7 @@ export function GoalMatrixView({ goals, members, onOpenDetail, commentCounts, ba
     const onUp = () => {
       if (dragRef.current) {
         if (dragRef.current.el) dragRef.current.el.classList.remove('opacity-30', 'scale-95');
-        if (hoverQRef.current && quadrants[hoverQRef.current] && can('edit_goals')) {
+        if (hoverQRef.current && quadrants[hoverQRef.current] && can('goals_edit')) {
           dispatch({ type: 'UPDATE_GOAL', payload: { id: dragRef.current.id, updates: { priority: quadrants[hoverQRef.current].priorityMap } } });
         }
         const prevHover = hoverQRef.current;
@@ -647,66 +503,6 @@ export function GoalMatrixView({ goals, members, onOpenDetail, commentCounts, ba
       {(['Q1','Q2','Q3','Q4'] as const).map(qKey => (
         <GoalMatrixQuadrantBox key={qKey} qKey={qKey} quadrants={quadrants} grouped={grouped} quadrantBoxRefs={quadrantBoxRefs} members={members} onOpenDetail={onOpenDetail} commentCounts={commentCounts} dragRef={dragRef} />
       ))}
-    </div>
-  );
-}
-
-export function GoalTimelineView({ goals, members, onOpenDetail, commentCounts }: { goals: Goal[]; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number> }) {
-  const sorted = useMemo(() => [...goals].sort((a, b) => a.endDate.localeCompare(b.endDate)), [goals]);
-  const buckets: Record<string, Goal[]> = {};
-  sorted.forEach(g => {
-    const key = g.endDate;
-    if (!buckets[key]) buckets[key] = [];
-    buckets[key].push(g);
-  });
-  const dateKeys = Object.keys(buckets).sort();
-  const todayStr = new Date().toISOString().split('T')[0];
-
-  return (
-    <div className="space-y-6">
-      {dateKeys.map(date => {
-        const isOverdue = date < todayStr;
-        const isToday = date === todayStr;
-        return (
-          <div key={date}>
-            <div className="flex items-center gap-2 mb-2">
-              <div className={`text-sm font-bold ${isOverdue ? 'text-red-500' : isToday ? 'text-primary' : 'text-foreground'}`}>
-                {date}
-                {isToday && <span className="ml-1 text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">今天</span>}
-                {isOverdue && <span className="ml-1 text-xs bg-red-50 text-red-500 px-1.5 py-0.5 rounded">已逾期</span>}
-              </div>
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">{buckets[date].length} 个目标</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {buckets[date].map(goal => {
-                const leader = members.find(m => m.id === goal.leaderId);
-                const cc = commentCounts.get(goal.id) || 0;
-                return (
-                  <div key={goal.id} className="bg-white rounded-lg border p-2.5 md:p-3 hover:shadow-sm transition-shadow cursor-pointer" onClick={() => onOpenDetail(goal.id)}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded ${statusColors[goal.status]}`}>{statusLabels[goal.status]}</span>
-                      <span className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded ${bizColors[goal.priority]}`}>{bizLabels[goal.priority]}</span>
-                      {cc > 0 && <span className="text-[10px] bg-blue-50 text-blue-600 px-1 py-0.5 rounded-full">{cc}</span>}
-                    </div>
-                    <div className="text-xs md:text-sm font-medium truncate mb-2">{goal.title}</div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${progressColor(goal.progress)}`} style={{ width: goal.progress + '%' }} />
-                      </div>
-                      <span className="text-xs font-medium text-muted-foreground">{goal.progress}%</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      {leader && <div className="flex items-center gap-1"><div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center"><span className="text-[10px] font-bold text-primary">{leader.name.charAt(0)}</span></div><span className="text-[10px] text-muted-foreground">{leader.name}</span></div>}
-                      <span className="text-[10px] text-muted-foreground">{goal.type === 'okr' ? 'OKR' : goal.type === 'kpi' ? 'KPI' : '里程碑'}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }

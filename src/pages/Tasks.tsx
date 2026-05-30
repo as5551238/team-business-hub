@@ -4,8 +4,9 @@ import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import { useVirtualScroll } from '@/hooks/useVirtualScroll';
 import type { Task, TaskStatus, TaskPriority, Comment } from '@/types';
 import { cn } from '@/lib/utils';
-import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, Ban, GripVertical, FileText, Copy, MessageSquare, Trash2, Check, Filter } from 'lucide-react';
+import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, Ban, GripVertical, FileText, Copy, MessageSquare, Trash2, Check, Filter, Sparkles } from 'lucide-react';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
+import { AIMatchPanel } from '@/components/AIMatchPanel';
 
 function getTodayStr() { return new Date().toISOString().split('T')[0]; }
 
@@ -305,6 +306,7 @@ export default function Tasks() {
   const [newTags, setNewTags] = useState<Set<string>>(new Set());
   const [newSupporters, setNewSupporters] = useState<Set<string>>(new Set());
   const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [showMatchPanel, setShowMatchPanel] = useState(false);
   const [sortField, setSortField] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const personPickerRef = useRef<HTMLDivElement>(null);
@@ -765,6 +767,7 @@ export default function Tasks() {
                 </div>
               )}
               <button onClick={() => setBatchMode(!batchMode)} className={cn('inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border transition-colors', batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted')}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
+              <button onClick={() => setShowMatchPanel(true)} className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors"><Sparkles size={14} /><span className="hidden sm:inline">智能匹配</span></button>
               <button className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-primary/90 transition-colors" onClick={() => setShowCreateDialog(true)}><Plus className="w-4 h-4" /> <span className="hidden xs:inline">新建任务</span></button>
             </div>
           </div>
@@ -853,6 +856,7 @@ export default function Tasks() {
       )}
 
       {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
+      {showMatchPanel && <AIMatchPanel onClose={() => setShowMatchPanel(false)} />}
     </div>
   );
 }

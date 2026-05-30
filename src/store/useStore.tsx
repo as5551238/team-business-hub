@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState, useMemo, type ReactNode } from 'react';
-import type { AppState, Goal, Project, BackupData, Tag, Permission, Category, Template, ScheduleEvent, Note, ItemType, Comment, Member, Bookmark } from '@/types';
+import type { AppState, Goal, Project, BackupData, Tag, Permission, Category, Template, ScheduleEvent, Note, ItemType, Comment, Member, Bookmark, Knowledge } from '@/types';
 import { getSupabaseClient, initSupabase, resetSupabase } from '@/supabase/client';
 import type { ConnectionMode, SupabaseConfig, Action } from './types';
 import { SUPABASE_CONFIG_KEY, ensureAppStateDefaults } from './types';
@@ -14,7 +14,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 import { toCamel } from './types';
 import { reducer, hasPermission } from './reducer';
-import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError } from './supabase';
+import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError, setCurrentTeamId } from './supabase';
+import { CURRENT_USER_KEY } from './types';
 import { generateAllData } from '@/data/dataGenerator';
 
 // --- Split Context Pattern ---
@@ -120,6 +121,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const data = await withTimeout(fetchAllFromSupabase(), 15000, '数据加载');
       if (connectSeqRef.current !== mySeq) return false;
       if (data) {
+        // Set current team from localStorage or data
+        const savedTeamId = (() => { try { return localStorage.getItem('tbh-current-team'); } catch { return null; } })();
+        const teamId = savedTeamId || data.currentTeamId || null;
+        if (teamId) setCurrentTeamId(teamId);
+        if (data.currentTeamId && !savedTeamId) {
+          try { localStorage.setItem('tbh-current-team', data.currentTeamId); } catch {}
+        }
+        data.currentTeamId = teamId;
         const curView = stateRef.current?.viewingMemberId || null;
         const localTags = Array.isArray(stateRef.current?.tags) ? stateRef.current.tags : [];
         const remoteTagIds = new Set(data.tags.map((t: any) => t.id));
@@ -138,9 +147,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const mergedBookmarks = [...(data.bookmarks || []), ...localBookmarks.filter((b: any) => !remoteBmIds.has(b.id))];
         const mergedSavedViews = [...(data.savedViews || []), ...localSavedViews.filter((v: any) => !remoteSvIds.has(v.id))];
         const dbUser = curUser ? data.members.find((m: any) => m.id === curUser.id) || null : null;
+        // Fallback: try to find currentUser from localStorage key even if stateRef hasn't updated yet
         const dbMembers = data.members;
+        let resolvedUser = dbUser || curUser;
+        if (!resolvedUser) {
+          try {
+            const savedId = localStorage.getItem(CURRENT_USER_KEY);
+            if (savedId) resolvedUser = dbMembers.find((m: any) => m.id === savedId) || null;
+          } catch {}
+        }
         // Single MERGE_STATE with members already included — no second SET_STATE that would overwrite
-        dispatch({ type: 'MERGE_STATE', payload: { ...data, members: dbMembers, currentUser: dbUser || curUser, viewingMemberId: curView, bookmarks: mergedBookmarks, savedViews: mergedSavedViews } });
+        dispatch({ type: 'MERGE_STATE', payload: { ...data, members: dbMembers, currentUser: resolvedUser, viewingMemberId: curView, bookmarks: mergedBookmarks, savedViews: mergedSavedViews } });
         try { localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey })); } catch {}
         setConnectionMode('supabase');
         setupRealtime();
@@ -151,9 +168,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setupRealtime();
         return true;
       }
-    } catch (e: any) {
-      console.error('[doConnect] Connection failed:', e?.message, e?.stack?.substring(0, 300));
-      setConnectionError(e.message || '连接失败');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[doConnect] Connection failed:', msg);
+      setConnectionError(msg || '连接失败');
       setConnectionMode('local');
       resetSupabase();
       return false;
@@ -197,8 +215,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       setConnectionMode('supabase');
       return true;
-    } catch (e: any) {
-      setConnectionError(e.message || '初始化失败');
+    } catch (e: unknown) {
+      setConnectionError(e instanceof Error ? e.message : '初始化失败');
       setConnectionMode('local');
       return false;
     }
@@ -209,7 +227,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const sb = getSupabaseClient();
     if (!sb) return;
     // Supabase Realtime postgres_changes is broken — use REST polling instead
-    const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views'];
+    const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules'];
     let polling = false;
     let pollTimerId: number | null = null;
     const poll = async (): Promise<boolean> => {
@@ -221,7 +239,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const results = await Promise.allSettled(tables.map(table => {
           const query = table === 'members' ? sb.from(table).select('*').eq('status', 'active') : sb.from(table).select('*');
           return query.then(({ data }) => {
-            const key = table === 'item_links' ? 'itemLinks' : table === 'schedule_events' ? 'scheduleEvents' : table === 'saved_views' ? 'savedViews' : table;
+            const key = table === 'item_links' ? 'itemLinks' : table === 'schedule_events' ? 'scheduleEvents' : table === 'saved_views' ? 'savedViews' : table === 'status_flow_rules' ? 'statusFlowRules' : table === 'automation_rules' ? 'automationRules' : table;
             return { key, data: Array.isArray(data) ? data.map(toCamel) : [] };
           });
         }));
@@ -420,7 +438,7 @@ export function useItemLinks(sourceId: string, sourceType: 'goal' | 'project' | 
 
 export function useMemberTasks(memberId: string) {
   const tasks = useStore().state.tasks;
-  return useMemo(() => tasks.filter(t => t.leaderId === memberId || (t.supporterIds || []).includes(memberId)), [tasks, memberId]);
+  return useMemo(() => tasks.filter(t => t.leaderId === memberId || (t.supporterIds ?? []).includes(memberId)), [tasks, memberId]);
 }
 
 export function useBackupExport(): BackupData {
@@ -511,6 +529,17 @@ export function useNotes(folder?: string) {
   };
 }
 
+export function useKnowledge() {
+  const knowledge = useStore().state.knowledge;
+  const dispatch = useStore().dispatch;
+  return {
+    knowledge: knowledge || [],
+    addKnowledge: (k: Omit<Knowledge, 'id' | 'createdAt' | 'updatedAt'>) => dispatch({ type: 'ADD_KNOWLEDGE', payload: k }),
+    updateKnowledge: (id: string, updates: Partial<Knowledge>) => dispatch({ type: 'UPDATE_KNOWLEDGE', payload: { id, updates } }),
+    deleteKnowledge: (id: string) => dispatch({ type: 'DELETE_KNOWLEDGE', payload: id }),
+  };
+}
+
 export function useBookmarks() {
   const bookmarks = useStore().state.bookmarks;
   const dispatch = useStore().dispatch;
@@ -538,9 +567,9 @@ export function useViewingMember() {
 
 export function useMemberData(memberId: string) {
   const { goals, projects, tasks, activities } = useStore().state;
-  const memberGoals = goals.filter(g => g.leaderId === memberId || (g.supporterIds || []).includes(memberId));
-  const memberProjects = projects.filter(p => p.leaderId === memberId || (p.supporterIds || []).includes(memberId));
-  const memberTasks = tasks.filter(t => t.leaderId === memberId || (t.supporterIds || []).includes(memberId));
+  const memberGoals = goals.filter(g => g.leaderId === memberId || (g.supporterIds ?? []).includes(memberId));
+  const memberProjects = projects.filter(p => p.leaderId === memberId || (p.supporterIds ?? []).includes(memberId));
+  const memberTasks = tasks.filter(t => t.leaderId === memberId || (t.supporterIds ?? []).includes(memberId));
   const memberActivities = activities.filter(a => a.memberId === memberId);
   return { goals: memberGoals, projects: memberProjects, tasks: memberTasks, activities: memberActivities };
 }

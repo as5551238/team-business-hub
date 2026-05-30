@@ -1,9 +1,9 @@
 import type { GoalStatus, GoalType, TaskPriority } from '@/types';
 import {
-  Target, ListTodo, LayoutGrid, TrendingUp, Clock, Kanban
+  Target, ListTodo, TrendingUp
 } from 'lucide-react';
 
-export type ViewMode = 'detail' | 'list' | 'kanban' | 'table' | 'matrix' | 'timeline';
+export type ViewMode = 'detail' | 'list' | 'matrix' | 'okr';
 
 export const statusLabels: Record<GoalStatus, string> = {
   todo: '待办', in_progress: '进行中', done: '已完成', blocked: '已阻塞', cancelled: '已取消',
@@ -24,11 +24,11 @@ export const bizColors: Record<string, string> = {
 export const viewTabs: Array<{ value: ViewMode; label: string; icon: typeof Target }> = [
   { value: 'detail', label: '详细', icon: Target },
   { value: 'list', label: '清单', icon: ListTodo },
-  { value: 'kanban', label: '看板', icon: LayoutGrid },
-  { value: 'table', label: '全量', icon: LayoutGrid },
   { value: 'matrix', label: '四象限', icon: TrendingUp },
-  { value: 'timeline', label: '时间线', icon: Clock },
+  { value: 'okr', label: 'OKR', icon: TrendingUp },
 ];
+
+export const VALID_VIEW_MODES: ViewMode[] = ['detail', 'list', 'matrix', 'okr'];
 
 export function progressColor(p: number) {
   if (p >= 80) return 'bg-green-500';

@@ -52,7 +52,7 @@ export async function uploadFile(
     }
     const { data } = supabase.storage.from(bucket).getPublicUrl(safePath);
     return data.publicUrl;
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Upload error:', e);
     return null;
   }
@@ -71,7 +71,7 @@ export async function deleteFile(bucket: string, paths: string[]): Promise<boole
       return false;
     }
     return true;
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Delete error:', e);
     return false;
   }
@@ -103,7 +103,7 @@ export async function listFiles(
       return null;
     }
     return (data ?? []).map((item) => ({ name: item.name, id: item.id }));
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('List error:', e);
     return null;
   }
