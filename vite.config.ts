@@ -23,10 +23,10 @@ export default defineConfig({
         theme_color: '#1E40AF',
         background_color: '#ffffff',
         display: 'standalone',
-        scope: '/',
-        start_url: '/',
+        scope: './',
+        start_url: './',
         icons: [
-          { src: '/icons.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: './icons.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
         ],
       },
       workbox: {
