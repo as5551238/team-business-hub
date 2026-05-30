@@ -52,14 +52,14 @@ export function predictDelayEnhanced(task: Task, allTasks: Task[]): PredictionRe
 
   const baseScore = base.risk === 'high' ? 80 : base.risk === 'medium' ? 50 : base.risk === 'low' ? 25 : 5;
   const cpmBoost = isOnCriticalPath ? 15 : 0;
-  const overdueDaysBoost = Math.min(base.predictedOverdueDays * 3, 30);
+  const overdueDaysBoost = Math.min((base.predictedDaysOverdue || 0) * 3, 30);
   const score = Math.min(100, baseScore + cpmBoost + overdueDaysBoost);
 
   const level = score >= 80 ? 'critical' : score >= 60 ? 'high' : score >= 35 ? 'medium' : score >= 15 ? 'low' : 'none';
 
   const suggestions: string[] = [];
   if (isOnCriticalPath) suggestions.push('此任务位于关键路径，延期将直接影响项目工期');
-  if (base.predictedOverdueDays > 3) suggestions.push('建议将截止日延后或增加资源投入');
+  if ((base.predictedDaysOverdue || 0) > 3) suggestions.push('建议将截止日延后或增加资源投入');
   if (base.avgCompletionRatio && base.avgCompletionRatio > 1.2) suggestions.push('历史数据显示该负责人/优先级的任务平均超期20%以上');
 
   return {
@@ -68,7 +68,7 @@ export function predictDelayEnhanced(task: Task, allTasks: Task[]): PredictionRe
     targetName: task.title,
     score,
     level,
-    summary: `延期风险${level === 'critical' ? '严重' : level === 'high' ? '高' : level === 'medium' ? '中等' : '低'}，预计超期${base.predictedOverdueDays}天${isOnCriticalPath ? '（关键路径）' : ''}`,
+    summary: `延期风险${level === 'critical' ? '严重' : level === 'high' ? '高' : level === 'medium' ? '中等' : '低'}，预计超期${base.predictedDaysOverdue || 0}天${isOnCriticalPath ? '（关键路径）' : ''}`,
     details: { ...base, isOnCriticalPath, projectTaskCount: tasksForCPM.length },
     suggestions,
     confidence: base.confidence,
@@ -126,8 +126,8 @@ export function predictOKRAchievement(goal: Goal): PredictionResult {
   const krDetails: Array<{ title: string; progress: number; status: string }> = [];
 
   for (const kr of krs) {
-    const progress = kr.currentValue ?? 0;
-    const target = kr.targetValue ?? 100;
+    const progress = Number.isFinite(kr.currentValue) ? kr.currentValue : 0;
+    const target = Number.isFinite(kr.targetValue) ? kr.targetValue : 100;
     const pct = target > 0 ? Math.min(100, (progress / target) * 100) : 0;
     totalProgress += pct;
 
@@ -199,18 +199,22 @@ export function generateRiskRadar(
   const resourceScore = predictions.find(p => p.type === 'resource')?.score || 0;
   const okrScores = predictions.filter(p => p.type === 'okr').map(p => p.score);
 
-  const delayDim = delayScores.length > 0 ? Math.round(delayScores.reduce((a, b) => a + b, 0) / delayScores.length) : 0;
-  const okrDim = okrScores.length > 0 ? Math.round(okrScores.reduce((a, b) => a + b, 0) / okrScores.length) : 0;
+  const validDelayScores = delayScores.filter(s => Number.isFinite(s));
+  const validOkrScores = okrScores.filter(s => Number.isFinite(s));
+
+  const delayDim = validDelayScores.length > 0 ? Math.round(validDelayScores.reduce((a, b) => a + b, 0) / validDelayScores.length) || 0 : 0;
+  const safeResourceScore = Number.isFinite(resourceScore) ? resourceScore : 0;
+  const okrDim = validOkrScores.length > 0 ? Math.round(validOkrScores.reduce((a, b) => a + b, 0) / validOkrScores.length) || 0 : 0;
 
   // 综合风险：加权平均（延期40% + 资源30% + OKR30%）
-  const riskDim = Math.round(delayDim * 0.4 + resourceScore * 0.3 + okrDim * 0.3);
-  const overall = Math.round(delayDim * 0.35 + resourceScore * 0.25 + okrDim * 0.2 + riskDim * 0.2);
+  const riskDim = Math.round(delayDim * 0.4 + safeResourceScore * 0.3 + okrDim * 0.3) || 0;
+  const overall = Math.round(delayDim * 0.35 + safeResourceScore * 0.25 + okrDim * 0.2 + riskDim * 0.2) || 0;
 
   // 生成告警
   const alerts: Array<{ level: string; message: string; action: string }> = [];
   if (delayDim >= 50) alerts.push({ level: 'high', message: `${delayPredictions.filter(p => p.level === 'high' || p.level === 'critical').length}个任务延期风险高`, action: '查看延期预测详情，调整截止日或分配' });
-  if (resourceScore >= 50) alerts.push({ level: 'medium', message: '团队资源紧张', action: '重新分配任务或增派人手' });
-  if (okrDim >= 40) alerts.push({ level: 'medium', message: `${okrScores.filter(s => s >= 40).length}个目标达成风险`, action: '审视KR进度，加速滞后项' });
+  if (safeResourceScore >= 50) alerts.push({ level: 'medium', message: '团队资源紧张', action: '重新分配任务或增派人手' });
+  if (okrDim >= 40) alerts.push({ level: 'medium', message: `${validOkrScores.filter(s => s >= 40).length}个目标达成风险`, action: '审视KR进度，加速滞后项' });
   if (riskDim >= 60) alerts.push({ level: 'critical', message: '项目整体风险较高', action: '立即执行风险缓解计划' });
 
   return { overall, dimensions: { delay: delayDim, resource: resourceScore, okr: okrDim, risk: riskDim }, alerts, predictions };

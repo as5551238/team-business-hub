@@ -68,16 +68,17 @@ const TYPE_LABEL: Record<PredictionType, string> = {
 };
 
 function ScoreBar({ score, level }: { score: number; level: string }) {
+  const safeScore = Number.isFinite(score) ? score : 0;
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-500 ${LEVEL_BG[level] || 'bg-gray-300'}`}
-          style={{ width: `${Math.min(100, score)}%` }}
+          style={{ width: `${Math.min(100, safeScore)}%` }}
         />
       </div>
-      <span className={`text-xs font-mono font-semibold min-w-[2rem] text-right ${score >= 70 ? 'text-red-600' : score >= 40 ? 'text-yellow-600' : 'text-green-600'}`}>
-        {score}
+      <span className={`text-xs font-mono font-semibold min-w-[2rem] text-right ${safeScore >= 70 ? 'text-red-600' : safeScore >= 40 ? 'text-yellow-600' : 'text-green-600'}`}>
+        {safeScore}
       </span>
     </div>
   );
@@ -147,13 +148,14 @@ export function RiskRadarTab() {
     }
   }, [state.tasks, state.members, state.goals]);
 
-  const overallLevel = radar.overall >= 70 ? 'critical' : radar.overall >= 50 ? 'high' : radar.overall >= 30 ? 'medium' : radar.overall >= 15 ? 'low' : 'none';
+  const safeOverall = Number.isFinite(radar.overall) ? radar.overall : 0;
+  const overallLevel = safeOverall >= 70 ? 'critical' : safeOverall >= 50 ? 'high' : safeOverall >= 30 ? 'medium' : safeOverall >= 15 ? 'low' : 'none';
 
   const dims = [
-    { key: 'delay' as const, label: '延期风险', icon: Clock, score: radar.dimensions.delay, desc: '基于CPM关键路径+自学习历史' },
-    { key: 'resource' as const, label: '资源瓶颈', icon: Users, score: radar.dimensions.resource, desc: '团队负载均衡分析' },
-    { key: 'okr' as const, label: 'OKR达成', icon: Target, score: radar.dimensions.okr, desc: '进度趋势vs时间进度' },
-    { key: 'risk' as const, label: '综合风险', icon: Shield, score: radar.dimensions.risk, desc: '加权综合(延期40%+资源30%+OKR30%)' },
+    { key: 'delay' as const, label: '延期风险', icon: Clock, score: Number.isFinite(radar.dimensions.delay) ? radar.dimensions.delay : 0, desc: '基于CPM关键路径+自学习历史' },
+    { key: 'resource' as const, label: '资源瓶颈', icon: Users, score: Number.isFinite(radar.dimensions.resource) ? radar.dimensions.resource : 0, desc: '团队负载均衡分析' },
+    { key: 'okr' as const, label: 'OKR达成', icon: Target, score: Number.isFinite(radar.dimensions.okr) ? radar.dimensions.okr : 0, desc: '进度趋势vs时间进度' },
+    { key: 'risk' as const, label: '综合风险', icon: Shield, score: Number.isFinite(radar.dimensions.risk) ? radar.dimensions.risk : 0, desc: '加权综合(延期40%+资源30%+OKR30%)' },
   ];
 
   const groupedPredictions = useMemo(() => {
@@ -295,14 +297,14 @@ export function RiskRadarTab() {
       {/* 总览卡片 */}
       <div className="flex items-center gap-3">
         <div className={`w-16 h-16 rounded-xl flex items-center justify-center ${LEVEL_BG[overallLevel]}`}>
-          <span className="text-2xl font-bold text-white">{radar.overall}</span>
+          <span className="text-2xl font-bold text-white">{safeOverall}</span>
         </div>
         <div>
           <h3 className="font-semibold text-sm">综合风险指数</h3>
           <p className="text-xs text-muted-foreground">
-            {radar.overall >= 70 ? '项目整体风险严重，需立即干预' :
-             radar.overall >= 50 ? '存在较高风险，建议及时调整' :
-             radar.overall >= 30 ? '风险可控，持续关注即可' :
+            {safeOverall >= 70 ? '项目整体风险严重，需立即干预' :
+             safeOverall >= 50 ? '存在较高风险，建议及时调整' :
+             safeOverall >= 30 ? '风险可控，持续关注即可' :
              '项目运行平稳，风险较低'}
           </p>
         </div>

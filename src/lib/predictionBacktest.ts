@@ -49,17 +49,19 @@ export function runBacktest(tasks: Task[]): BacktestResult {
       const startTs = new Date(t.startDate!).getTime();
       const dueTs = new Date(t.dueDate!).getTime();
       const completedTs = new Date(t.completedAt!).getTime();
-      const plannedDays = Math.max(1, Math.round((dueTs - startTs) / 86400000));
-      const actualDays = Math.max(1, Math.round((completedTs - startTs) / 86400000));
+      if (isNaN(startTs) || isNaN(dueTs) || isNaN(completedTs)) continue;
+      const plannedDays = Math.max(1, Math.round((dueTs - startTs) / 86400000) || 1);
+      const actualDays = Math.max(1, Math.round((completedTs - startTs) / 86400000) || 1);
+      const ratio = Number.isFinite(actualDays / plannedDays) ? actualDays / plannedDays : 1;
       allRecords.push({
         taskId: t.id,
         leaderId: t.leaderId,
         priority: t.priority,
         plannedDays,
         actualDays,
-        ratio: actualDays / plannedDays,
+        ratio,
         completedAt: t.completedAt!,
-        deviation: (actualDays / plannedDays) - 1,
+        deviation: ratio - 1,
       });
     }
   }
@@ -74,9 +76,10 @@ export function runBacktest(tasks: Task[]): BacktestResult {
   }
 
   // 总体统计
-  const avgDeviation = allRecords.reduce((a, r) => a + r.deviation, 0) / allRecords.length;
-  const accurateCount = allRecords.filter(r => Math.abs(r.deviation) < 0.2).length;
-  const predictionAccuracy = accurateCount / allRecords.length;
+  const validRecords = allRecords.filter(r => Number.isFinite(r.deviation));
+  const avgDeviation = validRecords.length > 0 ? validRecords.reduce((a, r) => a + r.deviation, 0) / validRecords.length : 0;
+  const accurateCount = validRecords.filter(r => Math.abs(r.deviation) < 0.2).length;
+  const predictionAccuracy = validRecords.length > 0 ? accurateCount / validRecords.length : 0;
   const overestimateCount = allRecords.filter(r => r.deviation < -0.1).length;
   const underestimateCount = allRecords.filter(r => r.deviation > 0.1).length;
 
@@ -96,7 +99,7 @@ export function runBacktest(tasks: Task[]): BacktestResult {
       month,
       avgDeviation: Math.round(avg * 100) / 100,
       sampleCount: records.length,
-      improvementRate: prevAvg !== 0 ? Math.round(((prevAvg - avg) / Math.abs(prevAvg)) * 100) : 0,
+      improvementRate: Number.isFinite(prevAvg) && prevAvg !== 0 ? Math.round(((prevAvg - avg) / Math.abs(prevAvg)) * 100) : 0,
     };
   });
 

@@ -58,8 +58,9 @@ export function learnFromCompletedTask(task: Task): void {
   const startTs = new Date(task.startDate).getTime();
   const dueTs = new Date(task.dueDate).getTime();
   const completedTs = new Date(task.completedAt).getTime();
-  const plannedDays = Math.max(1, Math.round((dueTs - startTs) / DAY_MS));
-  const actualDays = Math.max(1, Math.round((completedTs - startTs) / DAY_MS));
+  if (isNaN(startTs) || isNaN(dueTs) || isNaN(completedTs)) return;
+  const plannedDays = Math.max(1, Math.round((dueTs - startTs) / DAY_MS) || 1);
+  const actualDays = Math.max(1, Math.round((completedTs - startTs) / DAY_MS) || 1);
 
   const library = loadLibrary();
   library.push({
@@ -87,8 +88,9 @@ function collectHistory(tasks: Task[], now: number = Date.now()): HistoricalReco
     if (completedTs < cutoff) continue;
     const startTs = new Date(t.startDate).getTime();
     const dueTs = new Date(t.dueDate).getTime();
-    const plannedDays = Math.max(1, Math.round((dueTs - startTs) / DAY_MS));
-    const actualDays = Math.max(1, Math.round((completedTs - startTs) / DAY_MS));
+    if (isNaN(startTs) || isNaN(dueTs) || isNaN(completedTs)) continue;
+    const plannedDays = Math.max(1, Math.round((dueTs - startTs) / DAY_MS) || 1);
+    const actualDays = Math.max(1, Math.round((completedTs - startTs) / DAY_MS) || 1);
     // 去重：如果持久化库已包含此任务的记录，跳过
     const alreadyExists = library.some(r => r.taskId === t.id);
     if (!alreadyExists) {
@@ -140,13 +142,14 @@ export function predictDelayRisk(task: Task, allTasks: Task[]): {
   }
 
   const records = collectHistory(allTasks);
-  const ratio = getGroupRatio(records, task.leaderId, task.priority);
+  const rawRatio = getGroupRatio(records, task.leaderId, task.priority);
+  const ratio = Number.isFinite(rawRatio) ? rawRatio : 1;
 
   const startTs = new Date(task.startDate).getTime();
   const dueTs = new Date(task.dueDate).getTime();
-  const plannedDays = Math.max(1, Math.round((dueTs - startTs) / DAY_MS));
+  const plannedDays = Math.max(1, Math.round((dueTs - startTs) / DAY_MS) || 1);
   const predictedActualDays = Math.round(plannedDays * ratio);
-  const predictedDaysOverdue = Math.max(0, predictedActualDays - plannedDays);
+  const predictedDaysOverdue = Math.max(0, predictedActualDays - plannedDays) || 0;
 
   let risk: DelayRisk;
   if (predictedDaysOverdue === 0) risk = 'none';
@@ -175,12 +178,13 @@ export function predictDelayRisks(tasks: Task[]): Map<string, {
   const records = collectHistory(tasks);
 
   for (const task of activeTasks) {
-    const ratio = getGroupRatio(records, task.leaderId, task.priority);
+    const rawRatio = getGroupRatio(records, task.leaderId, task.priority);
+    const ratio = Number.isFinite(rawRatio) ? rawRatio : 1;
     const startTs = new Date(task.startDate!).getTime();
     const dueTs = new Date(task.dueDate!).getTime();
-    const plannedDays = Math.max(1, Math.round((dueTs - startTs) / DAY_MS));
+    const plannedDays = Math.max(1, Math.round((dueTs - startTs) / DAY_MS) || 1);
     const predictedActualDays = Math.round(plannedDays * ratio);
-    const predictedDaysOverdue = Math.max(0, predictedActualDays - plannedDays);
+    const predictedDaysOverdue = Math.max(0, predictedActualDays - plannedDays) || 0;
 
     let risk: DelayRisk;
     if (predictedDaysOverdue === 0) risk = 'none';
@@ -217,15 +221,16 @@ export function getDelayRiskLabel(risk: DelayRisk): string {
 export function getDelayLibraryStats(): { totalRecords: number; avgRatio: number; topDelayedLeaders: Array<{ leaderId: string; avgRatio: number }> } {
   const library = loadLibrary();
   if (library.length === 0) return { totalRecords: 0, avgRatio: 1, topDelayedLeaders: [] };
-  const avgRatio = Math.round(library.reduce((s, r) => s + r.ratio, 0) / library.length * 100) / 100;
+  const validRecords = library.filter(r => Number.isFinite(r.ratio));
+  const avgRatio = validRecords.length > 0 ? Math.round(validRecords.reduce((s, r) => s + r.ratio, 0) / validRecords.length * 100) / 100 : 1;
   const byLeader = new Map<string, number[]>();
-  for (const r of library) {
+  for (const r of validRecords) {
     const arr = byLeader.get(r.leaderId) ?? [];
     arr.push(r.ratio);
     byLeader.set(r.leaderId, arr);
   }
   const leaders = Array.from(byLeader.entries())
-    .map(([leaderId, ratios]) => ({ leaderId, avgRatio: Math.round(ratios.reduce((s, v) => s + v, 0) / ratios.length * 100) / 100 }))
+    .map(([leaderId, ratios]) => { const valid = ratios.filter(v => Number.isFinite(v)); return { leaderId, avgRatio: valid.length > 0 ? Math.round(valid.reduce((s, v) => s + v, 0) / valid.length * 100) / 100 : 1 }; })
     .filter(l => l.avgRatio > 1.1)
     .sort((a, b) => b.avgRatio - a.avgRatio)
     .slice(0, 5);
