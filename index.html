@@ -12,40 +12,9 @@
     <title>团队业务中台 - Team Business Hub</title>
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://atexvoyvnnuaonvrgzhn.supabase.co wss://atexvoyvnnuaonvrgzhn.supabase.co https://*.supabase.co https://sctapi.ftqq.com https://qyapi.weixin.qq.com https://api.resend.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none';" />
     <script>
-      // Force SW cache bust: detect version change and clear stale PWA cache
-      // This prevents TDZ errors caused by old SW serving stale code
-      (function() {
-        var APP_VERSION = '2026-05-31-v3';
-        try {
-          var stored = localStorage.getItem('tbh-app-version');
-          if (stored !== APP_VERSION) {
-            // Version mismatch — clear all caches and unregister SW
-            localStorage.setItem('tbh-app-version', APP_VERSION);
-            if ('serviceWorker' in navigator) {
-              navigator.serviceWorker.getRegistrations().then(function(regs) {
-                for (var i = 0; i < regs.length; i++) regs[i].unregister();
-                if ('caches' in window) {
-                  caches.keys().then(function(names) {
-                    Promise.all(names.map(function(n) { return caches.delete(n); })).then(function() {
-                      window.location.reload();
-                    });
-                  });
-                } else if (regs.length > 0) {
-                  window.location.reload();
-                }
-              });
-            } else if ('caches' in window) {
-              caches.keys().then(function(names) {
-                Promise.all(names.map(function(n) { return caches.delete(n); })).then(function() {
-                  window.location.reload();
-                });
-              });
-            }
-          }
-        } catch(e) {}
-      })();
+      (function(){var V='2026-05-31-v4';try{var s=localStorage.getItem('tbh-app-version');if(s!==V){localStorage.setItem('tbh-app-version',V);var d=false;if('serviceWorker'in navigator)navigator.serviceWorker.getRegistrations().then(function(r){for(var i=0;i<r.length;i++){r[i].unregister();d=true}if(d&&'caches'in window)caches.keys().then(function(n){Promise.all(n.map(function(k){return caches.delete(k)})).then(function(){location.reload()})});else if(d)location.reload()});else if('caches'in window)caches.keys().then(function(n){Promise.all(n.map(function(k){return caches.delete(k)})).then(function(){location.reload()})})}}catch(e){}})();
     </script>
-    <script type="module" crossorigin src="./assets/index-CM4cizTv.js"></script>
+    <script type="module" crossorigin src="./assets/index-DF2WejPU.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-D9y5Wfjm.css">
   <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
   <body>
