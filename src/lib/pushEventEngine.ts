@@ -264,3 +264,86 @@ export function dispatchAiPushEvent(event: AiPushEvent): void {
       break;
   }
 }
+
+// ===== AI 主动推送 MVP：定时扫描风险并自动推送 =====
+
+let _scanTimer: ReturnType<typeof setInterval> | null = null;
+const AI_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 每5分钟扫描一次
+
+/** 启动AI主动推送扫描（登录后调用） */
+export function startAiPushScan(
+  getTasks: () => any[],
+  getGoals: () => any[],
+  getUserId: () => string | null,
+) {
+  stopAiPushScan();
+  _scanTimer = setInterval(() => {
+    const tasks = getTasks();
+    const goals = getGoals();
+    const userId = getUserId();
+    if (!userId) return;
+
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const threeDaysLater = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    // 1. 即将逾期（3天内到期且未完成）
+    for (const t of tasks) {
+      if (t.status === 'done' || t.status === 'cancelled') continue;
+      if (t.deletedAt) continue;
+      if (t.dueDate && t.dueDate >= todayStr && t.dueDate <= threeDaysLater) {
+        const daysLeft = Math.ceil((new Date(t.dueDate).getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+        dispatchAiPushEvent({
+          type: 'delay_warning',
+          title: `任务即将到期`,
+          body: `「${t.title}」将在${daysLeft}天后到期`,
+          targetId: t.id,
+          targetType: 'task',
+          priority: daysLeft <= 1 ? 'high' : 'medium',
+        });
+      }
+    }
+
+    // 2. 已逾期
+    for (const t of tasks) {
+      if (t.status === 'done' || t.status === 'cancelled') continue;
+      if (t.deletedAt) continue;
+      if (t.dueDate && t.dueDate < todayStr) {
+        dispatchAiPushEvent({
+          type: 'delay_warning',
+          title: `任务已逾期`,
+          body: `「${t.title}」已逾期 ${Math.ceil((now.getTime() - new Date(t.dueDate).getTime()) / (24 * 60 * 60 * 1000))} 天`,
+          targetId: t.id,
+          targetType: 'task',
+          priority: 'high',
+        });
+      }
+    }
+
+    // 3. 目标进度停滞（进行中但7天无更新）
+    for (const g of goals) {
+      if (g.status !== 'in_progress' || g.deletedAt) continue;
+      if (g.updatedAt) {
+        const daysSinceUpdate = Math.ceil((now.getTime() - new Date(g.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
+        if (daysSinceUpdate >= 7) {
+          dispatchAiPushEvent({
+            type: 'kr_progress',
+            title: `目标进度停滞`,
+            body: `「${g.title}」已${daysSinceUpdate}天未更新`,
+            targetId: g.id,
+            targetType: 'goal',
+            priority: 'medium',
+          });
+        }
+      }
+    }
+  }, AI_SCAN_INTERVAL_MS);
+}
+
+/** 停止AI主动推送扫描（登出时调用） */
+export function stopAiPushScan() {
+  if (_scanTimer) {
+    clearInterval(_scanTimer);
+    _scanTimer = null;
+  }
+}

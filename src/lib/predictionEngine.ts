@@ -60,7 +60,7 @@ export function predictDelayEnhanced(task: Task, allTasks: Task[]): PredictionRe
   const suggestions: string[] = [];
   if (isOnCriticalPath) suggestions.push('此任务位于关键路径，延期将直接影响项目工期');
   if ((base.predictedDaysOverdue || 0) > 3) suggestions.push('建议将截止日延后或增加资源投入');
-  if (base.avgCompletionRatio && base.avgCompletionRatio > 1.2) suggestions.push('历史数据显示该负责人/优先级的任务平均超期20%以上');
+  if (base.ratio && base.ratio > 1.2) suggestions.push('历史数据显示该负责人/优先级的任务平均超期20%以上');
 
   return {
     type: 'delay',
@@ -218,4 +218,157 @@ export function generateRiskRadar(
   if (riskDim >= 60) alerts.push({ level: 'critical', message: '项目整体风险较高', action: '立即执行风险缓解计划' });
 
   return { overall, dimensions: { delay: delayDim, resource: resourceScore, okr: okrDim, risk: riskDim }, alerts, predictions };
+}
+
+// ===== V2 增强功能 =====
+
+/** 进度感知延期预测 — 综合当前进度%">
+ *  原始引擎只看历史比率，V2 额外考虑任务当前完成度和剩余时间
+ */
+export function predictDelayV2(task: Task, allTasks: Task[]): PredictionResult {
+  const base = predictDelayEnhanced(task, allTasks);
+
+  // 进度修正：如果进度已高，风险降低
+  const progress = (task as any).progress ?? 0;
+  const hasDue = !!task.dueDate;
+  let progressDiscount = 0;
+  if (hasDue && progress > 0) {
+    const now = new Date();
+    const due = new Date(task.dueDate);
+    const created = new Date(task.createdAt);
+    const totalDays = Math.max(1, (due.getTime() - created.getTime()) / 86400000);
+    const elapsedDays = Math.max(0, (now.getTime() - created.getTime()) / 86400000);
+    const timeProgress = Math.min(1, elapsedDays / totalDays);
+    // 如果进度领先于时间进度，大幅降低风险
+    if (progress / 100 > timeProgress * 1.2) {
+      progressDiscount = Math.round((progress / 100 - timeProgress) * 30);
+    }
+    // 如果进度远远落后于时间进度，增加风险
+    if (progress / 100 < timeProgress * 0.5 && timeProgress > 0.3) {
+      progressDiscount = -Math.round((timeProgress - progress / 100) * 25);
+    }
+  }
+
+  // 已完成任务风险为零
+  if (task.status === 'done') {
+    return { ...base, score: 0, level: 'none', summary: '任务已完成', suggestions: [] };
+  }
+
+  const adjustedScore = Math.max(0, Math.min(100, base.score - progressDiscount));
+  const adjustedLevel = adjustedScore >= 80 ? 'critical' : adjustedScore >= 60 ? 'high' : adjustedScore >= 35 ? 'medium' : adjustedScore >= 15 ? 'low' : 'none';
+
+  const newSuggestions = [...base.suggestions];
+  if (progressDiscount > 10) newSuggestions.push('当前进度领先于时间进度，延期风险已降低');
+  if (progressDiscount < -10) newSuggestions.push('进度明显落后于时间消耗，建议立即干预');
+
+  return {
+    ...base,
+    score: adjustedScore,
+    level: adjustedLevel,
+    summary: `${base.summary}${progressDiscount > 5 ? '（进度正常）' : progressDiscount < -5 ? '（进度滞后）' : ''}`,
+    suggestions: newSuggestions,
+    details: { ...base.details, progress, progressDiscount },
+  };
+}
+
+/** 级联传播预测 — 当上游任务延期时，级联影响下游依赖
+ *  支持多级传播（A→B→C）
+ */
+export function predictCascadeDelay(task: Task, allTasks: Task[]): PredictionResult {
+  const visited = new Set<string>();
+  const cascadeChain: string[] = [];
+  let totalCascadeDays = 0;
+
+  function traverse(taskId: string, depth: number) {
+    if (visited.has(taskId) || depth > 5) return;
+    visited.add(taskId);
+    cascadeChain.push(taskId);
+
+    // 找到所有被该任务阻塞的任务
+    const blocked = allTasks.filter(t => (t.blockedBy || []).includes(taskId) && t.status !== 'done' && !t.deletedAt);
+    for (const bt of blocked) {
+      const delayPred = predictDelayRisk(bt, allTasks);
+      const days = delayPred.predictedDaysOverdue || 0;
+      totalCascadeDays += days * (1 - depth * 0.15); // 越远级联影响衰减
+      traverse(bt.id, depth + 1);
+    }
+  }
+
+  traverse(task.id, 0);
+
+  const directDelay = predictDelayEnhanced(task, allTasks);
+  const totalImpact = (directDelay.details?.predictedDaysOverdue || 0) + totalCascadeDays;
+
+  const score = Math.min(100, directDelay.score + cascadeChain.length * 8);
+  const level = score >= 80 ? 'critical' : score >= 60 ? 'high' : score >= 35 ? 'medium' : score >= 15 ? 'low' : 'none';
+
+  const suggestions = [...directDelay.suggestions];
+  if (cascadeChain.length > 2) suggestions.push(`级联影响：延期将波及 ${cascadeChain.length - 1} 个下游任务`);
+  if (totalImpact > 7) suggestions.push('总影响天数超过一周，建议调整依赖链或并行化执行');
+
+  return {
+    type: 'risk',
+    targetId: task.id,
+    targetName: task.title,
+    score,
+    level,
+    summary: `级联风险${level === 'critical' ? '严重' : level === 'high' ? '高' : '中等'}：影响 ${cascadeChain.length - 1} 个下游任务，累计影响约 ${Math.round(totalImpact)} 天`,
+    details: { cascadeChain, totalCascadeDays: Math.round(totalCascadeDays), totalImpact: Math.round(totalImpact) },
+    suggestions,
+    confidence: cascadeChain.length > 3 ? 'low' : 'medium',
+    timestamp: new Date().toISOString(),
+  };
+}
+
+/** 统一 V2 风险雷达 — 整合原引擎 + 进度感知 + 级联传播 */
+export function generateRiskRadarV2(tasks: Task[], members: any[], goals: Goal[], projectId?: string): RiskRadar {
+  // 用 V2 进度感知延期预测替代原始预测
+  const activeTasks = tasks
+    .filter(t => !t.deletedAt && t.status !== 'done' && t.status !== 'cancelled')
+    .slice(0, 15); // 提升采样量 10→15
+  const activeGoals = goals.filter(g => !g.deletedAt && g.status !== 'done' && g.status !== 'cancelled').slice(0, 8); // 5→8
+
+  const predictions: PredictionResult[] = [];
+
+  // V2 延期预测
+  for (const task of activeTasks) {
+    const pred = predictDelayV2(task, tasks);
+    predictions.push(pred);
+    // 高风险任务额外做级联分析
+    if (pred.score >= 50 && (task.blockedBy || []).length === 0) {
+      predictions.push(predictCascadeDelay(task, tasks));
+    }
+  }
+
+  // 资源预测
+  predictions.push(predictResourceBottleneck(tasks, members));
+
+  // OKR 预测
+  for (const goal of activeGoals) {
+    predictions.push(predictOKRAchievement(goal));
+  }
+
+  // 计算维度分数
+  const delayScores = predictions.filter(p => p.type === 'delay').map(p => p.score);
+  const cascadeScore = predictions.filter(p => p.type === 'risk' && p.details?.cascadeChain).map(p => p.score);
+  const resourceScore = predictions.find(p => p.type === 'resource')?.score || 0;
+  const okrScores = predictions.filter(p => p.type === 'okr').map(p => p.score);
+
+  const delayDim = delayScores.length > 0 ? Math.round(delayScores.reduce((a, b) => a + b, 0) / delayScores.length) : 0;
+  const cascadeDim = cascadeScore.length > 0 ? Math.round(cascadeScore.reduce((a, b) => a + b, 0) / cascadeScore.length) : 0;
+  const okrDim = okrScores.length > 0 ? Math.round(okrScores.reduce((a, b) => a + b, 0) / okrScores.length) : 0;
+  const safeResourceScore = Number.isFinite(resourceScore) ? resourceScore : 0;
+
+  // V2 加权：延期30% + 级联20% + 资源25% + OKR25%
+  const riskDim = Math.round(delayDim * 0.3 + cascadeDim * 0.2 + safeResourceScore * 0.25 + okrDim * 0.25);
+  const overall = Math.round(delayDim * 0.25 + cascadeDim * 0.15 + safeResourceScore * 0.2 + okrDim * 0.2 + riskDim * 0.2);
+
+  const alerts: Array<{ level: string; message: string; action: string }> = [];
+  if (delayDim >= 50) alerts.push({ level: 'high', message: `${delayScores.filter(s => s >= 50).length}个任务延期风险高`, action: '调整截止日或增加资源' });
+  if (cascadeDim >= 40) alerts.push({ level: 'high', message: '存在级联延期风险', action: '检查依赖链，考虑并行化' });
+  if (safeResourceScore >= 50) alerts.push({ level: 'medium', message: '团队资源紧张', action: '重新分配任务' });
+  if (okrDim >= 40) alerts.push({ level: 'medium', message: `${okrScores.filter(s => s >= 40).length}个目标达成风险`, action: '审视KR进度' });
+  if (riskDim >= 60) alerts.push({ level: 'critical', message: '项目整体风险较高', action: '执行风险缓解计划' });
+
+  return { overall, dimensions: { delay: delayDim, resource: safeResourceScore, okr: okrDim, risk: riskDim }, alerts, predictions };
 }

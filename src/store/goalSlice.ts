@@ -102,6 +102,36 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
         }
         if (updates.status && updates.status !== oldStatus) {
           fireAutomationRules(s, s.goals[idx].id, 'goal', s.goals[idx].title, 'status_change', updates, s.goals[idx]);
+          // F5: 目标变更联动 — 级联到关联的项目和任务
+          const goalId = action.payload.id;
+          const newStatus = updates.status;
+          if (['done', 'blocked', 'cancelled'].includes(newStatus)) {
+            const cascadeStatus = newStatus === 'done' ? 'done' : newStatus === 'blocked' ? 'blocked' : 'cancelled';
+            // Cascade to projects linked to this goal
+            s.projects.filter(p => p.goalId === goalId && !p.deletedAt).forEach(p => {
+              if (p.status !== cascadeStatus) {
+                const pIdx = s.projects.indexOf(p);
+                s.projects[pIdx] = { ...p, status: cascadeStatus, updatedAt: now };
+                supabaseUpdate('projects', p.id, { status: cascadeStatus, updated_at: now });
+                // Cascade further to tasks in this project
+                s.tasks.filter(t => t.projectId === p.id && !t.deletedAt).forEach(t => {
+                  if (t.status !== cascadeStatus) {
+                    const tIdx = s.tasks.indexOf(t);
+                    s.tasks[tIdx] = { ...t, status: cascadeStatus, updatedAt: now, ...(cascadeStatus === 'done' ? { completedAt: now } : { completedAt: null }) };
+                    supabaseUpdate('tasks', t.id, { status: cascadeStatus, updated_at: now, ...(cascadeStatus === 'done' ? { completed_at: now } : { completed_at: null }) });
+                  }
+                });
+              }
+            });
+            // Also cascade to tasks directly linked to this goal (no project)
+            s.tasks.filter(t => t.goalId === goalId && !t.projectId && !t.deletedAt).forEach(t => {
+              if (t.status !== cascadeStatus) {
+                const tIdx = s.tasks.indexOf(t);
+                s.tasks[tIdx] = { ...t, status: cascadeStatus, updatedAt: now, ...(cascadeStatus === 'done' ? { completedAt: now } : { completedAt: null }) };
+                supabaseUpdate('tasks', t.id, { status: cascadeStatus, updated_at: now, ...(cascadeStatus === 'done' ? { completed_at: now } : { completed_at: null }) });
+              }
+            });
+          }
         }
         if (Object.keys(updates).some(k => k !== 'status')) {
           fireAutomationRules(s, s.goals[idx].id, 'goal', s.goals[idx].title, 'field_change', updates, s.goals[idx]);
@@ -113,31 +143,25 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
     case 'DELETE_GOAL': {
       if (!reducerCanDelete(state, 'goals_delete')) return state;
       const gid = action.payload;
-      const s = needMutate(state, ['goals', 'projects', 'tasks', 'itemLinks', 'comments']);
+      const s = needMutate(state, ['goals']);
       const now = tsNow();
-      const deletedGoal = s.goals.find(g => g.id === gid) || state.goals.find(g => g.id === gid);
-      markPendingDelete(gid);
-      s.goals = s.goals.filter(g => g.id !== gid);
-      const affectedGoals = s.goals.filter(g => g.parentId === gid);
-      s.goals.forEach(g => { if (g.parentId === gid) { g.parentId = null; g.level = 0; } });
-      for (const g of affectedGoals) { supabaseUpdate('goals', g.id, { parent_id: null, level: 0, updated_at: now }); }
-      function recalcGoalLevels(parentId: string, parentLevel: number) {
-        s.goals.filter(g => g.parentId === parentId).forEach(child => {
-          child.level = parentLevel + 1;
-          recalcGoalLevels(child.id, child.level);
-        });
+      const deletedGoal = s.goals.find(g => g.id === gid);
+      if (deletedGoal) {
+        deletedGoal.deletedAt = now;
+        deletedGoal.updatedAt = now;
+        supabaseUpdate('goals', gid, { deleted_at: now, updated_at: now });
       }
-      for (const g of affectedGoals) { recalcGoalLevels(g.id, 0); }
-      const affectedProjects = s.projects.filter(p => p.goalId === gid);
-      s.projects.forEach(p => { if (p.goalId === gid) p.goalId = null; });
-      for (const p of affectedProjects) { supabaseUpdate('projects', p.id, { goal_id: null, updated_at: now }); }
-      const affectedTasks = s.tasks.filter(t => t.goalId === gid);
-      s.tasks.forEach(t => { if (t.goalId === gid) t.goalId = null; });
-      for (const t of affectedTasks) { supabaseUpdate('tasks', t.id, { goal_id: null, updated_at: now }); }
-      s.itemLinks = s.itemLinks.filter(l => l.sourceId !== gid && l.targetId !== gid);
-      s.comments = s.comments.filter(c => c.itemId !== gid);
-      supabaseDelete('goals', gid);
-      logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '目标', targetId: gid, targetTitle: deletedGoal?.title || '' });
+      return s;
+    }
+    case 'RESTORE_GOAL': {
+      const gid = action.payload;
+      const s = needMutate(state, ['goals']);
+      const goal = s.goals.find(g => g.id === gid);
+      if (goal) {
+        goal.deletedAt = undefined;
+        goal.updatedAt = tsNow();
+        supabaseUpdate('goals', gid, { deleted_at: null, updated_at: goal.updatedAt });
+      }
       return s;
     }
 

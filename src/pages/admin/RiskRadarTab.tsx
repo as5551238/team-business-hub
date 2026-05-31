@@ -9,7 +9,9 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '@/store/useStore';
 import {
-  generateRiskRadar,
+  generateRiskRadarV2,
+  predictDelayV2,
+  predictCascadeDelay,
   predictDelayEnhanced,
   predictResourceBottleneck,
   predictOKRAchievement,
@@ -32,6 +34,7 @@ import {
   BarChart3,
   Activity,
   LineChart,
+  GitBranch,
 } from 'lucide-react';
 import { runBacktest, type BacktestResult } from '@/lib/predictionBacktest';
 
@@ -57,14 +60,14 @@ const TYPE_ICON: Record<PredictionType, typeof Clock> = {
   delay: Clock,
   resource: Users,
   okr: Target,
-  risk: Shield,
+  risk: GitBranch,
 };
 
 const TYPE_LABEL: Record<PredictionType, string> = {
   delay: '延期风险',
   resource: '资源瓶颈',
   okr: 'OKR达成',
-  risk: '综合风险',
+  risk: '级联传播',
 };
 
 function ScoreBar({ score, level }: { score: number; level: string }) {
@@ -104,6 +107,36 @@ function PredictionCard({ pred, expanded, onToggle }: { pred: PredictionResult; 
         <div className="px-3 pb-3 space-y-2 bg-muted/5">
           <p className="text-xs text-muted-foreground">{pred.summary}</p>
           <ScoreBar score={pred.score} level={pred.level} />
+          {/* 级联依赖链可视化 */}
+          {pred.type === 'risk' && pred.details?.cascadeChain && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 space-y-1">
+              <div className="text-[10px] font-semibold text-orange-700 flex items-center gap-1"><GitBranch size={10} />依赖传播链</div>
+              <div className="flex flex-wrap items-center gap-1">
+                {((pred.details.cascadeChain as string[]) || []).map((id, idx) => {
+                  const taskName = id === pred.targetId ? pred.targetName : id.slice(0, 6);
+                  return (
+                    <span key={id} className="flex items-center gap-1">
+                      {idx > 0 && <span className="text-orange-400 text-[10px]">→</span>}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${idx === 0 ? 'bg-orange-200 text-orange-800 font-semibold' : 'bg-orange-100 text-orange-600'}`}>
+                        {taskName}
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+              {pred.details.totalImpact != null && (
+                <div className="text-[10px] text-orange-600">累计影响约 {pred.details.totalImpact} 天</div>
+              )}
+            </div>
+          )}
+          {/* 进度感知信息 */}
+          {pred.type === 'delay' && pred.details?.progress != null && (
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+              <span>当前进度: {pred.details.progress}%</span>
+              {pred.details.progressDiscount > 0 && <span className="text-green-600">进度领先 (-{pred.details.progressDiscount}分)</span>}
+              {pred.details.progressDiscount < 0 && <span className="text-red-600">进度滞后 (+{Math.abs(pred.details.progressDiscount)}分)</span>}
+            </div>
+          )}
           {pred.suggestions.length > 0 && (
             <div className="space-y-1">
               {pred.suggestions.map((s, i) => (
@@ -133,7 +166,7 @@ export function RiskRadarTab() {
 
   const radar: RiskRadar = useMemo(() => {
     try {
-      return generateRiskRadar(
+      return generateRiskRadarV2(
         state.tasks,
         state.members,
         state.goals,
@@ -152,10 +185,10 @@ export function RiskRadarTab() {
   const overallLevel = safeOverall >= 70 ? 'critical' : safeOverall >= 50 ? 'high' : safeOverall >= 30 ? 'medium' : safeOverall >= 15 ? 'low' : 'none';
 
   const dims = [
-    { key: 'delay' as const, label: '延期风险', icon: Clock, score: Number.isFinite(radar.dimensions.delay) ? radar.dimensions.delay : 0, desc: '基于CPM关键路径+自学习历史' },
-    { key: 'resource' as const, label: '资源瓶颈', icon: Users, score: Number.isFinite(radar.dimensions.resource) ? radar.dimensions.resource : 0, desc: '团队负载均衡分析' },
-    { key: 'okr' as const, label: 'OKR达成', icon: Target, score: Number.isFinite(radar.dimensions.okr) ? radar.dimensions.okr : 0, desc: '进度趋势vs时间进度' },
-    { key: 'risk' as const, label: '综合风险', icon: Shield, score: Number.isFinite(radar.dimensions.risk) ? radar.dimensions.risk : 0, desc: '加权综合(延期40%+资源30%+OKR30%)' },
+    { key: 'delay' as const, label: '延期风险', icon: Clock, score: Number.isFinite(radar.dimensions.delay) ? radar.dimensions.delay : 0, desc: 'V2 进度感知 + CPM关键路径 + 自学习历史' },
+    { key: 'resource' as const, label: '资源瓶颈', icon: Users, score: Number.isFinite(radar.dimensions.resource) ? radar.dimensions.resource : 0, desc: '团队负载均衡分析（权重25%）' },
+    { key: 'okr' as const, label: 'OKR达成', icon: Target, score: Number.isFinite(radar.dimensions.okr) ? radar.dimensions.okr : 0, desc: '进度趋势vs时间进度（权重25%）' },
+    { key: 'risk' as const, label: '综合风险', icon: Shield, score: Number.isFinite(radar.dimensions.risk) ? radar.dimensions.risk : 0, desc: 'V2加权(延期30%+级联20%+资源25%+OKR25%)' },
   ];
 
   const groupedPredictions = useMemo(() => {
@@ -354,7 +387,7 @@ export function RiskRadarTab() {
       {/* 预测详情 */}
       <div className="space-y-2">
         <div className="text-sm font-semibold">预测详情</div>
-        {(['delay', 'resource', 'okr'] as PredictionType[]).map(type => {
+        {(['delay', 'risk', 'resource', 'okr'] as PredictionType[]).map(type => {
           const preds = groupedPredictions[type];
           if (!preds || preds.length === 0) return null;
           const TypeIcon = TYPE_ICON[type];
@@ -380,7 +413,7 @@ export function RiskRadarTab() {
       {/* 数据来源说明 */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
         <p className="text-[11px] text-blue-700">
-          <strong>数据说明</strong>：风险雷达基于CPM关键路径分析、自学习延期历史库、资源负载模型和OKR进度趋势综合计算。置信度随历史数据积累逐步提升。
+          <strong>V2 引擎数据说明</strong>：风险雷达 V2 采用进度感知延期预测（结合当前进度与时间进度），新增级联传播预测（上游延期向下游依赖传播），加权综合延期30%+级联20%+资源25%+OKR25%。置信度随历史数据积累逐步提升。
         </p>
       </div>
       </>

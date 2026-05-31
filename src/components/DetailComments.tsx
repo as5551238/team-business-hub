@@ -3,7 +3,7 @@ import { useStore } from '@/store/useStore';
 import { uploadFile, BUCKET_NAMES } from '@/supabase/storage';
 import type { ItemType } from '@/types';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Edit2, Save, Trash2, Bell, Sparkles } from 'lucide-react';
+import { MessageSquare, Edit2, Save, Trash2, Bell, Sparkles, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { genId } from '@/store/utils';
 import { Section } from './detail-shared';
@@ -245,6 +245,41 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
     dispatch({ type: 'UPDATE_COMMENT', payload: { id: commentId, updates: { followUpRequired: nextStatus !== 'none', followUpStatus: nextStatus } } });
   }
 
+  function handleConvertToTask(commentId: string) {
+    if (!canEdit) return;
+    const comment = state.comments.find(c => c.id === commentId);
+    if (!comment) return;
+    const title = comment.content.length > 50 ? comment.content.substring(0, 50) + '...' : comment.content;
+    const taskPayload: any = {
+      title,
+      description: `由评论转任务创建（原始评论: ${comment.content}）`,
+      projectId: comment.itemType === 'project' ? comment.itemId : null,
+      goalId: comment.itemType === 'goal' ? comment.itemId : null,
+      parentId: comment.itemType === 'task' ? comment.itemId : null,
+      status: 'todo' as const,
+      priority: 'medium' as const,
+      leaderId: comment.memberId,
+      supporterIds: comment.mentionedMemberIds || [],
+      tags: [],
+      category: '',
+      startDate: null,
+      dueDate: null,
+      reminderDate: null,
+      completedAt: null,
+      subtasks: [],
+      attachments: [],
+      trackingRecords: [],
+      repeatCycle: 'none' as const,
+      blockedBy: [],
+      sprintId: null,
+      discussionThreadId: null,
+      summary: '',
+      teamId: state.currentTeamId || '',
+    };
+    dispatch({ type: 'ADD_TASK', payload: taskPayload });
+    dispatch({ type: 'UPDATE_COMMENT', payload: { id: commentId, updates: { followUpRequired: true, followUpStatus: 'completed' as const } } });
+  }
+
   function handleStartEditComment(commentId: string) {
     const comment = state.comments.find(c => c.id === commentId);
     if (!comment) return;
@@ -307,6 +342,7 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
                   </span>
                 )}
                 <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 shrink-0">
+                  {!isAi && <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="转为任务" onClick={() => handleConvertToTask(c.id)}><ListChecks className="w-3 h-3 text-muted-foreground" /></button>}
                   {!isAi && <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="切换跟进状态" onClick={() => handleToggleFollowUp(c.id)}><Bell className="w-3 h-3 text-muted-foreground" /></button>}
                   {!isAi && c.memberId === state.currentUser?.id && (
                     <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="编辑" onClick={() => handleStartEditComment(c.id)}><Edit2 className="w-3 h-3 text-muted-foreground" /></button>
@@ -338,12 +374,19 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
             <div className="relative" ref={mentionRef}>
               <button className="px-2 py-1 text-xs border border-border rounded hover:bg-accent cursor-pointer" onClick={() => setMentionOpen(!mentionOpen)}>@成员</button>
               {mentionOpen && (
-                <div className="absolute bottom-full left-0 mb-1 w-48 bg-white border border-border rounded shadow-lg z-20">
-                  <input className="w-full text-xs border-b border-border px-2 py-1.5 rounded-t" placeholder="搜索成员..." value={mentionSearch} onChange={e => setMentionSearch(e.target.value)} />
-                  <div className="max-h-[120px] overflow-y-auto">
-                    {filteredMentionMembers.length === 0 && <p className="text-xs text-muted-foreground px-2 py-1">无匹配</p>}
+                <div className="absolute bottom-full left-0 mb-1 w-56 bg-white border border-border rounded-lg shadow-lg z-20">
+                  <input className="w-full text-xs border-b border-border px-2 py-1.5 rounded-t-lg" placeholder="搜索成员..." value={mentionSearch} onChange={e => setMentionSearch(e.target.value)} autoFocus />
+                  <div className="max-h-[160px] overflow-y-auto py-0.5">
+                    {filteredMentionMembers.length === 0 && <p className="text-xs text-muted-foreground px-2 py-2">无匹配</p>}
                     {filteredMentionMembers.map(m => (
-                      <button key={m.id} className="w-full text-left px-2 py-1 text-xs hover:bg-accent cursor-pointer" onClick={() => insertMention(m.name)}>{m.name}</button>
+                      <button key={m.id} className="w-full flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-accent cursor-pointer text-left" onClick={() => insertMention(m.name)}>
+                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold flex-shrink-0">{(m.name || '?')[0]}</div>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium">{m.name}</span>
+                          <span className="ml-1 text-muted-foreground">{m.role === 'admin' ? '管理员' : m.role === 'manager' ? '经理' : m.role === 'leader' ? '负责人' : ''}</span>
+                        </div>
+                        {m.department && <span className="text-[10px] text-muted-foreground truncate max-w-[60px]">{m.department}</span>}
+                      </button>
                     ))}
                   </div>
                 </div>

@@ -3,6 +3,16 @@ import { genId } from './utils';
 import { supabaseUpdate } from './supabase';
 import { calcDualTrack } from '@/lib/kpiScoring';
 
+// ==================== 软删除过滤 ====================
+/** Filter out soft-deleted items for display lists */
+export function activeGoals(goals: Goal[]): Goal[] { return goals.filter(g => !g.deletedAt); }
+export function activeProjects(projects: Project[]): Project[] { return projects.filter(p => !p.deletedAt); }
+export function activeTasks(tasks: Task[]): Task[] { return tasks.filter(t => !t.deletedAt); }
+/** Get soft-deleted items (for recycle bin) */
+export function deletedGoals(goals: Goal[]): Goal[] { return goals.filter(g => g.deletedAt); }
+export function deletedProjects(projects: Project[]): Project[] { return projects.filter(p => p.deletedAt); }
+export function deletedTasks(tasks: Task[]): Task[] { return tasks.filter(t => t.deletedAt); }
+
 // ==================== 企微通知桥接 ====================
 let _wechatNotify: ((title: string, message: string) => void) | null = null;
 export function setWeChatNotify(fn: (title: string, message: string) => void) { _wechatNotify = fn; }

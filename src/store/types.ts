@@ -13,6 +13,8 @@ export interface SupabaseConfig {
 }
 
 export type Action =
+  | { type: 'UNDO' }
+  | { type: 'REDO' }
   | { type: 'SET_STATE'; payload: AppState }
   | { type: 'MERGE_STATE'; payload: Partial<AppState> }
   | { type: 'SET_CURRENT_USER'; payload: string | null }
@@ -21,14 +23,17 @@ export type Action =
   | { type: 'ADD_GOAL'; payload: Omit<Goal, 'id' | 'createdAt' | 'updatedAt' | 'progress'> }
   | { type: 'UPDATE_GOAL'; payload: { id: string; updates: Partial<Goal> } }
   | { type: 'DELETE_GOAL'; payload: string }
+  | { type: 'RESTORE_GOAL'; payload: string }
   | { type: 'MOVE_GOAL_PARENT'; payload: { goalId: string; newParentId: string | null } }
   | { type: 'UPDATE_KEY_RESULT'; payload: { goalId: string; krId: string; value: number } }
   | { type: 'ADD_PROJECT'; payload: Omit<Project, 'id' | 'createdAt' | 'updatedAt' | 'progress'> }
   | { type: 'UPDATE_PROJECT'; payload: { id: string; updates: Partial<Project> } }
   | { type: 'DELETE_PROJECT'; payload: string }
+  | { type: 'RESTORE_PROJECT'; payload: string }
   | { type: 'ADD_TASK'; payload: Omit<Task, 'id' | 'createdAt' | 'updatedAt'> }
   | { type: 'UPDATE_TASK'; payload: { id: string; updates: Partial<Task> } }
   | { type: 'DELETE_TASK'; payload: string }
+  | { type: 'RESTORE_TASK'; payload: string }
   | { type: 'TOGGLE_SUBTASK'; payload: { taskId: string; subtaskId: string } }
   | { type: 'ADD_SUBTASK'; payload: { taskId: string; subtask: Omit<SubTask, 'id' | 'createdAt'> } }
   | { type: 'ADD_ITEM_LINK'; payload: Omit<ItemLink, 'id' | 'createdAt'> }
@@ -89,7 +94,9 @@ export type Action =
   | { type: 'APPROVE_GOAL'; payload: { id: string; comment: string } }
   | { type: 'REJECT_GOAL'; payload: { id: string; comment: string } }
   | { type: 'RECALL_GOAL_APPROVAL'; payload: string }
-  | { type: 'UPDATE_SUBSCRIPTION'; payload: { teamId: string; updates: Partial<Subscription> } };
+  | { type: 'UPDATE_SUBSCRIPTION'; payload: { teamId: string; updates: Partial<Subscription> } }
+  | { type: 'REALTIME_UPSERT'; payload: { table: string; item: Record<string, unknown> } }
+  | { type: 'REALTIME_DELETE'; payload: { table: string; id: string } };
 
 export function toCamel(row: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};

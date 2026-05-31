@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Target, FolderKanban, ListTodo, Plus, Users, Zap, Globe, Search, Edit2, Trash2, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
 import { useBookmarks } from '@/store/useStore';
 import { actionLabels, useFilteredData } from './shared';
+import { RecycleBin } from './RecycleBin';
 import type { Bookmark as BookmarkType } from '@/types';
 import type { DashboardTabProps } from './shared';
 
@@ -247,6 +248,9 @@ export default function OtherTab({ onOpenDetail, onPageChange }: DashboardTabPro
           ))}
         </div>
       </div>
+
+      {/* 回收站 */}
+      <RecycleBin />
     </div>
   );
 }

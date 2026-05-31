@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState, useMemo, type ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import type { AppState, Goal, Project, BackupData, Tag, Permission, Category, Template, ScheduleEvent, Note, ItemType, Comment, Member, Bookmark, Knowledge } from '@/types';
 import { getSupabaseClient, initSupabase, resetSupabase } from '@/supabase/client';
 import type { ConnectionMode, SupabaseConfig, Action } from './types';
@@ -14,7 +14,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 import { toCamel } from './types';
 import { reducer, hasPermission } from './reducer';
+import { pushUndo, popUndo, popRedo, canUndo, canRedo, getUndoLabel, getRedoLabel } from './undo';
 import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError, setCurrentTeamId } from './supabase';
+import { setRLSContext } from '@/supabase/client';
 import { CURRENT_USER_KEY } from './types';
 import { generateAllData } from '@/data/dataGenerator';
 
@@ -29,6 +31,7 @@ interface ActionsContextType {
   connectionMode: ConnectionMode;
   connectionError: string | null;
   stateRef: React.RefObject<AppState>;
+  undoInfo: { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null };
 }
 
 const StateContext = createContext<AppState | null>(null);
@@ -43,9 +46,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const offlineWriteCountRef = useRef(0);
 
-  // Dispatch proxy that tracks offline writes for Layout.tsx badge
+  const [undoCounter, setUndoCounter] = useState(0);
+
+  // Dispatch proxy that tracks offline writes for Layout.tsx badge + undo/redo
   const trackedDispatch = useCallback((action: any) => {
+    // Handle undo/redo special actions
+    if (action.type === 'UNDO') {
+      const inverseAction = popUndo();
+      if (inverseAction) { dispatch(inverseAction); setUndoCounter(c => c + 1); notifySelectorListeners(); }
+      return;
+    }
+    if (action.type === 'REDO') {
+      const redoAction = popRedo();
+      if (redoAction) { dispatch(redoAction); setUndoCounter(c => c + 1); notifySelectorListeners(); }
+      return;
+    }
     dispatch(action);
+    // Notify selector subscribers of state change
+    notifySelectorListeners();
+    // Track for undo
+    if (action.type) pushUndo(action);
+    setUndoCounter(c => c + 1);
+    // Track offline writes
     if (action.type && action.type !== 'MERGE_STATE' && action.type !== 'SET_STATE' && action.type !== 'MARK_NOTIFICATION_READ' && action.type !== 'MARK_ALL_NOTIFICATIONS_READ') {
       try {
         if (localStorage.getItem('tbh-went-offline-at')) {
@@ -125,6 +147,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const savedTeamId = (() => { try { return localStorage.getItem('tbh-current-team'); } catch { return null; } })();
         const teamId = savedTeamId || data.currentTeamId || null;
         if (teamId) setCurrentTeamId(teamId);
+        // Set RLS context for subsequent queries
+        const savedUserId = (() => { try { return localStorage.getItem(CURRENT_USER_KEY); } catch { return null; } })();
+        if (teamId && savedUserId) setRLSContext(teamId, savedUserId);
         if (data.currentTeamId && !savedTeamId) {
           try { localStorage.setItem('tbh-current-team', data.currentTeamId); } catch {}
         }
@@ -226,104 +251,138 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     cleanupRealtime();
     const sb = getSupabaseClient();
     if (!sb) return;
-    // Supabase Realtime postgres_changes is broken — use REST polling instead
-    const tables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules'];
+
+    // --- Supabase Realtime postgres_changes subscriptions ---
+    // Dedup: skip events within 2s of a local write to avoid echoing our own changes
+    const lastWriteAt: Record<string, number> = {};
+    const origDispatch = dispatch;
+    const dedupedDispatch = (action: Action) => {
+      if (action.type && typeof action.type === 'string' && action.type.startsWith('ADD_') || action.type.startsWith('UPDATE_') || action.type.startsWith('DELETE_')) {
+        lastWriteAt[action.type] = Date.now();
+      }
+      origDispatch(action);
+    };
+
+    const handleDbChange = (table: string, payload: any) => {
+      const { eventType, new: newRow, old: oldRow } = payload;
+      // Skip events caused by our own recent write (within 2s)
+      const writeKey = `${table}:${eventType}`;
+      if (lastWriteAt[writeKey] && Date.now() - lastWriteAt[writeKey] < 2000) return;
+
+      if (eventType === 'INSERT' || eventType === 'UPDATE') {
+        if (!newRow || !newRow.id) return;
+        const camelRow = toCamel(newRow);
+        dedupedDispatch({ type: 'REALTIME_UPSERT', payload: { table, item: camelRow } });
+      } else if (eventType === 'DELETE') {
+        const id = oldRow?.id;
+        if (!id) return;
+        dedupedDispatch({ type: 'REALTIME_DELETE', payload: { table, id } });
+      }
+    };
+
+    const teamId = state.currentTeamId;
+    const realtimeChannel = sb.channel('db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('goals', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('projects', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('tasks', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, (p) => handleDbChange('members', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, (p) => handleDbChange('notifications', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('comments', p))
+      .subscribe();
+
+    // --- Fallback REST polling (120s) for missed Realtime events ---
+    const tableKeyMap: Record<string, string> = {
+      item_links: 'itemLinks', schedule_events: 'scheduleEvents', saved_views: 'savedViews',
+      status_flow_rules: 'statusFlowRules', automation_rules: 'automationRules',
+    };
+    const allTables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules'];
     let polling = false;
-    let pollTimerId: number | null = null;
-    const poll = async (): Promise<boolean> => {
-      if (polling) return false;
-      if (document.visibilityState === 'hidden') return false;
+    const fallbackPoll = async () => {
+      if (polling || document.visibilityState === 'hidden') return;
       polling = true;
-      let anySuccess = false;
       try {
-        const results = await Promise.allSettled(tables.map(table => {
+        const results = await Promise.allSettled(allTables.map(table => {
           const query = table === 'members' ? sb.from(table).select('*').eq('status', 'active') : sb.from(table).select('*');
           return query.then(({ data }) => {
-            const key = table === 'item_links' ? 'itemLinks' : table === 'schedule_events' ? 'scheduleEvents' : table === 'saved_views' ? 'savedViews' : table === 'status_flow_rules' ? 'statusFlowRules' : table === 'automation_rules' ? 'automationRules' : table;
+            const key = tableKeyMap[table] || table;
             return { key, data: Array.isArray(data) ? data.map(toCamel) : [] };
           });
         }));
         const payload: Record<string, any> = {};
-        results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; anySuccess = true; } });
-        if (anySuccess) {
-          dispatch({ type: 'MERGE_STATE', payload });
-          try { bc.postMessage({ type: 'MERGE_STATE', payload }); } catch {}
-          // Auto-recover from offline if poll succeeds
-          if (navigator.onLine) setConnectionMode('supabase');
-        }
+        results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; } });
+        dispatch({ type: 'MERGE_STATE', payload });
+        try { bc.postMessage({ type: 'MERGE_STATE', payload }); } catch {}
       } catch (e) {
-        console.error('[poll] data sync failed:', e);
+        console.error('[fallbackPoll] data sync failed:', e);
       } finally {
         polling = false;
       }
-      return anySuccess;
     };
-    // BroadcastChannel for cross-tab instant sync (COL-01)
+
+    // BroadcastChannel for cross-tab instant sync
     let bc: BroadcastChannel | null = null;
-    try { bc = new BroadcastChannel('tbh-sync'); } catch (e) { console.warn('[setupRealtime] BroadcastChannel not supported:', e); }
+    try { bc = new BroadcastChannel('tbh-sync'); } catch {}
     const onBcMessage = (e: MessageEvent) => {
       if (e.data && e.data.type === 'MERGE_STATE' && e.data.payload) {
         dispatch({ type: 'MERGE_STATE', payload: e.data.payload });
-      } else {
-        poll();
       }
     };
     if (bc) bc.addEventListener('message', onBcMessage);
-    poll();
-    const timerHolder = { id: window.setInterval(poll, 10000) as number };
+
+    // Initial full fetch
+    fallbackPoll();
+
+    // Fallback timer: 120s full poll
+    const fallbackTimer = window.setInterval(fallbackPoll, 120000);
+
+    // Visibility change: immediate poll when tab becomes visible
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        poll();
-        if (timerHolder.id) window.clearInterval(timerHolder.id);
-        timerHolder.id = window.setInterval(poll, 10000);
-      } else {
-        if (timerHolder.id) window.clearInterval(timerHolder.id);
-        timerHolder.id = window.setInterval(poll, 30000);
-      }
+      if (document.visibilityState === 'visible') fallbackPoll();
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
-    // Offline detection: show offline status, auto-recover on reconnect (with backoff)
+
+    // Offline/online detection
     let reconnectFailures = 0;
-    const onOffline = () => { setConnectionMode('offline'); reconnectFailures = 0; offlineWriteCountRef.current = 0; try { localStorage.setItem('tbh-went-offline-at', String(Date.now())); try { localStorage.setItem('tbh-offline-writes', '0'); } catch {} } catch {} };
+    const onOffline = () => { setConnectionMode('offline'); reconnectFailures = 0; offlineWriteCountRef.current = 0; try { localStorage.setItem('tbh-went-offline-at', String(Date.now())); localStorage.setItem('tbh-offline-writes', '0'); } catch {} };
     const onOnline = () => {
       const delay = Math.min(100 * Math.pow(2, reconnectFailures), 5000);
       setTimeout(async () => {
-        const success = await poll();
+        const success = await fallbackPoll().then(() => true).catch(() => false);
         if (success) {
           reconnectFailures = 0;
           offlineWriteCountRef.current = 0;
           setConnectionMode('supabase');
-          try { localStorage.removeItem('tbh-offline-writes'); } catch {}
-          // Replay any writes that failed while offline
-          try { await replayFailedWrites(); } catch {}
-        } else {
-          reconnectFailures++;
-        }
+          try { localStorage.removeItem('tbh-offline-writes'); replayFailedWrites(); } catch {}
+        } else { reconnectFailures++; }
       }, delay);
     };
     window.addEventListener('offline', onOffline);
     window.addEventListener('online', onOnline);
-    // Store bc listener ref for cleanup (STA-03)
+
+    // Store all cleanup references
     if (bc) (bc as any)._onMessage = onBcMessage;
-    // Store timerHolder for cleanup — wrap to allow clearInterval on latest timer
-    realtimeChannels.current = [{ clear: () => window.clearInterval(timerHolder.id) } as any, onVisibilityChange, onOffline, onOnline, ...(bc ? [bc] : [])];
+    realtimeChannels.current = [realtimeChannel, { clear: () => window.clearInterval(fallbackTimer) } as any, onVisibilityChange, onOffline, onOnline, ...(bc ? [bc] : [])];
   }
 
   function cleanupRealtime() {
     realtimeChannels.current.forEach(item => {
       if (typeof item === 'number') window.clearInterval(item);
-      else if (typeof item === 'function') document.removeEventListener('visibilitychange', item);
+      else if (typeof item === 'function') {
+        document.removeEventListener('visibilitychange', item);
+        window.removeEventListener('offline', item);
+        window.removeEventListener('online', item);
+      }
       else if (item instanceof BroadcastChannel) {
-        if (item._onMessage) item.removeEventListener('message', item._onMessage);
+        if ((item as any)._onMessage) item.removeEventListener('message', (item as any)._onMessage);
         item.close();
       }
-      else if (item && typeof item.clear === 'function') item.clear();
-    });
-    // Also clean up online/offline listeners (stored as functions)
-    const fnItems = realtimeChannels.current.filter(i => typeof i === 'function');
-    fnItems.forEach(fn => {
-      window.removeEventListener('offline', fn);
-      window.removeEventListener('online', fn);
+      else if (item && typeof (item as any).unsubscribe === 'function') {
+        // Supabase Realtime channel
+        try { (item as any).unsubscribe(); } catch {}
+      }
+      else if (item && typeof (item as any).clear === 'function') {
+        (item as any).clear();
+      }
     });
     realtimeChannels.current = [];
   }
@@ -340,12 +399,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Undo/redo info (derived from module-level stacks + counter)
+  const undoInfo = useMemo(() => ({
+    canUndo: canUndo(),
+    canRedo: canRedo(),
+    undoLabel: getUndoLabel(),
+    redoLabel: getRedoLabel(),
+  }), [undoCounter]);
+
   // Actions context: stable reference (does NOT include state)
   const actionsValue = useMemo<ActionsContextType>(() => ({
     dispatch: trackedDispatch, connectionMode,
     connectSupabase: doConnect, disconnectSupabase: disconnect,
-    initializeSupabaseData: doInitializeData, connectionError, stateRef
-  }), [trackedDispatch, connectionMode, doConnect, disconnect, doInitializeData, connectionError]);
+    initializeSupabaseData: doInitializeData, connectionError, stateRef, undoInfo
+  }), [trackedDispatch, connectionMode, doConnect, disconnect, doInitializeData, connectionError, undoInfo]);
 
   return (
     <StateContext.Provider value={state}>
@@ -366,6 +433,81 @@ export function useStore() {
     ? state
     : ensureAppStateDefaults(state);
   return { state: safeState, ...actions };
+}
+
+/**
+ * Selector-based subscription: components only re-render when the selected slice changes.
+ * Uses a pub/sub pattern with useSyncExternalStore to completely avoid StateContext subscriptions.
+ * Components using this hook are NOT triggered by unrelated state changes.
+ * Supports shallow equality check to prevent re-renders when array/object contents haven't changed.
+ *
+ * Usage: const tasks = useStoreSelector(s => s.tasks);
+ */
+// Global listener registry for selector-based subscriptions
+const selectorListeners = new Set<() => void>();
+let selectorStateVersion = 0;
+
+function subscribeToSelectors(listener: () => void): () => void {
+  selectorListeners.add(listener);
+  return () => selectorListeners.delete(listener);
+}
+
+function getSelectorVersion(): number {
+  return selectorStateVersion;
+}
+
+// Called after every dispatch to notify selector subscribers
+function notifySelectorListeners() {
+  selectorStateVersion++;
+  selectorListeners.forEach(l => l());
+}
+
+// Shallow equality comparison
+function shallowEqual<T>(a: T, b: T): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) return false; }
+    return true;
+  }
+  const keysA = Object.keys(a as Record<string, unknown>);
+  const keysB = Object.keys(b as Record<string, unknown>);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) { if ((a as Record<string, unknown>)[k] !== (b as Record<string, unknown>)[k]) return false; }
+  return true;
+}
+
+export function useStoreSelector<T>(selector: (state: AppState) => T): T {
+  const actions = useContext(ActionsContext);
+  if (!actions) throw new Error('useStoreSelector must be used within StoreProvider');
+
+  const selectorRef = useRef(selector);
+  selectorRef.current = selector;
+  const stateRef = actions.stateRef as React.MutableRefObject<AppState>;
+  const prevRef = useRef<T | null>(null);
+
+  const getSnapshot = useCallback((): T => {
+    const s = stateRef.current;
+    const safeState = (s && Array.isArray(s.members)) ? s : ensureAppStateDefaults(s || ({} as AppState));
+    const result = selectorRef.current(safeState);
+    // Shallow equal check: if the selected slice hasn't meaningfully changed, return previous reference
+    // This prevents downstream re-renders when only unrelated state changed
+    if (prevRef.current !== null && shallowEqual(result, prevRef.current)) {
+      return prevRef.current;
+    }
+    prevRef.current = result;
+    return result;
+  }, [stateRef]);
+
+  const version = useSyncExternalStore(
+    subscribeToSelectors,
+    getSelectorVersion,
+    getSelectorVersion,
+  );
+
+  // version change triggers re-read via getSnapshot
+  return getSnapshot();
 }
 
 export function useDashboardStats() {

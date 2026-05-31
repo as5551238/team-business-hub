@@ -32,6 +32,30 @@ export { hasPermission } from './shared';
 
 let lastSyncNotificationTime = 0;
 
+// Map DB table names to AppState keys for Realtime events
+const TABLE_TO_STATE_KEY: Record<string, string> = {
+  goals: 'goals',
+  projects: 'projects',
+  tasks: 'tasks',
+  members: 'members',
+  notifications: 'notifications',
+  activities: 'activities',
+  comments: 'comments',
+  tags: 'tags',
+  categories: 'categories',
+  notes: 'notes',
+  bookmarks: 'bookmarks',
+  item_links: 'itemLinks',
+  saved_views: 'savedViews',
+  reviews: 'reviews',
+  templates: 'templates',
+  schedule_events: 'scheduleEvents',
+  knowledge: 'knowledge',
+  sprints: 'sprints',
+  teams: 'teams',
+  team_members: 'teamMembers',
+};
+
 export function reducer(state: AppState, action: Action): AppState {
   const goalResult = goalReducer(state, action);
   if (goalResult !== null) return goalResult;
@@ -137,6 +161,59 @@ export function reducer(state: AppState, action: Action): AppState {
       const s = needMutate(state, ['currentTeamId']);
       s.currentTeamId = action.payload;
       try { localStorage.setItem('tbh-current-team', action.payload || ''); } catch {}
+      return s;
+    }
+
+    case 'REALTIME_UPSERT': {
+      const { table, item } = action.payload;
+      const stateKey = TABLE_TO_STATE_KEY[table];
+      if (!stateKey) return state;
+      const arr = (state as Record<string, unknown>)[stateKey];
+      if (!Array.isArray(arr)) return state;
+      const itemId = (item as Record<string, unknown>).id as string;
+      if (!itemId) return state;
+      const idx = (arr as Array<Record<string, unknown>>).findIndex((r: Record<string, unknown>) => (r as Record<string, unknown>).id === itemId);
+      const s = needMutate(state, [stateKey as keyof AppState]);
+      const currentArr = (s as Record<string, unknown>)[stateKey] as Array<Record<string, unknown>>;
+      if (idx >= 0) {
+        // LWW per-field: for each field in the incoming item, take the remote
+        // value only if remote updatedAt >= local updatedAt, preserving local
+        // edits to other fields that were made more recently.
+        const local = currentArr[idx];
+        const localUpdated = new Date((local.updatedAt as string) || 0).getTime();
+        const remoteUpdated = new Date((item.updatedAt as string) || (item.updated_at as string) || 0).getTime();
+        if (remoteUpdated >= localUpdated) {
+          // Remote is newer or same — merge field-by-field
+          const merged: Record<string, unknown> = { ...local };
+          for (const [key, value] of Object.entries(item)) {
+            if (key === 'id') continue; // never overwrite id
+            if (value !== undefined && value !== null) {
+              merged[key] = value;
+            }
+          }
+          // Always take the latest updatedAt
+          if (item.updatedAt || item.updated_at) {
+            merged.updatedAt = item.updatedAt || item.updated_at;
+          }
+          currentArr[idx] = merged;
+        }
+        // If local is strictly newer, skip — our optimistic write is more recent
+      } else {
+        currentArr.push(item);
+      }
+      return s;
+    }
+
+    case 'REALTIME_DELETE': {
+      const { table, id } = action.payload;
+      const stateKey = TABLE_TO_STATE_KEY[table];
+      if (!stateKey) return state;
+      const arr = (state as Record<string, unknown>)[stateKey];
+      if (!Array.isArray(arr)) return state;
+      const idx = (arr as Array<Record<string, unknown>>).findIndex((r: Record<string, unknown>) => (r as Record<string, unknown>).id === id);
+      if (idx < 0) return state;
+      const s = needMutate(state, [stateKey as keyof AppState]);
+      ((s as Record<string, unknown>)[stateKey] as Array<Record<string, unknown>>).splice(idx, 1);
       return s;
     }
 

@@ -273,32 +273,26 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
     case 'DELETE_TASK': {
       if (!reducerCanDelete(state, 'tasks_delete')) return state;
       const tid = action.payload;
-      const s = needMutate(state, ['tasks', 'notifications', 'projects', 'itemLinks', 'comments']);
+      const s = needMutate(state, ['tasks']);
       const now = tsNow();
-      markPendingDelete(tid);
       const t = s.tasks.find(t => t.id === tid);
-      s.tasks = s.tasks.filter(t => t.id !== tid);
-      const affectedTasks = s.tasks.filter(t => t.parentId === tid);
-      s.tasks.forEach(tk => { if (tk.parentId === tid) tk.parentId = null; });
-      const dependents = s.tasks.filter(tk => (tk.blockedBy ?? []).includes(tid));
-      s.tasks.forEach(tk => { if ((tk.blockedBy ?? []).includes(tid)) tk.blockedBy = tk.blockedBy.filter((bid: string) => bid !== tid); });
-      for (const t2 of affectedTasks) { supabaseUpdate('tasks', t2.id, { parent_id: null, updated_at: now }); }
-      for (const dep of dependents) { supabaseUpdate('tasks', dep.id, { blocked_by: dep.blockedBy, updated_at: now }); }
-      for (const dep of dependents) {
-        if (dep.status === 'blocked' && dep.blockedBy.length === 0) {
-          dep.status = 'todo'; dep.updatedAt = now;
-          supabaseUpdate('tasks', dep.id, { status: 'todo', updated_at: now });
-          s.notifications.unshift({ id: genId('n'), type: 'sync', title: '任务已解除阻塞', message: `「${dep.title}」的前置任务已删除，可以开始执行`, relatedId: dep.id, relatedType: 'task', memberId: dep.leaderId || state.currentUser?.id || '', read: false, createdAt: new Date().toISOString() });
-        }
+      if (t) {
+        t.deletedAt = now;
+        t.updatedAt = now;
+        supabaseUpdate('tasks', tid, { deleted_at: now, updated_at: now });
       }
-      if (t?.projectId) {
-        const pIdx = s.projects.findIndex(p => p.id === t.projectId);
-        if (pIdx !== -1) { s.projects[pIdx].taskCount = Math.max(0, (s.projects[pIdx].taskCount ?? 0) - 1); s.projects[pIdx].progress = calcProjectProgress(s.tasks, t.projectId); }
-      }
-      s.itemLinks = s.itemLinks.filter(l => l.sourceId !== tid && l.targetId !== tid);
-      s.comments = s.comments.filter(c => c.itemId !== tid);
-      supabaseDelete('tasks', tid);
       logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '任务', targetId: tid, targetTitle: t?.title || '' });
+      return s;
+    }
+    case 'RESTORE_TASK': {
+      const tid = action.payload;
+      const s = needMutate(state, ['tasks']);
+      const t = s.tasks.find(t => t.id === tid);
+      if (t) {
+        t.deletedAt = undefined;
+        t.updatedAt = tsNow();
+        supabaseUpdate('tasks', tid, { deleted_at: null, updated_at: t.updatedAt });
+      }
       return s;
     }
 

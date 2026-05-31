@@ -1,4 +1,4 @@
-export type AdminTab = 'team' | 'flow' | 'automation' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing';
+export type AdminTab = 'team' | 'flow' | 'automation' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates';
 
 export const tabItems: { key: AdminTab; label: string; icon: any }[] = [
   { key: 'team', label: '团队', icon: 'Users' as any },
@@ -8,6 +8,11 @@ export const tabItems: { key: AdminTab; label: string; icon: any }[] = [
   { key: 'riskradar', label: '风险雷达', icon: 'Shield' as any },
   { key: 'agent', label: 'Agent审计', icon: 'Bot' as any },
   { key: 'integrations', label: '集成', icon: 'Globe' as any },
+  { key: 'mcptools', label: 'MCP&Agent', icon: 'Bot' as any },
+  { key: 'marketplace', label: 'Agent市场', icon: 'Store' as any },
+  { key: 'compliance', label: '等保合规', icon: 'ShieldCheck' as any },
+  { key: 'collab', label: '实时协作', icon: 'Radio' as any },
+  { key: 'templates', label: '模板市场', icon: 'LayoutTemplate' as any },
   { key: 'deploy', label: '部署', icon: 'Server' as any },
   { key: 'toolbox', label: '工具箱', icon: 'Wrench' as any },
   { key: 'schedule', label: '日程', icon: 'Calendar' as any },

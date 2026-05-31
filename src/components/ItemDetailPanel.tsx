@@ -15,6 +15,8 @@ import { DetailRelationships } from './DetailRelationships';
 import { DetailProjectSections } from './DetailProjectSections';
 import { DetailChildItems } from './DetailChildItems';
 import { DetailPeople } from './DetailPeople';
+import { ApprovalPanel } from './ApprovalPanel';
+import { AiChatPanel } from './AiChatPanel';
 
 class DetailPanelErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
@@ -455,8 +457,10 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                   </div>
                 </Section>
                 {itemType === 'project' && project && <DetailProjectSections project={project} startDate={startDate} endDate={endDate} />}
+                {itemType === 'goal' && goal && <ApprovalPanel goalId={goal.id} approvalStatus={goal.approvalStatus ?? 'draft'} goalLeaderId={goal.leaderId} />}
                 {itemType === 'goal' && goal && <DetailKRs goal={goal} canEdit={canEdit} updateItem={updateItem} />}
                 <DetailChildItems itemId={itemId} itemType={itemType} task={task} />
+                {item && <AiChatPanel itemId={itemId} itemType={itemType} itemTitle={item.title} itemDescription={item.description || ''} />}
                 <Section title="项目总结">
                   <Textarea className="w-full min-h-[60px] text-sm" maxLength={3000} placeholder="输入总结..." value={localSummary} onChange={e => setLocalSummary(e.target.value)} onBlur={e => handleSummaryBlur(e.target.value)} />
                 </Section>

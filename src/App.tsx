@@ -1,5 +1,9 @@
-import { useState, useEffect, lazy, Suspense, Component, useMemo, type ReactNode, type ErrorInfo } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense, Component, useMemo, type ReactNode, type ErrorInfo } from 'react';
 import Layout from '@/components/layout/Layout';
+import { initSentry, setSentryUser, clearSentryUser } from '@/lib/sentry';
+import { DegradedBanner } from '@/components/DegradedMode';
+import { FeatureFlagProvider } from '@/lib/featureFlags';
+import { startAiPushScan, stopAiPushScan } from '@/lib/pushEventEngine';
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Goals = lazy(() => import('@/pages/Goals'));
 const Projects = lazy(() => import('@/pages/Projects'));
@@ -7,9 +11,12 @@ const Tasks = lazy(() => import('@/pages/Tasks'));
 const Insight = lazy(() => import('@/pages/Insight'));
 const Knowledge = lazy(() => import('@/pages/Knowledge'));
 const Admin = lazy(() => import('@/pages/Admin'));
+const PrivacyPage = lazy(() => import('@/pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
+const ConsentDialog = lazy(() => import('@/pages/PrivacyPage').then(m => ({ default: m.ConsentDialog })));
 import { StoreProvider, useStore } from '@/store/useStore';
 import { UserPlus, LogIn, Phone, MessageCircle, Mail, ArrowRight, Search, RefreshCw, Users, Key, Building2 } from 'lucide-react';
 import { setCurrentTeamId } from '@/store/supabase';
+import { setRLSContext } from '@/supabase/client';
 import { wechatOAuthLogin, phoneOtpLogin, emailMagicLink } from '@/lib/authBridge';
 
 // Per-page ErrorBoundary - one page crash won't take down others
@@ -25,7 +32,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; name: string },
   }
 }
 
-type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'knowledge' | 'admin';
+type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'knowledge' | 'admin' | 'privacy';
 
 const LOGIN_KEY = 'tbh-current-user';
 const TEAM_KEY = 'tbh-current-team';
@@ -249,6 +256,23 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
     const member = state.members.find(m => m.id === userId);
     dispatch({ type: 'SET_CURRENT_TEAM', payload: teamId });
     setCurrentTeamId(teamId);
+    setRLSContext(teamId, userId);
+    setSentryUser(userId, member?.name);
+    // Login audit: write to audit_logs
+    try {
+      const { getSupabaseClient } = require('@/supabase/client');
+      const sb = getSupabaseClient();
+      if (sb) {
+        sb.from('audit_logs').insert({
+          table_name: 'members',
+          record_id: userId,
+          action: 'INSERT',
+          new_data: { event: 'login', name: member?.name || '', role: member?.role || '' },
+          performed_by: userId,
+          team_id: teamId,
+        }).then(() => {}, () => {});
+      }
+    } catch {}
     if (member && member.role === 'member') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: userId }); }
     else { dispatch({ type: 'SET_VIEWING_MEMBER', payload: null }); }
     onLogin(userId);
@@ -477,20 +501,60 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
 
 function AppInner({ loggedIn }: { loggedIn: string }) {
   const { state, dispatch } = useStore();
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // --- Lightweight hash-based URL routing ---
+  // Hash format: #/dashboard, #/goals, #/tasks, etc.
+  const PAGE_FROM_HASH = (hash: string): Page => {
+    const p = hash.replace(/^#\/?/, '') as Page;
+    const valid: Page[] = ['dashboard', 'goals', 'projects', 'tasks', 'insight', 'knowledge', 'admin', 'privacy'];
+    return valid.includes(p) ? p : 'dashboard';
+  };
+  const [currentPage, setCurrentPage] = useState<Page>(() => PAGE_FROM_HASH(window.location.hash));
+  const navigateTo = useCallback((page: Page) => {
+    window.location.hash = `#/${page}`;
+  }, []);
+
+  // Listen for hash changes (back/forward, URL sharing)
+  useEffect(() => {
+    const onHashChange = () => setCurrentPage(PAGE_FROM_HASH(window.location.hash));
+    window.addEventListener('hashchange', onHashChange);
+    // Sync initial hash
+    if (!window.location.hash || window.location.hash === '#' || window.location.hash === '#/') {
+      window.location.hash = '#/dashboard';
+    }
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  const [showConsent, setShowConsent] = useState(() => {
+    try { return !localStorage.getItem('tbh-privacy-consented'); } catch { return true; }
+  });
+
+  // Start AI proactive push scan once on login — use stateRef to avoid re-creating interval
+  useEffect(() => {
+    startAiPushScan(
+      () => stateRef.current.tasks,
+      () => stateRef.current.goals,
+      () => stateRef.current.currentUser?.id ?? null,
+    );
+    return () => stopAiPushScan();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn]);
 
   // Admin/manager default to team view (viewingMemberId = null), set during login
   // Member users default to personal view (viewingMemberId = own ID), set during login
 
   function renderPage() {
     switch (currentPage) {
-      case 'dashboard': return <Dashboard onPageChange={(p: string) => setCurrentPage(p as Page)} />;
+      case 'dashboard': return <Dashboard onPageChange={(p: string) => navigateTo(p as Page)} />;
       case 'goals': return <Goals />;
       case 'projects': return <Projects />;
       case 'tasks': return <Tasks />;
       case 'insight': return <Insight />;
       case 'knowledge': return <Knowledge />;
       case 'admin': return <Admin />;
+      case 'privacy': return <PrivacyPage onBack={() => navigateTo('dashboard')} />;
       default: return <Dashboard />;
     }
   }
@@ -498,17 +562,34 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
   const currentUser = useMemo(() => state.members.find(m => m.id === loggedIn), [state.members, loggedIn]);
 
     return (
-    <Layout currentPage={currentPage} onPageChange={setCurrentPage} currentUser={currentUser}>
-      <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground text-sm">加载中...</div>}>
-        <PageErrorBoundary key={currentPage} name={navLabel(currentPage)}>
-          {renderPage()}
-        </PageErrorBoundary>
-      </Suspense>
-    </Layout>
+    <>
+      <DegradedBanner />
+      {showConsent && (
+        <Suspense fallback={null}>
+          <ConsentDialog
+            onAccept={() => setShowConsent(false)}
+            onDecline={() => {
+              setShowConsent(false);
+              // Decline: still allow basic use but log
+              console.warn('[Privacy] User declined privacy consent');
+            }}
+          />
+        </Suspense>
+      )}
+      <Layout currentPage={currentPage} onPageChange={navigateTo} currentUser={currentUser}>
+        <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground text-sm">加载中...</div>}>
+          <PageErrorBoundary key={currentPage} name={navLabel(currentPage)}>
+            {renderPage()}
+          </PageErrorBoundary>
+        </Suspense>
+      </Layout>
+    </>
   );
 }
 
 function App() {
+  // Initialize Sentry on first load
+  useEffect(() => { initSentry(); }, []);
   return (
     <StoreProvider>
       <AppShell />
@@ -543,7 +624,11 @@ function AppShell() {
     setLoggedIn(currentUserId);
   }, [currentUserId]);
 
-  return loggedIn ? <AppInner loggedIn={loggedIn} /> : <LoginScreen onLogin={(id) => setLoggedIn(id)} />;
+  return loggedIn ? (
+    <FeatureFlagProvider teamId={appState.currentTeamId}>
+      <AppInner loggedIn={loggedIn} />
+    </FeatureFlagProvider>
+  ) : <LoginScreen onLogin={(id) => setLoggedIn(id)} />;
 }
 
 export default App;

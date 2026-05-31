@@ -8,6 +8,7 @@ import { getFunnelMetrics } from '@/lib/analytics';
 import { CHART_COLORS, StatCard, useFilteredData } from './shared';
 import type { DashboardTabProps } from './shared';
 import { AIFocusWidget } from '@/components/AIFocusWidget';
+import { MyTodayView } from './MyTodayView';
 
 export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTabProps) {
   const { state, memberGoals, memberTasks, memberProjects, todayStr, getMemberName, commentCountMap } = useFilteredData();
@@ -72,6 +73,9 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
 
   return (
     <div className="space-y-6">
+      {/* 我的今日 — 执行者视角首屏 (F1断裂点修复) */}
+      <MyTodayView onOpenDetail={onOpenDetail} />
+
       {/* 4 统计卡片 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard icon={<Target size={20} className="text-blue-600" />} label="进行中目标" value={stats.activeGoals} sub={`平均进度 ${stats.overallGoalProgress}%`} color="bg-blue-50" onClick={() => { onPageChange('goals'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'goals', statuses: ['in_progress'] } })), 100); }} />

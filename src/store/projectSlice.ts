@@ -94,27 +94,26 @@ export function projectReducer(state: AppState, action: Action): AppState | null
     case 'DELETE_PROJECT': {
       if (!reducerCanDelete(state, 'projects_delete')) return state;
       const pid = action.payload;
-      const s = needMutate(state, ['projects', 'tasks', 'goals', 'itemLinks', 'comments']);
+      const s = needMutate(state, ['projects']);
       const now = tsNow();
-      const deletedProject = s.projects.find(p => p.id === pid) || state.projects.find(p => p.id === pid);
-      const parentGoalId = deletedProject?.goalId || null;
-      markPendingDelete(pid);
-      s.projects = s.projects.filter(p => p.id !== pid);
-      const affectedTasks = s.tasks.filter(t => t.projectId === pid);
-      s.tasks.forEach(t => { if (t.projectId === pid) t.projectId = null; });
-      for (const t of affectedTasks) { supabaseUpdate('tasks', t.id, { project_id: null, updated_at: now }); }
-      if (parentGoalId) {
-        const pIdx = s.goals.findIndex(g => g.id === parentGoalId);
-        if (pIdx !== -1) {
-          s.goals[pIdx].progress = calcGoalProgress(s.goals, parentGoalId);
-          s.goals[pIdx].updatedAt = now;
-          supabaseUpdate('goals', parentGoalId, { progress: s.goals[pIdx].progress, updated_at: now });
-        }
+      const deletedProject = s.projects.find(p => p.id === pid);
+      if (deletedProject) {
+        deletedProject.deletedAt = now;
+        deletedProject.updatedAt = now;
+        supabaseUpdate('projects', pid, { deleted_at: now, updated_at: now });
       }
-      s.itemLinks = s.itemLinks.filter(l => l.sourceId !== pid && l.targetId !== pid);
-      s.comments = s.comments.filter(c => c.itemId !== pid);
-      supabaseDelete('projects', pid);
       logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '项目', targetId: pid, targetTitle: deletedProject?.title || '' });
+      return s;
+    }
+    case 'RESTORE_PROJECT': {
+      const pid = action.payload;
+      const s = needMutate(state, ['projects']);
+      const project = s.projects.find(p => p.id === pid);
+      if (project) {
+        project.deletedAt = undefined;
+        project.updatedAt = tsNow();
+        supabaseUpdate('projects', pid, { deleted_at: null, updated_at: project.updatedAt });
+      }
       return s;
     }
 

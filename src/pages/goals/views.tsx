@@ -55,7 +55,7 @@ export const GoalCard = React.memo(function GoalCard({ goal, members, projects, 
   }
 
   return (
-    <div className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all ${dragOver ? 'border-primary ring-2 ring-primary/30 shadow-md' : 'border-border'}`} draggable onDragStart={handleDragStart} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={onOpenDetail}>
+    <div data-item-id={goal.id} data-item-type="goal" className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all ${dragOver ? 'border-primary ring-2 ring-primary/30 shadow-md' : 'border-border'}`} draggable onDragStart={handleDragStart} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={onOpenDetail}>
       <div className="p-3 md:p-4">
         <div className="flex items-start gap-2 md:gap-3 mb-3">
           {batchMode ? (
@@ -281,7 +281,7 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
     const hasKids = (childrenMap.get(goal.id)?.length || 0) > 0;
     const cc = commentCounts.get(goal.id) || 0;
     return (
-      <div key={goal.id} className="flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 hover:bg-muted/30 transition-colors group cursor-pointer border-b border-border/50" style={{ paddingLeft: (16 + depth * 24) + 'px' }} onClick={() => onOpenDetail(goal.id)}>
+      <div key={goal.id} data-item-id={goal.id} data-item-type="goal" className="flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 hover:bg-muted/30 transition-colors group cursor-pointer border-b border-border/50" style={{ paddingLeft: (16 + depth * 24) + 'px' }} onClick={() => onOpenDetail(goal.id)}>
         {batchMode && (
           <button className="flex-shrink-0" onClick={e => { e.stopPropagation(); onToggleSelect(goal.id); }}>
             <input type="checkbox" checked={selectedIds.has(goal.id)} readOnly className="w-3.5 h-3.5 rounded" />

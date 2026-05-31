@@ -6,7 +6,9 @@ import type { Notification } from '@/types';
 import { QuickCreateModal } from '@/components/QuickCreateModal';
 import { CommandPalette } from '@/components/CommandPalette';
 import { OnboardingWizard, shouldShowOnboarding } from '@/components/OnboardingWizard';
+import { computeUserLevel, isFeatureVisible, getLevelDescription, setUserLevel, recordAction } from '@/lib/progressiveDisclosure';
 import { pushTaskEvent, pushGoalEvent, pushRiskAlert } from '@/lib/pushEventEngine';
+import { useCollabPresence } from '@/lib/collab';
 import { requestNotificationPermission, sendBrowserNotification, isNotificationSupported } from '@/lib/browserNotify';
 import { isWeChatEnabled, sendWeChatMessage } from '@/supabase/wechat';
 import { setWeChatNotify, fireAutomationRules } from '@/store/shared';
@@ -14,11 +16,16 @@ import {
   LayoutDashboard, Target, FolderKanban, CheckSquare, StickyNote,
   BarChart3, Users, Bell, Search, Menu, X, ChevronDown,
   Settings, Cloud, CloudOff, Loader2, FileText, Eye, Users2,
-  LogOut, BookOpen, Building2
+  LogOut, BookOpen, Building2, Shield, PanelLeftClose, PanelLeft,
+  ChevronsLeft, ChevronsRight, Plus, Minus, Maximize2, Edit2, Trash2, Check
 } from 'lucide-react';
 import { CURRENT_USER_KEY } from '@/store/types';
 
-type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'knowledge' | 'admin';
+// Density mode context — accessible by any child page
+export type DensityMode = 'comfortable' | 'compact';
+export const DensityContext = React.createContext<DensityMode>('comfortable');
+
+type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'knowledge' | 'admin' | 'privacy';
 
 interface LayoutProps {
   currentPage: Page;
@@ -35,6 +42,7 @@ const navItems: { page: Page; label: string; icon: React.ReactNode; requirePermi
   { page: 'insight', label: '数据洞察', icon: <BarChart3 size={20} /> },
   { page: 'knowledge', label: '知识库', icon: <BookOpen size={20} /> },
   { page: 'admin', label: '管理中心', icon: <Settings size={20} />, requirePermission: 'settings_manage' },
+  { page: 'privacy', label: '隐私政策', icon: <Shield size={20} /> },
 ];
 
 // --- Extracted React.memo sub-components ---
@@ -143,6 +151,21 @@ const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMem
   );
 });
 
+// --- Mobile Long-Press Context Menu ---
+interface ContextMenuItem { label: string; action: string; icon?: React.ReactNode }
+const MobileContextMenu: React.FC<{ x: number; y: number; items: ContextMenuItem[]; onClose: () => void; onAction: (action: string) => void }> = React.memo(({ x, y, items, onClose, onAction }) => (
+  <>
+    <div className="fixed inset-0 z-[60]" onClick={onClose} onContextMenu={e => { e.preventDefault(); onClose(); }} />
+    <div className="fixed z-[61] bg-white border border-border rounded-lg shadow-xl py-1 min-w-[140px] animate-slide-up" style={{ left: Math.min(x, window.innerWidth - 160), top: Math.min(y, window.innerHeight - items.length * 40 - 20) }}>
+      {items.map(item => (
+        <button key={item.action} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-muted transition-colors" onClick={() => { onAction(item.action); onClose(); }}>
+          {item.icon}<span>{item.label}</span>
+        </button>
+      ))}
+    </div>
+  </>
+));
+
 // --- Main Layout ---
 
 export default function Layout({ currentPage, onPageChange, children, currentUser }: LayoutProps) {
@@ -151,6 +174,11 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const memberLookup = useMemberLookup();
   const { activeMembers } = useActiveMembers();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarMode, setSidebarMode] = useState<'wide' | 'narrow' | 'hidden'>(() => {
+    try { const s = localStorage.getItem('tbh-sidebar-mode'); if (s === 'wide' || s === 'narrow' || s === 'hidden') return s; } catch {}
+    // 小屏默认收起，大屏默认展开
+    return window.innerWidth < 768 ? 'hidden' : 'wide';
+  });
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMemberFilter, setShowMemberFilter] = useState(false);
@@ -161,6 +189,12 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [quickCreateType, setQuickCreateType] = useState<'task' | 'goal' | 'project'>('task');
   const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding());
+  const [density, setDensity] = useState<DensityMode>(() => {
+    try { const d = localStorage.getItem('tbh-density'); if (d === 'comfortable' || d === 'compact') return d; } catch {} return 'comfortable';
+  });
+  // Mobile long-press context menu
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; targetId: string; targetType: string } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const user = state.currentUser;
   const isAdmin = user?.role === 'admin';
   const unreadCount = useMemo(() => state.notifications.filter(n => !n.read).length, [state.notifications]);
@@ -168,6 +202,16 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const visibleMembers = isAdmin ? activeMembers : activeMembers.filter(m => m.id === currentUser?.id);
   // Memoize visibleMembers for React.memo props comparison
   const visibleMembersMemo = useMemo(() => visibleMembers, [isAdmin, activeMembers, currentUser?.id]);
+  const toggleDensity = useCallback(() => {
+    setDensity(prev => {
+      const next = prev === 'comfortable' ? 'compact' : 'comfortable';
+      try { localStorage.setItem('tbh-density', next); } catch {}
+      return next;
+    });
+  }, []);
+
+  // Real-time presence — show online collaborators
+  const { onlineUsers } = useCollabPresence(user?.id || '', user?.name || '');
 
   // Team switcher: compute user's teams
   const userTeams = useMemo(() => {
@@ -274,62 +318,181 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
 
   const closeAllDropdowns = useCallback(() => { setShowNotifications(false); setShowUserMenu(false); setShowMemberFilter(false); setShowTeamSelector(false); }, []);
 
-  // Global keyboard shortcuts
+  // Sidebar mode cycling: wide → narrow → hidden → wide
+  const cycleSidebarMode = useCallback(() => {
+    setSidebarMode(prev => {
+      const next = prev === 'wide' ? 'narrow' : prev === 'narrow' ? 'hidden' : 'wide';
+      try { localStorage.setItem('tbh-sidebar-mode', next); } catch {}
+      return next;
+    });
+  }, []);
+
+  const sidebarWidthClass = sidebarMode === 'wide' ? 'w-64' : sidebarMode === 'narrow' ? 'w-16' : 'w-0';
+  const sidebarCollapsed = sidebarMode === 'hidden';
+  const sidebarNarrow = sidebarMode === 'narrow';
+
+  // Touch swipe gestures for mobile sidebar
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, []);
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    // Only handle horizontal swipes (>50px, >2x vertical)
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 2) {
+      if (dx > 0 && !sidebarOpen) {
+        // Swipe right → open sidebar
+        setSidebarOpen(true);
+      } else if (dx < 0 && sidebarOpen) {
+        // Swipe left → close sidebar
+        setSidebarOpen(false);
+      }
+    }
+    touchStartRef.current = null;
+  }, [sidebarOpen]);
+
+  // Mobile long-press context menu handler on main content area
+  const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
+    if (window.innerWidth >= 768) return; // desktop: no long-press
+    const touch = e.touches[0];
+    // Find the closest card/row element with a data-item-id
+    const target = (touch.target as HTMLElement).closest('[data-item-id]');
+    if (!target) return;
+    const itemId = (target as HTMLElement).dataset.itemId || '';
+    const itemType = (target as HTMLElement).dataset.itemType || 'task';
+    longPressTimerRef.current = setTimeout(() => {
+      setContextMenu({ x: touch.clientX, y: touch.clientY, targetId: itemId, targetType: itemType });
+      // Haptic feedback if available
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 500);
+  }, []);
+  const handleMainTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+  }, []);
+  const handleMainTouchMove = useCallback(() => {
+    if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+  }, []);
+  const contextMenuItems: ContextMenuItem[] = useMemo(() => {
+    if (!contextMenu) return [];
+    return [
+      { label: '打开详情', action: 'open', icon: <Eye size={14} /> },
+      { label: '编辑', action: 'edit', icon: <Edit2 size={14} /> },
+      { label: '切换完成', action: 'toggle', icon: <Check size={14} /> },
+      { label: '删除', action: 'delete', icon: <Trash2 size={14} /> },
+    ];
+  }, [contextMenu]);
+  const handleContextAction = useCallback((action: string) => {
+    if (!contextMenu) return;
+    const { targetId, targetType } = contextMenu;
+    if (action === 'open' || action === 'edit') { window.dispatchEvent(new CustomEvent('tbh-open-detail', { detail: { itemId: targetId, itemType: targetType } })); }
+    else if (action === 'toggle') { window.dispatchEvent(new CustomEvent('tbh-complete-selected')); }
+    else if (action === 'delete') { window.dispatchEvent(new CustomEvent('tbh-delete-selected')); }
+    setContextMenu(null);
+  }, [contextMenu]);
+
+  // Global keyboard shortcuts (30+ bindings)
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const keyBufferRef = useRef('');
+  const keyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
-      // Skip when typing in input/textarea (except for Escape)
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable;
+
+      // --- Always-active shortcuts (even in inputs) ---
+      if (isInput) {
         if (e.key === 'Escape') { (e.target as HTMLElement).blur(); closeAllDropdowns(); }
         return;
       }
-      // Cmd/Ctrl+K: open command palette
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setCommandPaletteOpen(true);
-        return;
-      }
-      // Cmd/Ctrl+N: quick create task
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'n') {
-        e.preventDefault();
-        setQuickCreateType('task');
-        setQuickCreateOpen(true);
-        return;
-      }
-      // Cmd/Ctrl+Shift+N: quick create goal
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'N') {
-        e.preventDefault();
-        setQuickCreateType('goal');
-        setQuickCreateOpen(true);
-        return;
-      }
-      // Cmd/Ctrl+Shift+P: quick create project
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'P') {
-        e.preventDefault();
-        setQuickCreateType('project');
-        setQuickCreateOpen(true);
-        return;
-      }
-      // Cmd/Ctrl+G: open Gantt modal
-      if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
-        e.preventDefault();
-        window.dispatchEvent(new CustomEvent('tbh-open-gantt'));
-        return;
-      }
-      // Escape: close dropdowns
-      if (e.key === 'Escape') { closeAllDropdowns(); return; }
-      // Number keys 1-6: quick navigation
-      const navMap: Record<string, Page> = { '1': 'dashboard', '2': 'goals', '3': 'projects', '4': 'tasks', '5': 'insight', '6': 'ai', '7': 'admin' };
+
+      // --- Modifier shortcuts (Cmd/Ctrl) ---
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && !e.shiftKey && e.key === 'z') { e.preventDefault(); dispatch({ type: 'UNDO' }); return; }
+      if (mod && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); dispatch({ type: 'REDO' }); return; }
+      if (mod && e.key === 'k') { e.preventDefault(); setCommandPaletteOpen(true); return; }
+      if (mod && !e.shiftKey && e.key === 'n') { e.preventDefault(); setQuickCreateType('task'); setQuickCreateOpen(true); return; }
+      if (mod && e.shiftKey && e.key === 'N') { e.preventDefault(); setQuickCreateType('goal'); setQuickCreateOpen(true); return; }
+      if (mod && e.shiftKey && e.key === 'P') { e.preventDefault(); setQuickCreateType('project'); setQuickCreateOpen(true); return; }
+      if (mod && e.key === 'g') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-open-gantt')); return; }
+      if (mod && e.key === 'f') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-focus-filter')); return; }
+      if (mod && e.key === 's') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-save-current')); return; }
+      if (mod && e.key === ',') { e.preventDefault(); onPageChange('admin'); return; } // Settings
+
+      // --- Single key shortcuts ---
+      // Escape: close dropdowns / command palette
+      if (e.key === 'Escape') { closeAllDropdowns(); setCommandPaletteOpen(false); return; }
+
+      // / : focus search
+      if (e.key === '/') { e.preventDefault(); searchInputRef.current?.focus(); return; }
+
+      // ? : show keyboard help (via command palette with shortcut filter)
+      if (e.key === '?') { e.preventDefault(); setCommandPaletteOpen(true); return; }
+
+      // [ / ] : sidebar toggle
+      if (e.key === '[') { e.preventDefault(); cycleSidebarMode(); return; }
+      if (e.key === ']') { e.preventDefault(); cycleSidebarMode(); return; }
+
+      // 1-7: quick navigation
+      const navMap: Record<string, Page> = { '1': 'dashboard', '2': 'goals', '3': 'projects', '4': 'tasks', '5': 'insight', '6': 'knowledge', '7': 'admin' };
       if (navMap[e.key]) { onPageChange(navMap[e.key]); return; }
+
+      // c: quick create (task by default)
+      if (e.key === 'c') { e.preventDefault(); setQuickCreateType('task'); setQuickCreateOpen(true); return; }
+
+      // e: edit selected item
+      if (e.key === 'e') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-edit-selected')); return; }
+
+      // d: delete selected item
+      if (e.key === 'd') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-delete-selected')); return; }
+
+      // x: toggle complete for selected task
+      if (e.key === 'x') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-complete-selected')); return; }
+
+      // j/k: navigate up/down in list
+      if (e.key === 'j') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-nav-down')); return; }
+      if (e.key === 'k') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-nav-up')); return; }
+
+      // Enter: open selected item
+      if (e.key === 'Enter') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-open-selected')); return; }
+
+      // f: focus filter
+      if (e.key === 'f') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-focus-filter')); return; }
+
+      // t/v/l: switch view modes (table/board/list)
+      if (e.key === 't') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-switch-view', { detail: 'table' })); return; }
+      if (e.key === 'v') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-switch-view', { detail: 'board' })); return; }
+      if (e.key === 'l') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-switch-view', { detail: 'list' })); return; }
+
+      // b: toggle batch mode
+      if (e.key === 'b') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-toggle-batch')); return; }
+
+      // --- g-prefix (Vim-style navigation) ---
+      if (e.key === 'g') {
+        keyBufferRef.current = 'g';
+        if (keyTimerRef.current) clearTimeout(keyTimerRef.current);
+        keyTimerRef.current = setTimeout(() => { keyBufferRef.current = ''; }, 500);
+        return;
+      }
+      if (keyBufferRef.current === 'g') {
+        keyBufferRef.current = '';
+        if (keyTimerRef.current) { clearTimeout(keyTimerRef.current); keyTimerRef.current = null; }
+        const gNav: Record<string, Page> = { d: 'dashboard', o: 'goals', p: 'projects', t: 'tasks', i: 'insight', a: 'admin', k: 'knowledge' };
+        if (gNav[e.key]) { onPageChange(gNav[e.key]); return; }
+        // gg: scroll to top
+        if (e.key === 'g') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onPageChange, closeAllDropdowns]);
+  }, [onPageChange, closeAllDropdowns, dispatch, cycleSidebarMode]);
 
   const handlePageClick = useCallback((page: Page) => {
     onPageChange(page);
     setSidebarOpen(false);
+    recordAction();
   }, [onPageChange]);
 
   const handleMarkAllRead = useCallback(() => dispatch({ type: 'MARK_ALL_NOTIFICATIONS_READ' }), [dispatch]);
@@ -344,6 +507,8 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
     try { localStorage.removeItem(CURRENT_USER_KEY); } catch {}
     dispatch({ type: 'SET_CURRENT_USER', payload: null });
     setShowUserMenu(false);
+    // Clear Sentry user context on logout
+    import('@/lib/sentry').then(m => m.clearSentryUser()).catch(() => {});
   }, [dispatch]);
   const handleGlobalSearch = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
@@ -362,58 +527,102 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const notificationsMemo = useMemo(() => state.notifications, [state.notifications]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {sidebarOpen && <div className="sidebar-overlay md:hidden" onClick={() => setSidebarOpen(false)} />}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 flex flex-col ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={[
+        'fixed inset-y-0 left-0 z-50 bg-sidebar text-sidebar-foreground transform transition-all duration-200 ease-in-out flex flex-col',
+        // 移动端: sidebarOpen 控制 overlay 显示/隐藏
+        sidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full',
+        // 桌面端: sidebarMode 控制宽度，始终可见（hidden 除外）
+        'md:relative md:translate-x-0',
+        sidebarMode === 'wide' ? 'md:w-64' : sidebarMode === 'narrow' ? 'md:w-16' : 'md:w-0 md:overflow-hidden md:border-none',
+        sidebarMode === 'hidden' ? '' : 'border-r border-white/10',
+      ].join(' ')}>
         <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-sm">TB</div>
-          <div>
-            <div className="font-semibold text-sm">团队业务中台</div>
-            <div className="text-xs text-sidebar-foreground/50">Team Business Hub</div>
-          </div>
-          <button className="ml-auto md:hidden" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-sm flex-shrink-0">TB</div>
+          {!sidebarNarrow && !sidebarCollapsed && (
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm">团队业务中台</div>
+              <div className="text-xs text-sidebar-foreground/50">Team Business Hub</div>
+            </div>
+          )}
+          <button className="ml-auto p-1 rounded hover:bg-sidebar-accent transition-colors" onClick={cycleSidebarMode} title={sidebarMode === 'wide' ? '收窄侧边栏' : sidebarMode === 'narrow' ? '隐藏侧边栏' : '展开侧边栏'}>
+            {sidebarMode === 'wide' ? <PanelLeftClose size={16} /> : sidebarMode === 'narrow' ? <ChevronsLeft size={16} /> : <ChevronsRight size={16} />}
+          </button>
+          <button className="md:hidden" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
         </div>
 
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {navItems.filter(item => !item.requirePermission || (user && (user.role === 'admin' || hasPermission(state, user.id, item.requirePermission)))).map((item, idx) => (
+          {navItems.filter(item => {
+            if (item.requirePermission && (!user || (user.role !== 'admin' && !hasPermission(state, user.id, item.requirePermission)))) return false;
+            // Progressive disclosure: filter nav items by user level
+            const featureMap: Record<string, string> = { dashboard: 'dashboard', goals: 'goals_basic', projects: 'projects', tasks: 'tasks', insight: 'insight', knowledge: 'knowledge', admin: 'dashboard', privacy: 'dashboard' };
+            return isFeatureVisible(featureMap[item.page] || item.page);
+          }).map((item, idx) => (
             <button key={item.page} onClick={() => handlePageClick(item.page)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 text-left ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'}`}>
+              title={sidebarNarrow ? item.label : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 text-left ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'} ${sidebarNarrow ? 'justify-center px-0' : ''}`}>
               {item.icon}
-              {item.label}
-              {item.page === 'tasks' && overdueCount > 0 && (
+              {!sidebarNarrow && !sidebarCollapsed && item.label}
+              {!sidebarNarrow && !sidebarCollapsed && item.page === 'tasks' && overdueCount > 0 && (
                 <span className="ml-auto bg-destructive text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{overdueCount}</span>
               )}
-              <span className="ml-auto text-[10px] text-sidebar-foreground/30 hidden lg:inline">{idx + 1}</span>
+              {!sidebarNarrow && !sidebarCollapsed && <span className="ml-auto text-[10px] text-sidebar-foreground/30 hidden lg:inline">{idx + 1}</span>}
             </button>
           ))}
         </nav>
 
-        <div className="px-3 py-3 border-t border-white/10 space-y-1">
-          <div className="flex items-center gap-2 px-3 py-1.5">
-            {connectionMode === 'supabase' ? (
-              <Cloud size={14} className="text-green-400" />
-            ) : connectionMode === 'loading' ? (
-              <Loader2 size={14} className="animate-spin text-amber-400" />
-            ) : connectionMode === 'offline' ? (
-              <CloudOff size={14} className="text-red-400" />
-            ) : (
-              <CloudOff size={14} className="text-white/40" />
-            )}
-            <span className={`text-xs ${connectionMode === 'supabase' ? 'text-green-400' : connectionMode === 'loading' ? 'text-amber-400' : connectionMode === 'offline' ? 'text-red-400' : 'text-white/40'}`}>
-              {connectionMode === 'supabase' ? '云端同步' : connectionMode === 'loading' ? '连接中...' : connectionMode === 'offline' ? `网络离线${offlineWrites > 0 ? ` · ${offlineWrites}项待同步` : ''}` : '本地模式'}
-            </span>
-          </div>
+        <div className={`px-3 py-3 border-t border-white/10 space-y-1 ${sidebarNarrow ? 'flex flex-col items-center' : ''}`}>
+          {!sidebarNarrow && !sidebarCollapsed ? (
+            <>
+              <div className="flex items-center gap-2 px-3 py-1.5">
+                {connectionMode === 'supabase' ? (
+                  <Cloud size={14} className="text-green-400" />
+                ) : connectionMode === 'loading' ? (
+                  <Loader2 size={14} className="animate-spin text-amber-400" />
+                ) : connectionMode === 'offline' ? (
+                  <CloudOff size={14} className="text-red-400" />
+                ) : (
+                  <CloudOff size={14} className="text-white/40" />
+                )}
+                <span className={`text-xs ${connectionMode === 'supabase' ? 'text-green-400' : connectionMode === 'loading' ? 'text-amber-400' : connectionMode === 'offline' ? 'text-red-400' : 'text-white/40'}`}>
+                  {connectionMode === 'supabase' ? '云端同步' : connectionMode === 'loading' ? '连接中...' : connectionMode === 'offline' ? `网络离线${offlineWrites > 0 ? ` · ${offlineWrites}项待同步` : ''}` : '本地模式'}
+                </span>
+              </div>
+              {(() => {
+                const level = computeUserLevel();
+                const desc = getLevelDescription(level);
+                return (
+                  <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-sidebar-foreground/50 hover:text-sidebar-foreground/80 transition-colors cursor-pointer rounded hover:bg-sidebar-accent" onClick={() => {
+                    const next: Record<string, any> = { beginner: 'intermediate', intermediate: 'advanced', advanced: 'beginner' };
+                    setUserLevel(next[level]);
+                    window.location.reload();
+                  }} title={`点击切换体验等级（当前: ${desc.title}）`}>
+                    <span className="text-[10px]">{level === 'beginner' ? '🌱' : level === 'intermediate' ? '🌿' : '🌳'}</span>
+                    <span>{desc.title}</span>
+                    <span className="ml-auto text-[10px]">切换</span>
+                  </button>
+                );
+              })()}
+            </>
+          ) : (
+            <button className="p-2 rounded hover:bg-sidebar-accent transition-colors" onClick={cycleSidebarMode} title="展开侧边栏">
+              <ChevronsRight size={16} className="text-sidebar-foreground/50" />
+            </button>
+          )}
         </div>
 
         <div className="px-3 py-3 border-t border-white/10">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold">{user?.avatar || '?'}</div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate">{user?.name}</div>
-              <div className="text-xs text-sidebar-foreground/50 truncate">{user?.department}</div>
-              {user?.role && <div className="text-xs text-sidebar-foreground/40 truncate">{user.role === 'admin' ? '管理员' : user.role === 'manager' ? '经理' : user.role === 'leader' ? '负责人' : '成员'}</div>}
-            </div>
+          <div className={`flex items-center gap-3 ${sidebarNarrow ? 'justify-center px-0' : 'px-3'} py-2`}>
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold flex-shrink-0">{user?.avatar || '?'}</div>
+            {!sidebarNarrow && !sidebarCollapsed && (
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{user?.name}</div>
+                <div className="text-xs text-sidebar-foreground/50 truncate">{user?.department}</div>
+                {user?.role && <div className="text-xs text-sidebar-foreground/40 truncate">{user.role === 'admin' ? '管理员' : user.role === 'manager' ? '经理' : user.role === 'leader' ? '负责人' : '成员'}</div>}
+              </div>
+            )}
           </div>
         </div>
       </aside>
@@ -423,6 +632,11 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           <button className="md:hidden p-1.5 -ml-1.5 rounded-md hover:bg-muted" onClick={() => setSidebarOpen(true)}>
             <Menu size={20} />
           </button>
+          {sidebarMode === 'hidden' && (
+            <button className="hidden md:flex p-1.5 -ml-1.5 rounded-md hover:bg-muted" onClick={cycleSidebarMode} title="展开侧边栏">
+              <PanelLeft size={20} />
+            </button>
+          )}
           <h1 className="text-base font-semibold">
             {(currentPage === 'settings' ? '系统设置' : navItems.find(n => n.page === currentPage)?.label)}
           </h1>
@@ -460,6 +674,23 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           <div className="hidden md:flex items-center gap-2 bg-muted rounded-lg px-3 py-1.5 text-sm w-64">
             <Search size={16} /><input ref={searchInputRef} type="text" placeholder="搜索... (⌘K)" className="bg-transparent border-none outline-none flex-1 text-sm text-foreground placeholder:text-muted-foreground" onKeyDown={handleGlobalSearch} />
           </div>
+          {/* Density toggle: comfortable ↔ compact */}
+          <button className="hidden md:flex p-1.5 rounded-md hover:bg-muted transition-colors" onClick={toggleDensity} title={density === 'comfortable' ? '切换紧凑模式' : '切换舒适模式'}>
+            {density === 'comfortable' ? <Maximize2 size={16} className="text-muted-foreground" /> : <Minus size={16} className="text-primary" />}
+          </button>
+          {/* Online collaborators indicator */}
+          {onlineUsers.length > 1 && (
+            <div className="hidden md:flex items-center -space-x-1.5" title={`${onlineUsers.length} 人在线`}>
+              {onlineUsers.slice(0, 4).map(u => (
+                <div key={u.id} className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-bold text-white" style={{ backgroundColor: u.color }}>
+                  {(u.name || '?')[0]}
+                </div>
+              ))}
+              {onlineUsers.length > 4 && (
+                <div className="w-6 h-6 rounded-full border-2 border-white bg-muted flex items-center justify-center text-[9px] text-muted-foreground">+{onlineUsers.length - 4}</div>
+              )}
+            </div>
+          )}
           <div className="relative">
             <button className="relative p-2 rounded-lg hover:bg-muted transition-colors"
               onClick={() => { setShowNotifications(!showNotifications); setShowUserMenu(false); setShowMemberFilter(false); }}>
@@ -481,8 +712,40 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
             )}
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto bg-muted/30">{children}</main>
+        <main className={`flex-1 overflow-y-auto bg-muted/30 pb-16 md:pb-0 ${density === 'compact' ? 'text-sm' : ''}`} onTouchStart={handleMainTouchStart} onTouchEnd={handleMainTouchEnd} onTouchMove={handleMainTouchMove}><DensityContext.Provider value={density}>{children}</DensityContext.Provider></main>
       </div>
+
+      {/* Mobile bottom navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-border flex items-center justify-around h-14 px-1">
+        {navItems.filter(item => {
+          if (item.requirePermission && (!user || (user.role !== 'admin' && !hasPermission(state, user.id, item.requirePermission)))) return false;
+          const featureMap: Record<string, string> = { dashboard: 'dashboard', goals: 'goals_basic', projects: 'projects', tasks: 'tasks', insight: 'insight', knowledge: 'knowledge', admin: 'dashboard', privacy: 'dashboard' };
+          return isFeatureVisible(featureMap[item.page] || item.page);
+        }).filter(item => ['dashboard', 'goals', 'projects', 'tasks'].includes(item.page)).map(item => (
+          <button key={item.page} onClick={() => handlePageClick(item.page)}
+            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${currentPage === item.page ? 'text-primary' : 'text-muted-foreground'}`}>
+            {item.icon}
+            <span className="text-[10px] mt-0.5">{item.label.slice(0, 2)}</span>
+          </button>
+        ))}
+        {/* Quick create button */}
+        <button onClick={() => { setQuickCreateType('task'); setQuickCreateOpen(true); }}
+          className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-white shadow-lg -mt-4">
+          <Plus size={20} />
+        </button>
+        <button onClick={() => handlePageClick('insight')}
+          className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${currentPage === 'insight' ? 'text-primary' : 'text-muted-foreground'}`}>
+          <BarChart3 size={20} />
+          <span className="text-[10px] mt-0.5">洞察</span>
+        </button>
+        {/* More button: opens sidebar overlay for admin/privacy */}
+        <button onClick={() => setSidebarOpen(true)}
+          className="flex flex-col items-center justify-center flex-1 h-full text-muted-foreground">
+          <Menu size={20} />
+          <span className="text-[10px] mt-0.5">更多</span>
+        </button>
+      </nav>
+
       {(showNotifications || showUserMenu || showMemberFilter) && <div className="fixed inset-0 z-40" onClick={closeAllDropdowns} />}
       <CommandPalette
         open={commandPaletteOpen}
@@ -497,6 +760,8 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
       />
       <CommandPalette open={cmdPaletteOpen} onClose={() => setCmdPaletteOpen(false)} onPageChange={onPageChange} />
       <QuickCreateModal open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} initialType={quickCreateType} />
+      {/* Mobile long-press context menu */}
+      {contextMenu && <MobileContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={() => setContextMenu(null)} onAction={handleContextAction} />}
       {showOnboarding && <OnboardingWizard onComplete={() => setShowOnboarding(false)} />}
     </div>
   );

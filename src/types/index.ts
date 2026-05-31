@@ -123,6 +123,7 @@ export interface Goal {
   teamId: string;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
 }
 
 // ==================== 项目 ====================
@@ -152,6 +153,7 @@ export interface Project {
   teamId: string;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
 }
 
 // ==================== 子任务 ====================
@@ -218,6 +220,7 @@ export interface Task {
   summary: string;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
 }
 
 // ==================== 关联/通知/活动/标签 ====================

@@ -46,6 +46,41 @@ export default function Goals() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchStatus, setBatchStatus] = useState('');
   const [batchAssignee, setBatchAssignee] = useState('');
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+
+  // Keyboard event handlers for j/k/e/d/x navigation + batch toggle
+  useEffect(() => {
+    const getFilteredIds = () => filteredGoals.map(g => g.id);
+    const onNavDown = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : -1; setFocusedId(ids[Math.min(idx + 1, ids.length - 1)]); };
+    const onNavUp = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : 0; setFocusedId(ids[Math.max(idx - 1, 0)]); };
+    const onEdit = () => { if (focusedId) setDetailItem({ type: 'goal', id: focusedId }); };
+    const onOpen = () => { if (focusedId) setDetailItem({ type: 'goal', id: focusedId }); };
+    const onDelete = () => { if (focusedId && can('goal_delete')) dispatch({ type: 'DELETE_GOAL', payload: focusedId }); };
+    const onComplete = () => { if (focusedId) { const goal = state.goals.find(g => g.id === focusedId); if (goal) dispatch({ type: 'UPDATE_GOAL', payload: { id: focusedId, updates: { status: goal.status === 'done' ? 'in_progress' : 'done' } } }); } };
+    const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
+    const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (VALID_VIEW_MODES.includes(mode as ViewMode)) setViewMode(mode as ViewMode); };
+    const onToggleBatch = () => { setBatchMode(prev => !prev); if (batchMode) setSelectedIds(new Set()); };
+    window.addEventListener('tbh-nav-down', onNavDown);
+    window.addEventListener('tbh-nav-up', onNavUp);
+    window.addEventListener('tbh-edit-selected', onEdit);
+    window.addEventListener('tbh-open-selected', onOpen);
+    window.addEventListener('tbh-delete-selected', onDelete);
+    window.addEventListener('tbh-complete-selected', onComplete);
+    window.addEventListener('tbh-focus-filter', onFilter);
+    window.addEventListener('tbh-switch-view', onViewSwitch);
+    window.addEventListener('tbh-toggle-batch', onToggleBatch);
+    return () => {
+      window.removeEventListener('tbh-nav-down', onNavDown);
+      window.removeEventListener('tbh-nav-up', onNavUp);
+      window.removeEventListener('tbh-edit-selected', onEdit);
+      window.removeEventListener('tbh-open-selected', onOpen);
+      window.removeEventListener('tbh-delete-selected', onDelete);
+      window.removeEventListener('tbh-complete-selected', onComplete);
+      window.removeEventListener('tbh-focus-filter', onFilter);
+      window.removeEventListener('tbh-switch-view', onViewSwitch);
+      window.removeEventListener('tbh-toggle-batch', onToggleBatch);
+    };
+  }, [focusedId, filteredGoals, can, dispatch, batchMode]);
 
   const activeMembers = useMemo(() => state.members.filter(m => m.status === 'active'), [state.members]);
   const goalTemplates = useMemo(() => state.templates.filter(t => t.type === 'goal'), [state.templates]);

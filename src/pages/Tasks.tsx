@@ -37,8 +37,42 @@ export default function Tasks() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [detailItem, setDetailItem] = useState<{ type: 'task'; id: string } | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d && d.itemType === 'task') setDetailItem({ type: 'task', id: d.itemId }); }; window.addEventListener('tbh-open-detail', h); return () => window.removeEventListener('tbh-open-detail', h); }, []);
   useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (!d || d.page !== 'tasks') return; if (d.statuses) setSelectedStatuses(new Set(d.statuses as string[])); if (d.timeFilter) setTimeFilter(d.timeFilter as string); if (d.persons) setSelectedPersons(new Set(d.persons as string[])); }; window.addEventListener('tbh-nav-filter', h); return () => window.removeEventListener('tbh-nav-filter', h); }, []);
+  // Keyboard event handlers for j/k/e/d/x navigation
+  useEffect(() => {
+    const getFilteredIds = () => { let list = state.tasks; return list.map(t => t.id); };
+    const onNavDown = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : -1; setFocusedId(ids[Math.min(idx + 1, ids.length - 1)]); };
+    const onNavUp = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : 0; setFocusedId(ids[Math.max(idx - 1, 0)]); };
+    const onEdit = () => { if (focusedId) setDetailItem({ type: 'task', id: focusedId }); };
+    const onOpen = () => { if (focusedId) setDetailItem({ type: 'task', id: focusedId }); };
+    const onDelete = () => { if (focusedId && can('task_delete')) dispatch({ type: 'DELETE_TASK', payload: focusedId }); };
+    const onComplete = () => { if (focusedId) { const task = state.tasks.find(t => t.id === focusedId); if (task) dispatch({ type: 'UPDATE_TASK', payload: { id: focusedId, updates: { status: task.status === 'done' ? 'todo' : 'done' } } }); } };
+    const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
+    const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (mode === 'table' || mode === 'board' || mode === 'list' || mode === 'timeline' || mode === 'matrix') setViewMode(mode as ViewMode); };
+    const onToggleBatch = () => { setBatchMode(prev => !prev); if (batchMode) setSelectedIds(new Set()); };
+    window.addEventListener('tbh-nav-down', onNavDown);
+    window.addEventListener('tbh-nav-up', onNavUp);
+    window.addEventListener('tbh-edit-selected', onEdit);
+    window.addEventListener('tbh-open-selected', onOpen);
+    window.addEventListener('tbh-delete-selected', onDelete);
+    window.addEventListener('tbh-complete-selected', onComplete);
+    window.addEventListener('tbh-focus-filter', onFilter);
+    window.addEventListener('tbh-switch-view', onViewSwitch);
+    window.addEventListener('tbh-toggle-batch', onToggleBatch);
+    return () => {
+      window.removeEventListener('tbh-nav-down', onNavDown);
+      window.removeEventListener('tbh-nav-up', onNavUp);
+      window.removeEventListener('tbh-edit-selected', onEdit);
+      window.removeEventListener('tbh-open-selected', onOpen);
+      window.removeEventListener('tbh-delete-selected', onDelete);
+      window.removeEventListener('tbh-complete-selected', onComplete);
+      window.removeEventListener('tbh-focus-filter', onFilter);
+      window.removeEventListener('tbh-switch-view', onViewSwitch);
+      window.removeEventListener('tbh-toggle-batch', onToggleBatch);
+    };
+  }, [focusedId, state.tasks, can, dispatch]);
   const [showPersonPicker, setShowPersonPicker] = useState(false);
   const [showCustomDate, setShowCustomDate] = useState(false);
   const [customDateFrom, setCustomDateFrom] = useState('');
@@ -421,7 +455,13 @@ export default function Tasks() {
               {needsVirtual && virtual.endIdx < sortedTasks.length && <tr style={{ height: (sortedTasks.length - virtual.endIdx) * TABLE_ROW_H }} />}
             </tbody>
           </table>
-        </div>
+         </div>
+        {sortedTasks.length > 50 && (
+          <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground flex items-center justify-between bg-muted/30">
+            <span>共 {sortedTasks.length} 条记录（虚拟滚动已启用）</span>
+            <span>已显示 {visibleTasks.length} 条</span>
+          </div>
+        )}
       </div>
     );
   }
