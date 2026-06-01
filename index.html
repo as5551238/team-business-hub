@@ -11,10 +11,29 @@
     <link rel="dns-prefetch" href="https://atexvoyvnnuaonvrgzhn.supabase.co" />
     <title>团队业务中台 - Team Business Hub</title>
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://atexvoyvnnuaonvrgzhn.supabase.co wss://atexvoyvnnuaonvrgzhn.supabase.co https://*.supabase.co https://sctapi.ftqq.com https://qyapi.weixin.qq.com https://api.resend.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none';" />
-    <script type="module" crossorigin src="./assets/index-Cr0Wd0yX.js"></script>
+    <script type="module" crossorigin src="./assets/index-B7rdr5Kd.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-nro-b3L-.css">
   <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
   <body>
     <div id="root"></div>
+    <script>
+      (function(){
+        var v='2026-06-01-v7';
+        var k='tbh-app-version';
+        try{
+          var s=localStorage.getItem(k);
+          if(s&&s!==v){
+            if('serviceWorker'in navigator){
+              navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();})});
+            }
+            caches.keys().then(function(n){n.forEach(function(x){caches.delete(x);})});
+            localStorage.setItem(k,v);
+            location.reload();
+          }else if(!s){
+            localStorage.setItem(k,v);
+          }
+        }catch(e){}
+      })();
+    </script>
   </body>
 </html>
