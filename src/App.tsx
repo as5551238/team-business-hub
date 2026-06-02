@@ -4,6 +4,7 @@ import { initSentry, setSentryUser, clearSentryUser } from '@/lib/sentry';
 import { DegradedBanner } from '@/components/DegradedMode';
 import { FeatureFlagProvider } from '@/lib/featureFlags';
 import { startAiPushScan, stopAiPushScan } from '@/lib/pushEventEngine';
+import { startAutomaton, stopAutomaton } from '@/lib/ai/aiAutomaton';
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Goals = lazy(() => import('@/pages/Goals'));
 const Projects = lazy(() => import('@/pages/Projects'));
@@ -16,14 +17,16 @@ const ConsentDialog = lazy(() => import('@/pages/PrivacyPage').then(m => ({ defa
 import { StoreProvider, useStore } from '@/store/useStore';
 import { UserPlus, LogIn, Phone, MessageCircle, Mail, ArrowRight, Search, RefreshCw, Users, Key, Building2 } from 'lucide-react';
 import { setCurrentTeamId } from '@/store/supabase';
-import { setRLSContext } from '@/supabase/client';
+import { setRLSContext, getSupabaseClient } from '@/supabase/client';
 import { wechatOAuthLogin, phoneOtpLogin, emailMagicLink } from '@/lib/authBridge';
 
 // Per-page ErrorBoundary - one page crash won't take down others
 class PageErrorBoundary extends Component<{ children: ReactNode; name: string }, { hasError: boolean; error: Error | null }> {
   state = { hasError: false, error: null };
   static getDerivedStateFromError(error: Error) { return { hasError: true, error }; }
-  componentDidCatch(error: Error, info: ErrorInfo) { console.error(`[PageErrorBoundary] ${this.props.name}:`, error.message, '\n', info.componentStack); }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    import('@/lib/sentry').then(m => m.captureException?.(error, { componentStack: info.componentStack })).catch(() => {});
+  }
   render() {
     if (this.state.hasError) {
       return <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground p-6"><div className="text-3xl">⚠️</div><div className="text-sm font-medium">{this.props.name} 页面加载出错</div><div className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 max-w-lg text-center break-all">{this.state.error?.message || '未知错误'}</div><button onClick={() => { this.setState({ hasError: false, error: null }); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-muted"><RefreshCw size={14} /> 重试</button></div>;
@@ -260,7 +263,6 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
     setSentryUser(userId, member?.name);
     // Login audit: write to audit_logs
     try {
-      const { getSupabaseClient } = require('@/supabase/client');
       const sb = getSupabaseClient();
       if (sb) {
         sb.from('audit_logs').insert({
@@ -331,7 +333,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
             <h1 className="text-2xl font-bold text-foreground">选择团队</h1>
             <p className="text-sm text-muted-foreground mt-1">选择一个团队加入，或创建/加入新团队</p>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl border border-border p-6 space-y-4">
+          <div className="bg-card rounded-2xl shadow-xl border border-border p-6 space-y-4">
             {teamsForUser.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-muted-foreground">我的团队</h3>
@@ -349,8 +351,8 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
             )}
             {teamsForUser.length > 0 && <div className="border-t border-border" />}
             <div className="flex bg-muted rounded-lg p-0.5">
-              <button onClick={() => setTeamMode('join')} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all ${teamMode === 'join' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground'}`}><Key size={14} />邀请码加入</button>
-              <button onClick={() => setTeamMode('create')} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all ${teamMode === 'create' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground'}`}><Building2 size={14} />创建团队</button>
+              <button onClick={() => setTeamMode('join')} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all ${teamMode === 'join' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}><Key size={14} />邀请码加入</button>
+              <button onClick={() => setTeamMode('create')} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all ${teamMode === 'create' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}><Building2 size={14} />创建团队</button>
             </div>
             {teamMode === 'join' ? (
               <div className="space-y-3">
@@ -386,12 +388,12 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
           <h1 className="text-2xl font-bold text-foreground">团队业务中台</h1>
           <p className="text-sm text-muted-foreground mt-1">Team Business Hub</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-xl border border-border p-6 space-y-5">
+        <div className="bg-card rounded-2xl shadow-xl border border-border p-6 space-y-5">
           <div className="flex bg-muted rounded-lg p-0.5">
-            <button onClick={() => { setMode('login'); setError(''); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'login' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground'}`}>
+            <button onClick={() => { setMode('login'); setError(''); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'login' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>
               <LogIn size={16} /> 登录
             </button>
-            <button onClick={() => { setMode('register'); setError(''); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'register' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground'}`}>
+            <button onClick={() => { setMode('register'); setError(''); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'register' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>
               <UserPlus size={16} /> 注册
             </button>
           </div>
@@ -399,16 +401,16 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
             {mode === 'login' ? (
               <>
                 <div className="flex bg-muted rounded-lg p-0.5">
-                  <button onClick={() => { setAuthMethod('search'); setError(''); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium transition-all ${authMethod === 'search' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground'}`}>
+                  <button onClick={() => { setAuthMethod('search'); setError(''); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium transition-all ${authMethod === 'search' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>
                     <Search size={14} />搜索
                   </button>
-                  <button onClick={() => { setAuthMethod('wechat'); setError(''); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium transition-all ${authMethod === 'wechat' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground'}`}>
+                  <button onClick={() => { setAuthMethod('wechat'); setError(''); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium transition-all ${authMethod === 'wechat' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>
                     <MessageCircle size={14} />企微
                   </button>
-                  <button onClick={() => { setAuthMethod('phone'); setError(''); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium transition-all ${authMethod === 'phone' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground'}`}>
+                  <button onClick={() => { setAuthMethod('phone'); setError(''); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium transition-all ${authMethod === 'phone' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>
                     <Phone size={14} />手机
                   </button>
-                  <button onClick={() => { setAuthMethod('email'); setError(''); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium transition-all ${authMethod === 'email' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground'}`}>
+                  <button onClick={() => { setAuthMethod('email'); setError(''); }} className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium transition-all ${authMethod === 'email' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>
                     <Mail size={14} />邮箱
                   </button>
                 </div>
@@ -531,14 +533,19 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
     try { return !localStorage.getItem('tbh-privacy-consented'); } catch { return true; }
   });
 
-  // Start AI proactive push scan once on login — use stateRef to avoid re-creating interval
+  // Start AI proactive push scan + Automaton once on login
   useEffect(() => {
     startAiPushScan(
       () => stateRef.current.tasks,
       () => stateRef.current.goals,
       () => stateRef.current.currentUser?.id ?? null,
     );
-    return () => stopAiPushScan();
+    // Automaton uses the dispatch bridge injected by StoreProvider via setAsyncDispatch
+    startAutomaton(
+      () => stateRef.current,
+      (action: any) => { try { dispatch(action); } catch {} },
+    );
+    return () => { stopAiPushScan(); stopAutomaton(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loggedIn]);
 
@@ -590,6 +597,44 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
 function App() {
   // Initialize Sentry on first load
   useEffect(() => { initSentry(); }, []);
+
+  // Force SW update: detect new version and reload to bust stale PWA cache
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        // New SW has taken control — reload to use fresh code
+        window.location.reload();
+      });
+      // Also: if there's a waiting SW, force it to activate immediately
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg?.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); }
+      });
+    }
+  }, []);
+
+  // D7: Deep link — handle NAVIGATE messages from SW (notificationclick)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'NAVIGATE' && event.data.url) {
+        const url = event.data.url;
+        // Convert SW URL to hash-based route: /task/xxx -> #tasks, /goal/xxx -> #goals
+        const page = url.includes('/goal') ? 'goals' : url.includes('/project') ? 'projects' : url.includes('/task') ? 'tasks' : null;
+        if (page) {
+          window.location.hash = page;
+          // Dispatch item navigation after a short delay for page to load
+          const itemId = url.split('/').pop();
+          if (itemId) {
+            const itemType = url.includes('/goal') ? 'goal' : url.includes('/project') ? 'project' : 'task';
+            setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-item', { detail: { id: itemId, type: itemType } })), 300);
+          }
+        }
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, []);
+
   return (
     <StoreProvider>
       <AppShell />

@@ -22,7 +22,7 @@ export function SprintSelector({ value, onChange, className }: SprintSelectorPro
     <select
       value={value || ''}
       onChange={e => onChange(e.target.value || null)}
-      className={`border border-input rounded px-2 py-1 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary/20 ${className || ''}`}
+      className={`border border-input rounded px-2 py-1 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary/20 ${className || ''}`}
     >
       <option value="">无迭代</option>
       {assignableSprints.map(sp => (

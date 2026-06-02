@@ -1,6 +1,7 @@
 // TeamTab 组件 - 团队管理
 import { useState, useMemo } from 'react';
-import { useStore, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { usePermissions } from '@/store/hooks';
 import { Users, Plus, Shield, Briefcase, Mail, Calendar, Trash2, ChevronDown, ChevronUp, Edit2, Save, X, Phone, MessageCircle, User, Copy, RefreshCw, Check } from 'lucide-react';
 import type { MemberRole, Permission, PermissionModule } from '@/types';
 import { inputCls, roleLabels, roleColors, permissionDesc, allPermissions, getRoleDefaultPermission, memberToEditForm, type EditForm } from './constants';
@@ -219,7 +220,7 @@ export function TeamTab() {
               <div>
                 <div className="text-sm font-semibold">{currentTeam.name} - 邀请码</div>
                 <div className="flex items-center gap-2 mt-1">
-                  <code className="text-lg font-mono font-bold tracking-widest text-primary bg-white px-3 py-0.5 rounded border border-primary/20">{currentTeam.inviteCode || '未生成'}</code>
+                  <code className="text-lg font-mono font-bold tracking-widest text-primary bg-card px-3 py-0.5 rounded border border-primary/20">{currentTeam.inviteCode || '未生成'}</code>
                   <button onClick={copyInviteCode} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="复制">
                     {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} className="text-muted-foreground" />}
                   </button>
@@ -234,12 +235,12 @@ export function TeamTab() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm"><p className="text-sm text-muted-foreground">团队总人数</p><p className="text-2xl font-bold mt-1">{members.length}</p></div>
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm"><p className="text-sm text-muted-foreground">活跃成员</p><p className="text-2xl font-bold mt-1 text-green-600">{activeMembers.length}</p></div>
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm"><p className="text-sm text-muted-foreground">部门数</p><p className="text-2xl font-bold mt-1">{Object.keys(deptStats).length}</p></div>
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm"><p className="text-sm text-muted-foreground">人均任务</p><p className="text-2xl font-bold mt-1">{activeMembers.length > 0 ? (tasks.length / activeMembers.length).toFixed(1) : 0}</p></div>
+        <div className="bg-card rounded-xl p-5 border border-border shadow-sm"><p className="text-sm text-muted-foreground">团队总人数</p><p className="text-2xl font-bold mt-1">{members.length}</p></div>
+        <div className="bg-card rounded-xl p-5 border border-border shadow-sm"><p className="text-sm text-muted-foreground">活跃成员</p><p className="text-2xl font-bold mt-1 text-green-600">{activeMembers.length}</p></div>
+        <div className="bg-card rounded-xl p-5 border border-border shadow-sm"><p className="text-sm text-muted-foreground">部门数</p><p className="text-2xl font-bold mt-1">{Object.keys(deptStats).length}</p></div>
+        <div className="bg-card rounded-xl p-5 border border-border shadow-sm"><p className="text-sm text-muted-foreground">人均任务</p><p className="text-2xl font-bold mt-1">{activeMembers.length > 0 ? (tasks.length / activeMembers.length).toFixed(1) : 0}</p></div>
       </div>
-      <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+      <div className="bg-card rounded-xl border border-border shadow-sm p-5">
         <h3 className="font-semibold text-sm mb-4">部门分布</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {Object.entries(deptStats).map(([dept, count]) => <div key={dept} className="bg-muted/50 rounded-lg p-3 text-center"><div className="text-lg font-bold">{count}</div><div className="text-xs text-muted-foreground">{dept}</div></div>)}
@@ -258,7 +259,7 @@ export function TeamTab() {
           </div>
         </div>
       )}
-      <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-border"><h3 className="font-semibold text-sm flex items-center gap-2"><Users size={16} className="text-primary" />成员列表</h3></div>
         <div className="divide-y divide-border">
           {activeMembers.map(m => renderMemberCard(m, true))}
@@ -268,7 +269,7 @@ export function TeamTab() {
       {showAddDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => setShowAddDialog(false)} />
-          <div className="relative bg-white rounded-xl shadow-xl border border-border w-full max-w-md animate-slide-up">
+          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-md animate-slide-up">
             <div className="px-6 py-4 border-b border-border"><h3 className="font-semibold">添加成员</h3></div>
             <div className="px-6 py-4 space-y-4">
               <div><label className="block text-sm font-medium mb-1">姓名 *</label><input className={inputCls} placeholder="输入成员姓名" value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} /></div>

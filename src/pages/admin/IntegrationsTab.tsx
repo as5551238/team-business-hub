@@ -3,8 +3,10 @@
  * Phase 3: Cross-platform protocol
  */
 import { useState, useCallback } from 'react';
-import { useStore, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { usePermissions } from '@/store/hooks';
 import { Code, Globe, Webhook, Plus, Trash2, TestTube, CheckCircle2, Copy, ExternalLink, ChevronDown, ChevronRight, Key, Eye, EyeOff, MessageSquare, Send, Bell, Link2, Unlink, Activity } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { getApiTokens, createApiToken, revokeApiToken, ALL_PERMISSIONS, type ApiToken } from '@/lib/api';
 import { getPushConfigs, savePushConfigs, pushNotification, formatTaskNotification, type PushConfig, type PushChannel } from '@/lib/pushConnector';
 import { initiateOAuth, loadOAuthStatuses, getOAuthStatus, disconnectOAuth, PROVIDER_LABELS, type OAuthProvider } from '@/lib/oauthIntegration';
@@ -77,14 +79,14 @@ function OpenAPISection() {
             {copiedField === 'base' ? <CheckCircle2 size={12} /> : <Copy size={12} />} 复制
           </button>
         </div>
-        <code className="text-xs block bg-white rounded px-2 py-1 border font-mono break-all">{supabaseUrl}/rest/v1</code>
+        <code className="text-xs block bg-card rounded px-2 py-1 border font-mono break-all">{supabaseUrl}/rest/v1</code>
         <div className="flex items-center justify-between mt-2">
           <span className="text-xs font-medium">Publishable Key</span>
           <button onClick={() => copyText(publishableKey, 'key')} className="text-xs text-primary hover:underline flex items-center gap-1">
             {copiedField === 'key' ? <CheckCircle2 size={12} /> : <Copy size={12} />} 复制
           </button>
         </div>
-        <code className="text-xs block bg-white rounded px-2 py-1 border font-mono break-all">{publishableKey}</code>
+        <code className="text-xs block bg-card rounded px-2 py-1 border font-mono break-all">{publishableKey}</code>
       </div>
 
       {/* Example Request */}
@@ -112,7 +114,7 @@ Headers:
               <div className="px-3 pb-2 bg-muted/10">
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {t.fields.map(f => (
-                    <code key={f} className="text-[11px] bg-white border rounded px-1.5 py-0.5 font-mono">{f}</code>
+                    <code key={f} className="text-[11px] bg-card border rounded px-1.5 py-0.5 font-mono">{f}</code>
                   ))}
                 </div>
                 <button onClick={() => copyText(`GET ${supabaseUrl}/rest/v1/${t.name}`, `api-${t.name}`)} className="mt-2 text-[11px] text-primary hover:underline flex items-center gap-1">
@@ -194,7 +196,7 @@ function ApiTokenSection() {
               <span className="text-[10px] text-muted-foreground font-medium">{group}</span>
               <div className="flex flex-wrap gap-1.5 mt-0.5">
                 {perms.map(p => (
-                  <button key={p.value} type="button" onClick={() => setNewPerms(prev => prev.includes(p.value) ? prev.filter(v => v !== p.value) : [...prev, p.value])} className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${newPerms.includes(p.value) ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-border hover:border-primary/50'} ${p.value === 'admin' ? 'ring-1 ring-amber-300' : ''}`}>{p.label}</button>
+                  <button key={p.value} type="button" onClick={() => setNewPerms(prev => prev.includes(p.value) ? prev.filter(v => v !== p.value) : [...prev, p.value])} className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${newPerms.includes(p.value) ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border hover:border-primary/50'} ${p.value === 'admin' ? 'ring-1 ring-amber-300' : ''}`}>{p.label}</button>
                 ))}
               </div>
             </div>
@@ -317,7 +319,7 @@ function WebhookSection() {
             <label className="text-xs font-medium mb-1 block">订阅事件 *</label>
             <div className="flex flex-wrap gap-1.5">
               {WEBHOOK_EVENTS.map(ev => (
-                <button key={ev.value} type="button" onClick={() => setFormEvents(p => { const n = new Set(p); n.has(ev.value) ? n.delete(ev.value) : n.add(ev.value); return n; })} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${formEvents.has(ev.value) ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-border hover:border-primary/50'}`}>
+                <button key={ev.value} type="button" onClick={() => setFormEvents(p => { const n = new Set(p); n.has(ev.value) ? n.delete(ev.value) : n.add(ev.value); return n; })} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${formEvents.has(ev.value) ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border hover:border-primary/50'}`}>
                   {ev.label}
                 </button>
               ))}
@@ -340,7 +342,7 @@ function WebhookSection() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button onClick={() => toggleWebhook(wh.id)} className={`w-8 h-4 rounded-full transition-colors relative ${wh.active ? 'bg-primary' : 'bg-gray-200'}`}>
-                    <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${wh.active ? 'left-4' : 'left-0.5'}`} />
+                    <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-card transition-transform ${wh.active ? 'left-4' : 'left-0.5'}`} />
                   </button>
                   <code className="text-xs font-mono truncate max-w-[300px]">{wh.url}</code>
                   {!wh.active && <span className="text-[10px] text-muted-foreground">已暂停</span>}
@@ -455,7 +457,7 @@ function PushConnectorSection() {
             <label className="text-xs font-medium mb-1 block">推送渠道 *</label>
             <div className="flex flex-wrap gap-1.5">
               {(Object.entries(CHANNEL_LABELS) as [PushChannel, string][]).map(([k, l]) => (
-                <button key={k} type="button" onClick={() => setFormChannel(k)} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${formChannel === k ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-border hover:border-primary/50'}`}>{l}</button>
+                <button key={k} type="button" onClick={() => setFormChannel(k)} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${formChannel === k ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border hover:border-primary/50'}`}>{l}</button>
               ))}
             </div>
           </div>
@@ -485,7 +487,7 @@ function PushConnectorSection() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button onClick={() => toggleConfig(i)} className={`w-8 h-4 rounded-full transition-colors relative ${c.enabled ? 'bg-primary' : 'bg-gray-200'}`}>
-                    <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${c.enabled ? 'left-4' : 'left-0.5'}`} />
+                    <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-card transition-transform ${c.enabled ? 'left-4' : 'left-0.5'}`} />
                   </button>
                   <span className="text-xs font-medium">{CHANNEL_LABELS[c.channel]}</span>
                   {!c.enabled && <span className="text-[10px] text-muted-foreground">已暂停</span>}
@@ -582,19 +584,19 @@ export function IntegrationsTab() {
       <h3 className="font-semibold text-sm">集成管理</h3>
 
       <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5 flex-wrap">
-        <button onClick={() => setSection('api')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'api' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSection('api')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'api' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Code size={14} /> API
         </button>
-        <button onClick={() => setSection('webhook')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'webhook' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSection('webhook')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'webhook' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Webhook size={14} /> Webhook
         </button>
-        <button onClick={() => setSection('push')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'push' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSection('push')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'push' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Bell size={14} /> 推送
         </button>
-        <button onClick={() => setSection('oauth')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'oauth' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSection('oauth')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'oauth' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Link2 size={14} /> OAuth
         </button>
-        <button onClick={() => setSection('health')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'health' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSection('health')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'health' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Activity size={14} /> 健康
         </button>
       </div>

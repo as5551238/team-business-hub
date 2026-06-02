@@ -46,7 +46,7 @@ export function DetailRelationships({ itemType, itemId, goal, project, task, can
       {itemType === 'goal' && (
         <div className="space-y-2">
           <label className="text-xs text-muted-foreground">父目标</label>
-          <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-white" value={(goal as Goal)?.parentId || ''} onChange={e => handleParentChange('parentId', e.target.value || null)}>
+          <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card" value={(goal as Goal)?.parentId || ''} onChange={e => handleParentChange('parentId', e.target.value || null)}>
             <option value="">无</option>
             {availableParentGoals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
           </select>
@@ -56,14 +56,14 @@ export function DetailRelationships({ itemType, itemId, goal, project, task, can
         <div className="space-y-2">
           <div>
             <label className="text-xs text-muted-foreground">父项目</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-white mt-1" value={(project as Project)?.parentId || ''} onChange={e => handleParentChange('parentId', e.target.value || null)}>
+            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-1" value={(project as Project)?.parentId || ''} onChange={e => handleParentChange('parentId', e.target.value || null)}>
               <option value="">无</option>
               {availableParentProjects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
             </select>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">关联目标</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-white mt-1" value={(project as Project)?.goalId || ''} onChange={e => handleParentChange('goalId', e.target.value || null)}>
+            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-1" value={(project as Project)?.goalId || ''} onChange={e => handleParentChange('goalId', e.target.value || null)}>
               <option value="">无</option>
               {state.goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
             </select>
@@ -80,21 +80,21 @@ export function DetailRelationships({ itemType, itemId, goal, project, task, can
         <div className="space-y-2">
           <div>
             <label className="text-xs text-muted-foreground">父任务</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-white mt-1" value={(task as Task)?.parentId || ''} onChange={e => handleParentChange('parentId', e.target.value || null)}>
+            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-1" value={(task as Task)?.parentId || ''} onChange={e => handleParentChange('parentId', e.target.value || null)}>
               <option value="">无</option>
               {availableParentTasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
             </select>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">所属项目</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-white mt-1" value={(task as Task)?.projectId || ''} onChange={e => handleParentChange('projectId', e.target.value || null)}>
+            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-1" value={(task as Task)?.projectId || ''} onChange={e => handleParentChange('projectId', e.target.value || null)}>
               <option value="">无</option>
               {state.projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
             </select>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">关联目标</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-white mt-1" value={(task as Task)?.goalId || ''} onChange={e => { handleParentChange('goalId', e.target.value || null); if (!e.target.value) updateItem({ krId: undefined }); }}>
+            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-1" value={(task as Task)?.goalId || ''} onChange={e => { handleParentChange('goalId', e.target.value || null); if (!e.target.value) updateItem({ krId: undefined }); }}>
               <option value="">无</option>
               {state.goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
             </select>
@@ -106,7 +106,7 @@ export function DetailRelationships({ itemType, itemId, goal, project, task, can
               <div>
                 <label className="text-xs text-muted-foreground">关联关键结果</label>
                 <p className="text-[10px] text-muted-foreground mb-1">任务完成时自动+1该KR的当前值</p>
-                <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-white mt-0.5" value={(task as Task)?.krId || ''} onChange={e => updateItem({ krId: e.target.value || undefined })}>
+                <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-0.5" value={(task as Task)?.krId || ''} onChange={e => updateItem({ krId: e.target.value || undefined })}>
                   <option value="">不关联</option>
                   {krs.map(kr => <option key={kr.id} value={kr.id}>{kr.title} ({kr.currentValue}/{kr.targetValue})</option>)}
                 </select>

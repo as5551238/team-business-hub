@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useStore, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { usePermissions } from '@/store/hooks';
 import { uploadFile, deleteFile, BUCKET_NAMES } from '@/supabase/storage';
 import type { TrackingRecord, RepeatCycle } from '@/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { X, Trash2, Clock, Tag, Paperclip, Plus, Edit2 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { genId } from '@/store/utils';
 import { Section, STATUS_MAP, PRIORITY_MAP, REPEAT_LABELS } from './detail-shared';
 import { DetailKRs } from './DetailKRs';
@@ -24,7 +26,7 @@ class DetailPanelErrorBoundary extends React.Component<{ children: React.ReactNo
   render() {
     if (this.state.hasError) return (
       <div className="p-6 text-center">
-        <p className="text-muted-foreground mb-3">面板加载失败</p>
+        <EmptyState title="面板加载失败" compact />
         <button className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-muted/50" onClick={() => this.setState({ hasError: false })}>重试</button>
       </div>
     );
@@ -262,13 +264,19 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
 
   async function handleDeleteAttachment(attId: string, attUrl: string) {
     if (!confirm('确认删除此附件？')) return;
-    const urlParts = attUrl.split('/');
-    const bucketIdx = urlParts.indexOf(BUCKET_NAMES.attachments);
-    if (bucketIdx >= 0) {
-      const filePath = urlParts.slice(bucketIdx + 1).join('/');
-      await deleteFile(BUCKET_NAMES.attachments, [filePath]);
+    try {
+      const urlParts = attUrl.split('/');
+      const bucketIdx = urlParts.indexOf(BUCKET_NAMES.attachments);
+      if (bucketIdx >= 0) {
+        const filePath = urlParts.slice(bucketIdx + 1).join('/');
+        await deleteFile(BUCKET_NAMES.attachments, [filePath]);
+      }
+      updateItem({ attachments: attachments.filter(a => a.id !== attId) });
+    } catch (err) {
+      // P3#33 fix: show error feedback instead of silent failure
+      console.error('删除附件失败:', err);
+      alert('删除附件失败，请稍后重试');
     }
-    updateItem({ attachments: attachments.filter(a => a.id !== attId) });
   }
 
   async function handlePasteImage(e: React.ClipboardEvent) {
@@ -287,6 +295,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
           const pos = descArea.selectionStart;
           const md = `\n![${file.name}](${url})\n`;
           descArea.value = descArea.value.slice(0, pos) + md + descArea.value.slice(pos);
+          setLocalDescription(descArea.value);
         } else {
           setUploadStatus('error');
         }
@@ -301,17 +310,30 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
     }
   }
 
-  if (!item) return null;
+  if (!item) return (
+    <DetailPanelErrorBoundary>
+    <>
+      {!inline && isOpen && <div className="fixed inset-0 bg-black/30 z-40 hidden md:block" onClick={handleOverlayClick} />}
+      <div className={cn(inline ? 'h-full flex flex-col border-l bg-card animate-slide-in-right items-center justify-center' : 'fixed bg-card border-border shadow-xl z-50 flex flex-col items-center justify-center transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', !inline && (isOpen ? 'translate-x-0' : 'translate-x-full'))} style={inline ? undefined : { width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}>
+        <div className="text-center p-6">
+          <div className="text-3xl mb-3">📝</div>
+          <div className="text-sm text-muted-foreground mb-3">该事项已被删除</div>
+          <button onClick={() => onClose()} className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-muted">关闭面板</button>
+        </div>
+      </div>
+    </>
+    </DetailPanelErrorBoundary>
+  );
 
   return (
     <DetailPanelErrorBoundary>
     <>
       {!inline && isOpen && <div className="fixed inset-0 bg-black/30 z-40 hidden md:block" onClick={handleOverlayClick} />}
-      <div ref={panelRef} className={cn(inline ? 'h-full flex flex-col border-l bg-white animate-slide-in-right' : 'fixed bg-white border-border shadow-xl z-50 flex flex-col transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', !inline && (isOpen ? 'translate-x-0' : 'translate-x-full'))} style={inline ? undefined : { width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}>
+      <div ref={panelRef} className={cn(inline ? 'h-full flex flex-col border-l bg-card animate-slide-in-right' : 'fixed bg-card border-border shadow-xl z-50 flex flex-col transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', !inline && (isOpen ? 'translate-x-0' : 'translate-x-full'))} style={inline ? undefined : { width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}>
         {inline && <div className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/20 active:bg-primary/30 z-10" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }} />}
         {!inline && <div className="hidden md:block absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/20 active:bg-primary/30 z-10" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }} />}
         <div className="overflow-y-auto flex-1">
-          <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-border sticky top-0 bg-white z-10">
+          <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-border sticky top-0 bg-card z-10">
             <div className="flex items-start gap-2">
               <div className="flex-1 min-w-0">
                 {editingTitle ? (
@@ -326,7 +348,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                   <div className="relative">
                     <button className={cn('px-2 py-0.5 rounded text-xs font-medium cursor-pointer', STATUS_MAP[status]?.color || 'bg-gray-100 text-gray-600')} onClick={() => setStatusOpen(!statusOpen)}>{STATUS_MAP[status]?.label || status}</button>
                     {statusOpen && (
-                      <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded shadow-lg z-20 py-1 min-w-[100px]">
+                      <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded shadow-lg z-20 py-1 min-w-[100px]">
                         {Object.entries(STATUS_MAP).map(([key, val]) => (
                           <button key={key} className={cn('w-full text-left px-3 py-1.5 text-xs hover:bg-accent', key === status && 'font-semibold')} onClick={() => handleStatusChange(key)}>{val.label}</button>
                         ))}
@@ -336,7 +358,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                   <div className="relative">
                     <button className={cn('px-2 py-0.5 rounded text-xs font-medium cursor-pointer', PRIORITY_MAP[priority]?.color || 'bg-gray-100 text-gray-600')} onClick={() => setPriorityOpen(!priorityOpen)}>{PRIORITY_MAP[priority]?.label || priority}</button>
                     {priorityOpen && (
-                      <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded shadow-lg z-20 py-1 min-w-[80px]">
+                      <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded shadow-lg z-20 py-1 min-w-[80px]">
                         {Object.entries(PRIORITY_MAP).map(([key, val]) => (
                           <button key={key} className={cn('w-full text-left px-3 py-1.5 text-xs hover:bg-accent', key === priority && 'font-semibold')} onClick={() => handlePriorityChange(key)}>{val.label}</button>
                         ))}
@@ -387,7 +409,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                     <div>
                       <label className="text-xs text-muted-foreground">分类</label>
                       {allCategories.length > 0 ? (
-                        <select className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1 bg-white" value={category} onChange={e => handleCategoryChange(e.target.value)}>
+                        <select className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1 bg-card" value={category} onChange={e => handleCategoryChange(e.target.value)}>
                           <option value="">未分类</option>
                           {allCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                         </select>
@@ -450,7 +472,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                     )}
                     <div className="col-span-2">
                       <label className="text-xs text-muted-foreground">重复周期</label>
-                      <select className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1 bg-white" value={repeatCycle} onChange={e => handleRepeatChange(e.target.value as RepeatCycle)}>
+                      <select className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1 bg-card" value={repeatCycle} onChange={e => handleRepeatChange(e.target.value as RepeatCycle)}>
                         {Object.entries(REPEAT_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                       </select>
                     </div>
@@ -488,7 +510,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
             {activeTab === 'tracking' && (
               <Section title="跟踪记录" icon={<Clock className="w-3.5 h-3.5" />}>
                 <div className="space-y-3">
-                  {trackingRecords.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">暂无跟踪记录</p>}
+                  {trackingRecords.length === 0 && <EmptyState title="暂无跟踪记录" compact />}
                   {trackingRecords.map(record => (
                     <div key={record.id} className="border rounded p-2 space-y-1">
                       <div className="flex items-center justify-between">

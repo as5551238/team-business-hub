@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useStore, useNotes } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useNotes } from '@/store/hooks';
 import {
   Plus, Trash2, Tag, Search, Pin, PinOff, Palette, StickyNote, Eye, Edit3
 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import DOMPurify from 'dompurify';
 import { NOTE_COLORS, FOLDERS } from './constants';
 import { renderMarkdown } from './MarkdownDocTab';
@@ -47,10 +49,10 @@ export function NotesTab() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div><h2 className="text-lg font-bold">记事本</h2><p className="text-sm text-muted-foreground mt-0.5">记录灵感、笔记与待办事项</p></div>
+        <div><h2 className="text-lg font-bold">记事本</h2><EmptyState title="记录灵感、笔记与待办事项" compact /></div>
       </div>
 
-      <div className="bg-white rounded-xl border border-border shadow-sm">
+      <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex flex-wrap items-center gap-2 p-4 border-b border-border">
           <div className="relative flex-1 min-w-[150px] max-w-xs">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />

@@ -1,7 +1,15 @@
 import type { AppState, Goal, Project, Task, Permission, PermissionModule, PermissionAction, MemberRole, AutomationRule, StatusFlowRule } from '@/types';
 import { genId } from './utils';
 import { supabaseUpdate } from './supabase';
-import { calcDualTrack } from '@/lib/kpiScoring';
+import { calcDualTrack, calcKpiKrScore } from '@/lib/kpiScoring';
+import { getFactoryRules } from './factoryRules';
+
+// Late-injected dispatch bridge for ai_action (avoids circular dependency with useStore)
+let _asyncDispatch: ((action: any) => void) | null = null;
+export function setAsyncDispatch(fn: (action: any) => void) { _asyncDispatch = fn; }
+
+// AI_ACTION_MAP imported directly (no circular dependency — aiActions only imports types)
+import { AI_ACTION_MAP } from '@/lib/ai/aiActions';
 
 // ==================== 软删除过滤 ====================
 /** Filter out soft-deleted items for display lists */
@@ -123,6 +131,8 @@ export function matchCondition(operator: string, fieldValue: any, condValue: str
     case 'contains': return String(fieldValue ?? '').includes(condValue);
     case 'empty': return fieldValue == null || fieldValue === '' || (Array.isArray(fieldValue) && fieldValue.length === 0);
     case 'not_empty': return fieldValue != null && fieldValue !== '' && !(Array.isArray(fieldValue) && fieldValue.length === 0);
+    case 'gt': return Number(fieldValue) > Number(condValue);
+    case 'lt': return Number(fieldValue) < Number(condValue);
     default: return false;
   }
 }
@@ -130,7 +140,7 @@ export function matchCondition(operator: string, fieldValue: any, condValue: str
 /** 触发自动化规则（status_change / field_change / item_created 统一入口） */
 export function fireAutomationRules(
   s: AppState, itemId: string, itemType: 'goal' | 'project' | 'task', itemTitle: string,
-  trigger: 'status_change' | 'field_change' | 'item_created' | 'due_arrive',
+  trigger: 'status_change' | 'field_change' | 'item_created' | 'due_arrive' | 'kr_lag' | 'overdue',
   updates: Record<string, unknown>, oldItem: Record<string, unknown>,
 ) {
   for (const rule of s.automationRules) {
@@ -159,6 +169,11 @@ export function fireAutomationRules(
       }
     } catch (e) { console.warn(`${trigger} automation failed:`, e); }
   }
+  // P3#4 fix: prune stale _dueArriveLastFired entries (older than cooldown)
+  const pruneThreshold = Date.now() - DUE_ARRIVE_COOLDOWN_MS * 2;
+  for (const [key, ts] of _dueArriveLastFired) {
+    if (ts < pruneThreshold) _dueArriveLastFired.delete(key);
+  }
 }
 
 export function executeAutomationActions(s: AppState, rule: AutomationRule | { actions: AutomationRule['actions']; name?: string }, itemId: string, itemType: 'goal' | 'project' | 'task', itemTitle: string) {
@@ -172,6 +187,8 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
           const nTitle = act.config.title ?? (rule as AutomationRule).name ?? '自动化通知';
           const nMsg = act.config.message ?? `自动化规则已触发：${itemTitle}`;
           s.notifications.unshift({ id: genId('n'), type: 'sync', title: nTitle, message: nMsg, relatedId: itemId, relatedType: itemType, memberId: targetId, read: false, createdAt: new Date().toISOString() });
+          // D2: 操作反馈 toast
+          try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: nTitle, type: 'info' } })); } catch {}
           fireWeChatNotify(nTitle, nMsg);
         } else if (act.type === 'escalation') {
           const admins = s.members.filter(m => (m.role === 'admin' || m.role === 'manager') && m.status === 'active');
@@ -230,6 +247,35 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
           supabaseUpdate(tableName, itemId, { leader_id: act.config.memberId, updated_at: new Date().toISOString() });
           if (act.config.memberId !== s.currentUser?.id) {
             s.notifications.unshift({ id: genId('n'), type: 'assigned', title: '你被自动指派了新事项', message: `自动化规则将你指派为「${itemTitle}」的负责人`, relatedId: itemId, relatedType: itemType, memberId: act.config.memberId, read: false, createdAt: new Date().toISOString() });
+          }
+        } else if (act.type === 'ai_action') {
+          // AI-powered workflow action: invoke an AI action with context-aware params
+          const actionId = act.config.actionId;
+          if (!actionId) continue;
+          try {
+            const aiAction = AI_ACTION_MAP.get(actionId);
+            if (!aiAction) { console.warn(`ai_action: unknown actionId "${actionId}"`); continue; }
+            // Build params from config
+            const params: Record<string, any> = {};
+            for (const [k, v] of Object.entries(act.config)) {
+              if (k === 'actionId') continue;
+              params[k] = v;
+            }
+            // Inject context: auto-fill itemId/itemType if the action expects them
+            if (aiAction.params.some(p => p.key === 'taskId') && itemType === 'task') params.taskId = params.taskId || itemId;
+            if (aiAction.params.some(p => p.key === 'goalId') && itemType === 'goal') params.goalId = params.goalId || itemId;
+            if (aiAction.params.some(p => p.key === 'projectId') && itemType === 'project') params.projectId = params.projectId || itemId;
+            const result = aiAction.execute(s, params);
+            if (result && 'error' in result) {
+              console.warn(`ai_action ${actionId} failed:`, result.error);
+            } else if (result) {
+              // Dispatch via late-injected bridge (async, outside reducer)
+              if (_asyncDispatch) {
+                Promise.resolve().then(() => _asyncDispatch!(result));
+              }
+            }
+          } catch (e) {
+            console.warn('ai_action execution error:', e);
           }
         }
       } catch (e) {
@@ -321,6 +367,12 @@ export function calcGoalProgress(goals: Goal[], goalId: string, visited?: Set<st
   if (allKrs.length > 0) {
     // 只计算 selected 的 KR，未选中的不参与进度计算
     const krs = allKrs.filter(kr => kr.selected !== false);
+    // D6: 回写 KPI 评分到每个 KR 的 kpiScore 字段
+    for (const kr of allKrs) {
+      if (kr.track === 'kpi' || kr.track === 'both') {
+        kr.kpiScore = calcKpiKrScore(kr).score;
+      }
+    }
     if (krs.length > 0) {
       // 权重归一化 + 加权平均（KR 的 weight 字段已定义但之前未使用）
       const totalWeight = krs.reduce((sum, kr) => sum + (kr.weight ?? 1), 0);
@@ -329,6 +381,8 @@ export function calcGoalProgress(goals: Goal[], goalId: string, visited?: Set<st
         const normalizedWeight = (kr.weight ?? 1) / totalWeight;
         return sum + completion * normalizedWeight;
       }, 0));
+      // P3#31 fix: dualTrack mutation — safe only inside reducer; callers outside reducer must not rely on this mutation
+      // When called outside reducer, React won't detect the change; use the returned progress + separate dualTrack calculation
       goal.dualTrack = calcDualTrack(allKrs) ?? undefined;
       return progress;
     }
@@ -381,14 +435,48 @@ export function clampTitle(s: string | undefined): string | undefined { return s
 export function clampDesc(s: string | undefined): string | undefined { return s && s.length > MAX_DESC ? s.slice(0, MAX_DESC) : s; }
 export function clampComment(s: string | undefined): string | undefined { return s && s.length > MAX_COMMENT ? s.slice(0, MAX_COMMENT) : s; }
 
+const PENDING_DELETES_KEY = 'tbh-pending-deletes';
 export const pendingDeletes = new Map<string, number>();
+let _pendingLoaded = false;
+
+/** Lazy-load persisted pendingDeletes from localStorage (avoids TDZ on module eval) */
+function ensurePendingDeletesLoaded() {
+  if (_pendingLoaded) return;
+  _pendingLoaded = true;
+  try {
+    const saved = localStorage.getItem(PENDING_DELETES_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed === 'object' && parsed !== null) {
+        const now = Date.now();
+        for (const [id, expiry] of Object.entries(parsed)) {
+          if (typeof expiry === 'number' && expiry > now) pendingDeletes.set(id, expiry);
+        }
+      }
+    }
+  } catch {}
+}
+
+function persistPendingDeletes() {
+  try {
+    const now = Date.now();
+    const obj: Record<string, number> = {};
+    for (const [id, expiry] of pendingDeletes) {
+      if (now < expiry) obj[id] = expiry;
+    }
+    localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify(obj));
+  } catch {}
+}
+
 export function markPendingDelete(id: string) {
-  let ttl = 60_000;
+  ensurePendingDeletesLoaded();
+  let ttl = 120_000; // P3#6 fix: online TTL increased from 60s to 120s to match fallbackPoll interval
   try { if (localStorage.getItem('tbh-went-offline-at')) ttl = 10 * 60_000; } catch {}
   pendingDeletes.set(id, Date.now() + ttl);
+  persistPendingDeletes();
 }
-export function cleanPendingDeletes() { const now = Date.now(); for (const [id, expiry] of pendingDeletes) { if (now > expiry) pendingDeletes.delete(id); } }
-export function isPendingDelete(id: string) { const expiry = pendingDeletes.get(id); return expiry !== undefined && Date.now() < expiry; }
+export function cleanPendingDeletes() { ensurePendingDeletesLoaded(); const now = Date.now(); for (const [id, expiry] of pendingDeletes) { if (now > expiry) pendingDeletes.delete(id); } persistPendingDeletes(); }
+export function isPendingDelete(id: string) { ensurePendingDeletesLoaded(); const expiry = pendingDeletes.get(id); return expiry !== undefined && Date.now() < expiry; }
 
 export function validateStatusFlow(
   state: AppState, itemId: string, itemType: 'goal' | 'project' | 'task',
@@ -434,6 +522,11 @@ export function validateNewFlowRule(
     }
   }
   return { valid: true };
+}
+
+export function initFactoryRulesIfNeeded(existingRules: AutomationRule[]): AutomationRule[] {
+  if (existingRules.length > 0) return existingRules;
+  return getFactoryRules();
 }
 
 export function getDefaultStatusFlowRules(): StatusFlowRule[] {

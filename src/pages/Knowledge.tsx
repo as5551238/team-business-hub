@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useStore, useKnowledge } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useKnowledge } from '@/store/hooks';
 import type { Knowledge, ItemType } from '@/types';
 import { BookOpen, Plus, Trash2, Search, Tag, X, Link2, Eye, Edit3, Palette, StickyNote } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import DOMPurify from 'dompurify';
 import { renderMarkdown } from '@/pages/admin/MarkdownDocTab';
 import { NotesView } from '@/pages/knowledge/NotesView';
@@ -16,14 +18,14 @@ export default function KnowledgePage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 pt-6 pb-4 flex-shrink-0">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><BookOpen size={20} /> 知识库</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">条目与笔记统一管理，可关联事项</p>
+          <EmptyState title="条目与笔记统一管理，可关联事项" compact />
         </div>
         <div className="flex items-center gap-1">
           <ViewModeSwitch items={[{ value: 'entries', label: '条目', icon: BookOpen }, { value: 'notes', label: '笔记', icon: StickyNote }]} value={activeTab} onChange={v => setActiveTab(v as 'entries' | 'notes')} />
         </div>
       </div>
       <div className="flex-1 min-h-0 px-6 pb-6">
-        <div className="bg-white rounded-xl border border-border shadow-sm h-full flex flex-col">
+        <div className="bg-card rounded-xl border border-border shadow-sm h-full flex flex-col">
           {activeTab === 'entries' ? <EntriesView /> : <NotesView />}
         </div>
       </div>
@@ -185,7 +187,7 @@ function EntriesView() {
                 <button className={`p-1 rounded hover:bg-muted ${markdownPreview ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`} onClick={() => setMarkdownPreview(!markdownPreview)} title={markdownPreview ? '编辑模式' : 'Markdown预览'}>{markdownPreview ? <Edit3 size={14} /> : <Eye size={14} />}</button>
               </div>
               {markdownPreview ? (
-                <div className="w-full border border-border rounded-lg px-3 py-2 min-h-[200px] max-h-[400px] overflow-y-auto text-sm prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: renderMarkdown(editContent) }} />
+                <div className="w-full border border-border rounded-lg px-3 py-2 min-h-[200px] max-h-[400px] overflow-y-auto text-sm prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderMarkdown(editContent)) }} />
               ) : (
                 <textarea className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[200px] resize-y font-mono" placeholder="输入内容... (支持Markdown)" value={editContent} onChange={e => setEditContent(e.target.value)} />
               )}

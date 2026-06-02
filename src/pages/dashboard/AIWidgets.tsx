@@ -5,6 +5,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Zap, AlertTriangle, Target } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { generateLocalSummary, generateDeepSummary } from '@/lib/ai/aiSummaryGenerator';
 import type { ProgressSummary } from '@/lib/ai/aiSummaryGenerator';
 import { predictRisksLocal, predictRisksDeep } from '@/lib/ai/aiRiskPredictor';
@@ -43,7 +44,7 @@ export function AISummaryWidget({ state }: { state: AppState }) {
   if (!summary) return null;
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm">
+    <div className="bg-card rounded-xl border border-border shadow-sm">
       <div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border">
         <Zap size={18} className="text-indigo-500" />
         <h2 className="font-semibold text-sm md:text-base">智能摘要</h2>
@@ -54,10 +55,10 @@ export function AISummaryWidget({ state }: { state: AppState }) {
         <p className="text-sm font-medium">{summary.headline}</p>
         {summary.deepSummary && <p className="text-sm text-muted-foreground leading-relaxed bg-indigo-50/50 border border-indigo-100 rounded-lg p-3">{summary.deepSummary}</p>}
         {summary.keyChanges.length > 0 && (
-          <div><p className="text-xs font-semibold text-muted-foreground mb-1">关键变化</p>{summary.keyChanges.map((c, i) => <p key={i} className="text-xs text-muted-foreground pl-2">• {c}</p>)}</div>
+          <div><EmptyState title="关键变化" compact />{summary.keyChanges.map((c, i) => <p key={i} className="text-xs text-muted-foreground pl-2">• {c}</p>)}</div>
         )}
         {summary.focusItems.length > 0 && (
-          <div><p className="text-xs font-semibold text-muted-foreground mb-1">关注焦点</p>{summary.focusItems.slice(0, 3).map((f, i) => <p key={i} className="text-xs text-muted-foreground pl-2">• <span className="text-indigo-600">[{f.type === 'goal' ? '目标' : f.type === 'project' ? '项目' : '任务'}]</span> {f.title} — {f.reason}</p>)}</div>
+          <div><EmptyState title="关注焦点" compact />{summary.focusItems.slice(0, 3).map((f, i) => <p key={i} className="text-xs text-muted-foreground pl-2">• <span className="text-indigo-600">[{f.type === 'goal' ? '目标' : f.type === 'project' ? '项目' : '任务'}]</span> {f.title} — {f.reason}</p>)}</div>
         )}
         {summary.riskAlerts.length > 0 && (
           <div><p className="text-xs font-semibold text-red-500 mb-1">风险预警</p>{summary.riskAlerts.map((r, i) => <p key={i} className="text-xs text-red-600 pl-2">• {r}</p>)}</div>
@@ -85,13 +86,13 @@ export function AIRiskPredictionWidget({ state }: { state: AppState }) {
   }, [state, deepLoading]);
 
   if (!result || result.risks.length === 0) {
-    return (<div className="bg-white rounded-xl border border-border shadow-sm"><div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border"><AlertTriangle size={18} className="text-green-500" /><h2 className="font-semibold text-sm md:text-base">风险预测</h2><span className="text-xs text-green-600 ml-auto">暂无风险</span></div></div>);
+    return (<div className="bg-card rounded-xl border border-border shadow-sm"><div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border"><AlertTriangle size={18} className="text-green-500" /><h2 className="font-semibold text-sm md:text-base">风险预测</h2><span className="text-xs text-green-600 ml-auto">暂无风险</span></div></div>);
   }
 
   const topRisks = expanded ? result.risks.slice(0, 8) : result.risks.slice(0, 3);
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm">
+    <div className="bg-card rounded-xl border border-border shadow-sm">
       <div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border">
         <AlertTriangle size={18} className={result.overallRiskScore > 50 ? 'text-red-500' : result.overallRiskScore > 25 ? 'text-amber-500' : 'text-green-500'} />
         <h2 className="font-semibold text-sm md:text-base">风险预测</h2>
@@ -140,13 +141,13 @@ export function AIMethodologyWidget({ state }: { state: AppState }) {
   }, [state, deepLoading]);
 
   if (!result || result.recommendations.length === 0) {
-    return (<div className="bg-white rounded-xl border border-border shadow-sm"><div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border"><Target size={18} className="text-indigo-500" /><h2 className="font-semibold text-sm md:text-base">方法论推荐</h2><span className="text-xs text-muted-foreground ml-auto">暂无推荐</span></div></div>);
+    return (<div className="bg-card rounded-xl border border-border shadow-sm"><div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border"><Target size={18} className="text-indigo-500" /><h2 className="font-semibold text-sm md:text-base">方法论推荐</h2><span className="text-xs text-muted-foreground ml-auto">暂无推荐</span></div></div>);
   }
 
   const selected = result.recommendations[selectedIdx];
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm">
+    <div className="bg-card rounded-xl border border-border shadow-sm">
       <div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border">
         <Target size={18} className="text-indigo-500" />
         <h2 className="font-semibold text-sm md:text-base">方法论推荐</h2>
@@ -157,7 +158,7 @@ export function AIMethodologyWidget({ state }: { state: AppState }) {
         <div className="flex flex-wrap gap-1.5">{result.teamPattern.diagnosisTags.map((tag, i) => (<span key={i} className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">{tag}</span>))}</div>
         {result.painPoints.length > 0 && result.painPoints[0] !== '整体运行良好' && (<div><p className="text-xs font-semibold text-red-500 mb-1">核心痛点</p>{result.painPoints.slice(0, 2).map((p, i) => <p key={i} className="text-xs text-muted-foreground pl-2">• {p}</p>)}</div>)}
         <div className="flex gap-1.5 overflow-x-auto pb-1">{result.recommendations.slice(0, 4).map((r, i) => (<button key={r.id} className={`text-xs px-2.5 py-1 rounded-lg border shrink-0 transition-colors ${i === selectedIdx ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-medium' : 'border-border hover:bg-muted/50'}`} onClick={() => setSelectedIdx(i)}>{r.name} <span className="text-muted-foreground">{r.fitnessScore}%</span></button>))}</div>
-        {selected && (<div className="space-y-2"><p className="text-xs text-muted-foreground">{selected.reason}</p><div><p className="text-xs font-semibold text-green-600 mb-1">预期收益</p>{selected.expectedBenefits.slice(0, 3).map((b, i) => <p key={i} className="text-xs text-muted-foreground pl-2">• {b}</p>)}</div>{selected.steps.length > 0 && (<div><p className="text-xs font-semibold text-muted-foreground mb-1">执行路径</p>{selected.steps.slice(0, 4).map((s, i) => (<div key={i} className="flex items-start gap-2 py-0.5"><span className="text-xs w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 font-medium">{s.step}</span><div><p className="text-xs font-medium">{s.title}{s.estimatedDays > 0 ? ` (${s.estimatedDays}天)` : ''}</p><p className="text-xs text-muted-foreground">{s.description}</p></div></div>))}</div>)}</div>)}
+        {selected && (<div className="space-y-2"><p className="text-xs text-muted-foreground">{selected.reason}</p><div><p className="text-xs font-semibold text-green-600 mb-1">预期收益</p>{selected.expectedBenefits.slice(0, 3).map((b, i) => <p key={i} className="text-xs text-muted-foreground pl-2">• {b}</p>)}</div>{selected.steps.length > 0 && (<div><EmptyState title="执行路径" compact />{selected.steps.slice(0, 4).map((s, i) => (<div key={i} className="flex items-start gap-2 py-0.5"><span className="text-xs w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 font-medium">{s.step}</span><div><p className="text-xs font-medium">{s.title}{s.estimatedDays > 0 ? ` (${s.estimatedDays}天)` : ''}</p><p className="text-xs text-muted-foreground">{s.description}</p></div></div>))}</div>)}</div>)}
       </div>
     </div>
   );

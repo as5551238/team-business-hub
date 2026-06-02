@@ -6,6 +6,7 @@ import { Users } from 'lucide-react';
 import { AISummaryWidget, AIRiskPredictionWidget, AIMethodologyWidget } from './AIWidgets';
 import { AIConstraintSolverWidget, AIResourceReallocWidget, AIVisionStrategyWidget, AICapabilityGapWidget, AIMethodologyEvolutionWidget } from './AIWidgetsAdvanced';
 import { computeCollaborationHealth } from '@/lib/ai/aiCollaborationHealth';
+import { detectKrLags } from '@/lib/krLagDetection';
 import { useFilteredData } from './shared';
 import type { DashboardTabProps } from './shared';
 import { TabErrorBoundary } from '@/components/TabErrorBoundary';
@@ -22,6 +23,7 @@ export default function RiskAITab(_props: DashboardTabProps) {
   }), [state, memberGoals, memberTasks, memberProjects]);
 
   const health = useMemo(() => computeCollaborationHealth(state), [state]);
+  const krLags = useMemo(() => detectKrLags(memberGoals), [memberGoals]);
   const scoreColor = health.overallScore >= 80 ? 'text-green-600' : health.overallScore >= 60 ? 'text-amber-600' : 'text-red-600';
   const scoreBg = health.overallScore >= 80 ? 'bg-green-50' : health.overallScore >= 60 ? 'bg-amber-50' : 'bg-red-50';
   const trendIcon = health.trend === 'improving' ? '↑' : health.trend === 'declining' ? '↓' : '→';
@@ -38,8 +40,32 @@ export default function RiskAITab(_props: DashboardTabProps) {
       <AICapabilityGapWidget state={aiState} />
       <AIMethodologyEvolutionWidget state={aiState} />
 
+      {/* KR 滞后预警 */}
+      {krLags.length > 0 && (
+        <div className="bg-card rounded-xl border border-border shadow-sm">
+          <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-border">
+            <div className="flex items-center gap-2"><span className="text-amber-500">⚠</span><h2 className="font-semibold text-sm md:text-base">KR 滞后预警</h2></div>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold">{krLags.length} 项滞后</span>
+          </div>
+          <div className="p-4 md:px-5 space-y-2">
+            {krLags.slice(0, 5).map(alert => (
+              <div key={alert.krId} className={`p-2 rounded-lg border ${alert.severity === 'critical' ? 'border-red-200 bg-red-50/50' : 'border-amber-200 bg-amber-50/50'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{alert.krTitle}<span className="text-muted-foreground ml-1">({alert.goalTitle})</span></p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">预期 {alert.expectedProgress}% / 实际 {alert.actualProgress}% / 落后 {alert.lagPercent}%</p>
+                  </div>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ml-2 ${alert.severity === 'critical' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{alert.severity === 'critical' ? '严重' : '关注'}</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">{alert.suggestedAction}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 协作健康度 */}
-      <div className="bg-white rounded-xl border border-border shadow-sm">
+      <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2"><Users size={18} className="text-indigo-500" /><h2 className="font-semibold text-sm md:text-base">协作健康度</h2></div>
           <span className={`text-xs px-2 py-0.5 rounded-full ${scoreBg} ${scoreColor} font-bold`}>{trendIcon} {health.overallScore}分</span>

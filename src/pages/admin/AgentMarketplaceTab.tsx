@@ -22,6 +22,7 @@ import {
   Sparkles,
   ExternalLink,
 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 // ===== 类型定义 =====
 
@@ -468,19 +469,19 @@ export function AgentMarketplaceTab() {
     <div className="space-y-4">
       {/* 概览统计 */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Package size={12} />市场总数</div>
           <div className="text-xl font-bold">{stats.total}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><CheckCircle2 size={12} />已安装</div>
           <div className="text-xl font-bold text-green-600">{stats.installed}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Shield size={12} />稳定版</div>
           <div className="text-xl font-bold text-blue-600">{stats.stable}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Zap size={12} />类别数</div>
           <div className="text-xl font-bold">{stats.categories}</div>
         </div>
@@ -511,13 +512,13 @@ export function AgentMarketplaceTab() {
         <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
           <button
             onClick={() => setViewMode('market')}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'market' ? 'bg-white shadow-sm' : 'text-muted-foreground'}`}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'market' ? 'bg-card shadow-sm' : 'text-muted-foreground'}`}
           >
             <Package size={12} />市场
           </button>
           <button
             onClick={() => setViewMode('installed')}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'installed' ? 'bg-white shadow-sm' : 'text-muted-foreground'}`}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'installed' ? 'bg-card shadow-sm' : 'text-muted-foreground'}`}
           >
             <CheckCircle2 size={12} />已安装({stats.installed})
           </button>

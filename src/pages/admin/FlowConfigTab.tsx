@@ -3,6 +3,7 @@ import { useStore } from '@/store/useStore';
 import type { StatusFlowRule, StatusFlowAutoAction, MemberRole } from '@/types';
 import { getDefaultStatusFlowRules } from '@/store/shared';
 import { Plus, Trash2, Bell, Edit2, UserPlus, ArrowRight, Download } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const STATUSES = ['todo', 'in_progress', 'done', 'blocked', 'cancelled'];
 const STATUS_LABELS: Record<string, string> = { todo: '待办', in_progress: '进行中', done: '已完成', blocked: '阻塞', cancelled: '已取消' };
@@ -111,7 +112,7 @@ export function FlowConfigTab() {
 
       <div className="space-y-2">
         {rules.map((rule, idx) => (
-          <div key={rule.id || idx} className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg bg-white">
+          <div key={rule.id || idx} className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg bg-card">
             <span className="text-xs px-2 py-0.5 rounded bg-gray-100">{STATUS_LABELS[rule.fromStatus] || rule.fromStatus}</span>
             <ArrowRight size={14} className="text-muted-foreground" />
             <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">{STATUS_LABELS[rule.toStatus] || rule.toStatus}</span>
@@ -125,7 +126,7 @@ export function FlowConfigTab() {
       </div>
 
       {editingIdx !== null && (
-        <div className="border border-border rounded-lg p-4 space-y-3 bg-white">
+        <div className="border border-border rounded-lg p-4 space-y-3 bg-card">
           <h4 className="text-xs font-semibold">{editingIdx < rules.length ? '编辑规则' : '新建规则'}</h4>
           <div className="flex items-center gap-2">
             <select className="border border-input rounded px-2 py-1 text-sm" value={form.fromStatus} onChange={e => setForm({ ...form, fromStatus: e.target.value })}>

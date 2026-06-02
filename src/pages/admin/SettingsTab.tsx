@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useStore, useBackupExport } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useBackupExport } from '@/store/hooks';
 import { loadWeChatConfig, saveWeChatConfig, sendWeChatMessage, testChannel, formatDailyDigest, type WeChatConfig, type NotifyChannel, getLastTestError, setLastTestError } from '@/supabase/wechat';
 import { generateAllData } from '@/data/dataGenerator';
 import type { BackupData } from '@/types';
@@ -9,6 +10,7 @@ import {
   Database, Download, Upload, Copy, Mail, Trash2, ChevronDown,
   Tag as TagIcon,
 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { inputCls, loadEmailConfig, saveEmailConfig } from './constants';
 import type { EmailConfig } from './constants';
 import { sendTestEmail, isEmailEnabled, getLastEmailError, setLastEmailError } from '@/supabase/email';
@@ -34,7 +36,7 @@ function SupabaseSection() {
   function handleCopy() { const el = document.getElementById('admin-schema-text'); if (el) { navigator.clipboard.writeText(el.textContent || ''); setCopied(true); setTimeout(() => setCopied(false), 2000); } }
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+    <div className="bg-card rounded-xl border border-border shadow-sm p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${connectionMode === 'supabase' ? 'bg-green-50' : 'bg-gray-50'}`}>{connectionMode === 'supabase' ? <Cloud size={18} className="text-green-600" /> : <CloudOff size={18} className="text-gray-400" />}</div>
@@ -68,7 +70,7 @@ function SupabaseSection() {
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">在 Supabase 的 SQL Editor 中执行以下脚本：</p>
           <div className="relative">
-            <button onClick={handleCopy} className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-white border border-border hover:bg-muted">{copied ? <><Check size={10} className="text-green-600" /> 已复制</> : <><Copy size={10} /> 复制</>}</button>
+            <button onClick={handleCopy} className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-card border border-border hover:bg-muted">{copied ? <><Check size={10} className="text-green-600" /> 已复制</> : <><Copy size={10} /> 复制</>}</button>
             <pre id="admin-schema-text" className="bg-gray-900 text-gray-100 rounded-lg p-3 text-[10px] font-mono max-h-48 overflow-auto whitespace-pre select-all leading-relaxed">{`create extension if not exists "uuid-ossp";
 create table if not exists members (id text primary key default gen_random_uuid()::text, name text not null, role text not null default 'member', department text not null, avatar text not null, email text not null, status text not null default 'active', join_date text not null, created_at timestamptz default now());
 create table if not exists goals (id text primary key default gen_random_uuid()::text, title text not null, description text, type text not null default 'okr', status text not null default 'todo', parent_id text references goals(id) on delete cascade, level int not null default 0, start_date text not null, end_date text not null, owner_id text, key_results jsonb default '[]'::jsonb, progress int not null default 0, created_at timestamptz default now(), updated_at timestamptz default now(), leader_id text, supporter_ids jsonb default '[]'::jsonb, canvas_x float, canvas_y float, priority text not null default 'medium', tags jsonb default '[]'::jsonb, category text default '', repeat_cycle text not null default 'none', discussion_thread_id text, summary text default '', tracking_records jsonb default '[]'::jsonb, attachments jsonb default '[]'::jsonb, selected_kr_ids jsonb default '[]'::jsonb);
@@ -181,13 +183,13 @@ function WeChatSection() {
   }, [config.autoSend, config.enabled, config.autoSendTime, isReady]);
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm p-5 space-y-4">
+    <div className="bg-card rounded-xl border border-border shadow-sm p-5 space-y-4">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${config.enabled && isReady ? 'bg-green-50' : 'bg-gray-50'}`}><MessageSquare size={18} className={config.enabled && isReady ? 'text-green-600' : 'text-gray-400'} /></div>
           <div><div className="font-semibold text-sm">微信通知</div><div className={`text-xs ${config.enabled && isReady ? 'text-green-600' : 'text-muted-foreground'}`}>{config.enabled && isReady ? `已启用 - ${config.channel === 'server_chan' ? 'Server酱' : '企业微信群'}接收通知` : '未启用'}</div></div>
         </div>
-        <button onClick={() => updateConfig({ enabled: !config.enabled })} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.enabled ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.enabled ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+        <button onClick={() => updateConfig({ enabled: !config.enabled })} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.enabled ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-card transition-transform ${config.enabled ? 'translate-x-6' : 'translate-x-1'}`} /></button>
       </div>
       <div><label className="block text-xs font-medium mb-2">通知通道</label>
         <div className="flex gap-2">
@@ -209,7 +211,7 @@ function WeChatSection() {
         </div>
       )}
       <div className="space-y-2">
-        <div className="flex items-center justify-between px-1"><div><span className="text-xs font-medium">定时自动发送摘要</span><span className="text-[10px] text-muted-foreground ml-1">每天定时推送任务摘要</span></div><button onClick={() => updateConfig({ autoSend: !config.autoSend })} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${config.autoSend ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${config.autoSend ? 'translate-x-4' : 'translate-x-0.5'}`} /></button></div>
+        <div className="flex items-center justify-between px-1"><div><span className="text-xs font-medium">定时自动发送摘要</span><span className="text-[10px] text-muted-foreground ml-1">每天定时推送任务摘要</span></div><button onClick={() => updateConfig({ autoSend: !config.autoSend })} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${config.autoSend ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-card transition-transform ${config.autoSend ? 'translate-x-4' : 'translate-x-0.5'}`} /></button></div>
         {config.autoSend && <div className="flex items-center gap-2 px-1"><label className="text-xs text-muted-foreground">发送时间</label><input type="time" value={config.autoSendTime || '08:00'} onChange={e => updateConfig({ autoSendTime: e.target.value })} className="border border-border rounded px-2 py-1 text-xs" /></div>}
       </div>
       <div className="flex items-center gap-2 pt-2 border-t border-border">
@@ -246,10 +248,10 @@ function EmailSection() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm p-5 space-y-3">
+    <div className="bg-card rounded-xl border border-border shadow-sm p-5 space-y-3">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3"><div className={`p-2 rounded-lg ${config.enabled ? 'bg-green-50' : 'bg-gray-50'}`}><Mail size={18} className={config.enabled ? 'text-green-600' : 'text-gray-400'} /></div><div><div className="font-semibold text-sm">每日邮件推送</div><div className={`text-xs ${config.enabled ? 'text-green-600' : 'text-muted-foreground'}`}>{config.enabled ? '已启用 - 每日定时推送个人业务现况' : '未启用'}</div></div></div>
-        <button onClick={() => update({ enabled: !config.enabled })} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.enabled ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.enabled ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+        <button onClick={() => update({ enabled: !config.enabled })} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.enabled ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-card transition-transform ${config.enabled ? 'translate-x-6' : 'translate-x-1'}`} /></button>
       </div>
       <div className="text-xs text-muted-foreground">每日定时按邮箱向各成员推送个人业务现况。使用 <a href="https://resend.com" target="_blank" rel="noopener" className="text-primary underline">Resend</a> 邮件服务（免费100封/天）。注册后获取 API Key 填入即可。</div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -278,7 +280,7 @@ function DataStatsSection() {
   const activeProjects = projects.filter(p => p.status === 'in_progress').length;
   const doneTasks = tasks.filter(t => t.status === 'done').length;
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+    <div className="bg-card rounded-xl border border-border shadow-sm p-5">
       <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><Database size={14} className="text-primary" /> 当前数据</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -360,10 +362,10 @@ function BackupSection() {
   function handleConfirmImport() { const backup = pendingBackupRef.current; if (!backup) return; setImportStatus('importing'); setTimeout(() => { dispatch({ type: 'IMPORT_BACKUP', payload: backup }); setImportStatus('success'); setTimeout(() => setImportStatus('idle'), 3000); }, 500); }
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+    <div className="bg-card rounded-xl border border-border shadow-sm p-5">
       <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><Database size={14} className="text-primary" /> 数据备份与恢复</h3>
       <div className="space-y-3">
-        <div className="flex items-center justify-between px-1"><div><span className="text-xs font-medium">每日17:00自动导出</span><span className="text-[10px] text-muted-foreground ml-1">开启后每天整点自动下载备份</span></div><button onClick={() => { const next = !autoExport; setAutoExport(next); try { localStorage.setItem('tbh-auto-export', String(next)); } catch {} }} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoExport ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${autoExport ? 'translate-x-4' : 'translate-x-0.5'}`} /></button></div>
+        <div className="flex items-center justify-between px-1"><div><span className="text-xs font-medium">每日17:00自动导出</span><span className="text-[10px] text-muted-foreground ml-1">开启后每天整点自动下载备份</span></div><button onClick={() => { const next = !autoExport; setAutoExport(next); try { localStorage.setItem('tbh-auto-export', String(next)); } catch {} }} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoExport ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-card transition-transform ${autoExport ? 'translate-x-4' : 'translate-x-0.5'}`} /></button></div>
         <div className="flex items-center gap-2">
           <button onClick={handleExport} disabled={exporting} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-border hover:bg-muted transition-colors disabled:opacity-50">{exporting ? '导出中...' : <><Download size={12} /> 导出备份（Excel）</>}</button>
           <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-border hover:bg-muted transition-colors cursor-pointer"><Upload size={12} /> 导入恢复<input type="file" accept=".xlsx,.xls,.json" className="hidden" onChange={handleFileSelect} /></label>
@@ -396,7 +398,7 @@ function TagsCategoriesSection() {
   function deleteCat(id: string) { if (!confirm('确认删除此分类？')) return; dispatch({ type: 'DELETE_CATEGORY', payload: id }); }
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm p-5 space-y-4">
+    <div className="bg-card rounded-xl border border-border shadow-sm p-5 space-y-4">
       <h3 className="font-semibold text-sm flex items-center gap-2"><TagIcon size={16} /> 标签与分类管理</h3>
       <div>
         <button onClick={() => setOpenSection(openSection === 'tags' ? null : 'tags')} className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors"><span className="text-sm font-medium">标签管理</span><ChevronDown size={14} className={`transition-transform ${openSection === 'tags' ? 'rotate-180' : ''}`} /></button>
@@ -437,13 +439,13 @@ export function SettingsTab() {
   }
   return (
     <div className="space-y-5 animate-fade-in">
-      <div><h2 className="text-lg font-bold flex items-center gap-2"><SettingsIcon size={20} /> 系统设置</h2><p className="text-sm text-muted-foreground mt-0.5">配置云端同步、通知和备份</p></div>
+      <div><h2 className="text-lg font-bold flex items-center gap-2"><SettingsIcon size={20} /> 系统设置</h2><EmptyState title="配置云端同步、通知和备份" compact /></div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <SupabaseSection />
         <WeChatSection />
       </div>
       <EmailSection />
-      <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+      <div className="bg-card rounded-xl border border-border shadow-sm p-5">
         <AISettingsSection />
       </div>
       <TagsCategoriesSection />

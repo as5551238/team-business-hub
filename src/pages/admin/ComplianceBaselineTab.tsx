@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   ShieldAlert,
 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 // ===== 类型定义 =====
 

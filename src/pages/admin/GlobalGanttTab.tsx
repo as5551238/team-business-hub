@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useStore, usePermissions, useViewingMember } from '@/store/useStore';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useStore } from '@/store/useStore';
+import { usePermissions, useViewingMember } from '@/store/hooks';
 import type { Task } from '@/types';
 
 const STATUS_COLORS: Record<string, string> = { todo: '#94a3b8', in_progress: '#3b82f6', done: '#22c55e', blocked: '#f59e0b', cancelled: '#ef4444' };
@@ -83,9 +85,9 @@ export function GlobalGanttView() {
       </div>
 
       {sortedTasks.length === 0 ? (
-        <p className="text-xs text-muted-foreground py-8 text-center">暂无带日期的任务</p>
+        <EmptyState title="暂无带日期的任务" compact />
       ) : (
-        <div className="border border-border rounded-lg overflow-auto bg-white" style={{ maxHeight: 500 }}>
+        <div className="border border-border rounded-lg overflow-auto bg-card" style={{ maxHeight: 500 }}>
           <svg width={LABEL_W + chartW} height={chartH} className="min-w-full">
             {/* Header dates */}
             {Array.from({ length: dateRange.days }).map((_, i) => {

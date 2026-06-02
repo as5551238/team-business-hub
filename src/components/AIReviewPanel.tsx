@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Loader2, RefreshCw, X, FileText } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { generateReviewLocal, generateReviewDeep } from '@/lib/ai/aiReviewGenerator';
 import type { ReviewResult, ReviewSection, OKRFeedback } from '@/lib/ai/aiReviewGenerator';
 import { useStore } from '@/store/useStore';
@@ -196,7 +197,7 @@ export default function AIReviewPanel({ goalId, onClose }: AIReviewPanelProps) {
   const isEmbedded = !!goalId;
 
   return (
-    <div className={`bg-white ${isEmbedded ? '' : 'min-h-screen p-6'}`}>
+    <div className={`bg-card ${isEmbedded ? '' : 'min-h-screen p-6'}`}>
       <div className={`${isEmbedded ? '' : 'max-w-3xl mx-auto'}`}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">

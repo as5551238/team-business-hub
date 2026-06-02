@@ -193,7 +193,7 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]" onClick={onClose}>
-      <div className="w-[640px] max-w-[90vw] max-h-[480px] bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-border overflow-hidden flex flex-col" role="dialog" aria-modal="true" aria-label="命令面板" onClick={e => e.stopPropagation()}>
+      <div className="w-[640px] max-w-[90vw] max-h-[480px] bg-card dark:bg-gray-900 rounded-xl shadow-2xl border border-border overflow-hidden flex flex-col" role="dialog" aria-modal="true" aria-label="命令面板" onClick={e => e.stopPropagation()}>
         {/* Search input */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
           <Search size={18} className="text-muted-foreground shrink-0" />

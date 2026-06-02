@@ -3,9 +3,11 @@
  * 基于 ProjectGanttChart 的交互模式，但覆盖全局所有项目/任务
  */
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useStore, useMemberLookup, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useMemberLookup, usePermissions } from '@/store/hooks';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag, X, Filter, Save, GitCompare, Sparkles, Zap } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { autoScheduleLocal, autoScheduleDeep, type ScheduleSuggestion } from '@/lib/ai/aiAutoScheduler';
 import {
   DAY_MS, parseDate, formatDate, addDays, getMonday, computeTimeRange,
@@ -263,7 +265,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-[1400px] h-[85vh] flex flex-col animate-fade-in" onClick={e => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl shadow-2xl w-[95vw] max-w-[1400px] h-[85vh] flex flex-col animate-fade-in" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-3">
@@ -280,18 +282,18 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
           {canEditTasks && <button onClick={handleAddTask} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"><Plus size={14} />添加任务</button>}
           <div className="flex items-center gap-1.5">
             <Filter size={13} className="text-muted-foreground" />
-            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-white" value={filterProject} onChange={e => setFilterProject(e.target.value)}>
+            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-card" value={filterProject} onChange={e => setFilterProject(e.target.value)}>
               <option value="">全部项目</option>
               {state.projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
             </select>
-            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-white" value={groupBy} onChange={e => setGroupBy(e.target.value as GroupBy)}>
+            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-card" value={groupBy} onChange={e => setGroupBy(e.target.value as GroupBy)}>
               <option value="none">不分组</option>
               <option value="project">按项目</option>
               <option value="leader">按负责人</option>
               <option value="priority">按优先级</option>
               <option value="status">按状态</option>
             </select>
-            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-white" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-card" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="">全部状态</option>
               {(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
@@ -312,7 +314,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
         {showBaseline && (
           <div className="px-5 py-2 border-b border-border bg-amber-50/50 flex items-center gap-2 flex-wrap">
             <span className="text-xs font-medium">基线对比</span>
-            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-white" value={activeBaselineId} onChange={e => setActiveBaselineId(e.target.value)}>
+            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-card" value={activeBaselineId} onChange={e => setActiveBaselineId(e.target.value)}>
               <option value="">不显示基线</option>
               {baselines.map(b => <option key={b.id} value={b.id}>{b.name} ({new Date(b.createdAt).toLocaleDateString('zh-CN')})</option>)}
             </select>
@@ -354,7 +356,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
           ) : (
             <>
               {/* Left: labels */}
-              <div className="flex-shrink-0 border-r border-border bg-white overflow-y-auto" style={{ width: labelWidth }}>
+              <div className="flex-shrink-0 border-r border-border bg-card overflow-y-auto" style={{ width: labelWidth }}>
                 <div className="flex items-center px-3 border-b border-border text-xs text-muted-foreground font-medium" style={{ height: headerHeight }}>
                   <span className="flex-1">任务名称</span>
                   <span className="w-14 text-center">负责人</span>
@@ -516,16 +518,16 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
         {/* Editing modal (centered overlay) */}
         {editingTaskId && (() => { const et = allTasks.find(t => t.id === editingTaskId); if (!et) return null; return (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30" onClick={() => setEditingTaskId(null)}>
-            <div className="bg-white rounded-2xl shadow-2xl p-6 w-[420px] max-h-[80vh] overflow-y-auto space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="bg-card rounded-2xl shadow-2xl p-6 w-[420px] max-h-[80vh] overflow-y-auto space-y-4" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between"><span className="text-base font-semibold">{et.title}</span><button onClick={() => setEditingTaskId(null)} className="p-1 hover:bg-muted rounded-lg"><X size={16} /></button></div>
-              <div><label className="text-xs text-muted-foreground block mb-1">状态</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white" value={et.status} onChange={e => handleUpdateTask(et.id, { status: e.target.value as TaskStatus })}>{(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-              <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white" value={et.leaderId || ''} onChange={e => handleUpdateTask(et.id, { leaderId: e.target.value })}><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
+              <div><label className="text-xs text-muted-foreground block mb-1">状态</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.status} onChange={e => handleUpdateTask(et.id, { status: e.target.value as TaskStatus })}>{(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+              <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.leaderId || ''} onChange={e => handleUpdateTask(et.id, { leaderId: e.target.value })}><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-muted-foreground block mb-1">开始日期</label><input type="date" className="w-full text-sm border border-input rounded-lg px-3 py-2" value={et.startDate || ''} onChange={e => handleUpdateTask(et.id, { startDate: e.target.value || null })} /></div>
                 <div><label className="text-xs text-muted-foreground block mb-1">截止日期</label><input type="date" className="w-full text-sm border border-input rounded-lg px-3 py-2" value={et.dueDate || ''} onChange={e => handleUpdateTask(et.id, { dueDate: e.target.value || null })} /></div>
               </div>
-              <div><label className="text-xs text-muted-foreground block mb-1">紧急程度</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white" value={et.priority} onChange={e => handleUpdateTask(et.id, { priority: e.target.value as TaskPriority })}><option value="urgent">紧急 (S)</option><option value="high">高 (A)</option><option value="medium">中 (B)</option><option value="low">低 (C)</option></select></div>
-              <div><label className="text-xs text-muted-foreground block mb-1">前置依赖</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white" value="" onChange={e => { if (!e.target.value) return; const current = (et.blockedBy ?? []) as string[]; if (!current.includes(e.target.value)) handleUpdateTask(et.id, { blockedBy: [...current, e.target.value] }); }}><option value="">添加依赖...</option>{allTasks.filter(t => t.id !== et.id).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select>
+              <div><label className="text-xs text-muted-foreground block mb-1">紧急程度</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.priority} onChange={e => handleUpdateTask(et.id, { priority: e.target.value as TaskPriority })}><option value="urgent">紧急 (S)</option><option value="high">高 (A)</option><option value="medium">中 (B)</option><option value="low">低 (C)</option></select></div>
+              <div><label className="text-xs text-muted-foreground block mb-1">前置依赖</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value="" onChange={e => { if (!e.target.value) return; const current = (et.blockedBy ?? []) as string[]; if (!current.includes(e.target.value)) handleUpdateTask(et.id, { blockedBy: [...current, e.target.value] }); }}><option value="">添加依赖...</option>{allTasks.filter(t => t.id !== et.id).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select>
                 <div className="flex flex-wrap gap-1 mt-2">{((et.blockedBy ?? []) as string[]).map(bid => { const dep = allTasks.find(t => t.id === bid); if (!dep) return null; return <span key={bid} className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1">{dep.title}<button className="hover:text-red-500" onClick={() => handleUpdateTask(et.id, { blockedBy: ((et.blockedBy ?? []) as string[]).filter((id: string) => id !== bid) })}><X size={12} /></button></span>; })}</div>
               </div>
             </div>

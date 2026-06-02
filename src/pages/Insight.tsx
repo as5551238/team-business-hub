@@ -1,7 +1,9 @@
 import { useMemo, useState, useCallback, Suspense, lazy } from 'react';
-import { useStore, useViewingMember, useReviewList, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useViewingMember, useReviewList, usePermissions } from '@/store/hooks';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { BarChart3, Target, CheckCircle2, Clock, TrendingUp, Users, FolderKanban, FileText, Lightbulb, Save, Calendar, Brain, Sparkles } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
 import type { ReviewPeriod, ReviewMetrics } from '@/types';
@@ -261,13 +263,14 @@ export default function Insight() {
   function handleDelete(id: string) { dispatch({ type: 'DELETE_REVIEW', payload: id }); if (editingId === id) { setEditingId(null); setContent(''); } }
 
   return (
-    <div className="h-full flex flex-col p-4 md:p-6 space-y-4 animate-fade-in">
-      <div>
+    <div className="h-full flex flex-col animate-fade-in">
+      {/* 标题行 — 固定不滚动 */}
+      <div className="flex-shrink-0 px-4 md:px-6 pt-4 md:pt-6 pb-2">
         <h1 className="text-xl font-bold">数据洞察</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">多维度分析团队数据，驱动决策优化</p>
+        <EmptyState title="多维度分析团队数据，驱动决策优化" compact />
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <div className="flex-shrink-0 px-4 md:px-6 pb-2 flex items-center gap-2 overflow-x-auto">
         <ViewModeSwitch items={tabItems.map(t => ({ value: t.key, label: t.label, icon: t.icon }))} value={tab} onChange={v => setTab(v as InsightTab)} />
         {tab === 'review' && editingId && <button onClick={() => { setEditingId(null); setContent(''); }} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-muted/50 transition-colors">新建复盘</button>}
         {tab === 'review' && <button onClick={() => setShowAIReview(v => !v)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"><Sparkles size={14} />AI 智能复盘</button>}
@@ -279,6 +282,8 @@ export default function Insight() {
         )}
       </div>
 
+      {/* 可滚动内容区域 — 移动端额外底部留白 */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pb-20 md:pb-4">
       <div key={tab} className="animate-fade-in">
       {tab === 'dashboard' && (
         <TabErrorBoundary name="数据看板">
@@ -291,7 +296,7 @@ export default function Insight() {
               { icon: <CheckCircle2 size={20} className="text-green-600" />, label: '任务完成率', value: `${overallCompletionRate}%`, sub: `${completedTasks}/${totalTasks}`, color: 'bg-green-50' },
               { icon: <Clock size={20} className="text-red-600" />, label: '逾期任务', value: overdueTasks, sub: '需立即处理', color: 'bg-red-50' },
             ].map((stat, i) => (
-              <div key={i} className="bg-white rounded-xl p-5 border border-border shadow-sm">
+              <div key={i} className="bg-card rounded-xl p-5 border border-border shadow-sm">
                 <div className="flex items-start justify-between">
                   <div><p className="text-sm text-muted-foreground">{stat.label}</p><p className="text-2xl font-bold mt-1">{stat.value}</p><p className="text-xs text-muted-foreground mt-1">{stat.sub}</p></div>
                   <div className={`p-2.5 rounded-lg ${stat.color}`}>{stat.icon}</div>
@@ -301,7 +306,7 @@ export default function Insight() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <div className="bg-card rounded-xl border border-border shadow-sm p-5">
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-primary" />周任务趋势</h3>
               <div className="overflow-x-auto -mx-5 px-5">
                 <div className="min-w-[400px]">
@@ -323,7 +328,7 @@ export default function Insight() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <div className="bg-card rounded-xl border border-border shadow-sm p-5">
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><Target size={16} className="text-primary" />目标状态分布</h3>
               <div className="flex items-center gap-8">
                 <ResponsiveContainer width="50%" height={200}>
@@ -335,7 +340,7 @@ export default function Insight() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <div className="bg-card rounded-xl border border-border shadow-sm p-5">
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><Users size={16} className="text-primary" />成员任务分布 (Top 10)</h3>
               <div className="overflow-x-auto -mx-5 px-5">
                 <div className="min-w-[400px]">
@@ -354,7 +359,7 @@ export default function Insight() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <div className="bg-card rounded-xl border border-border shadow-sm p-5">
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><FolderKanban size={16} className="text-primary" />项目进度概览</h3>
               <div className="space-y-3">
                 {activeProjects.filter(p => p.status !== 'cancelled').sort((a, b) => b.progress - a.progress).slice(0, 8).map(p => (
@@ -377,21 +382,21 @@ export default function Insight() {
         <div className="space-y-6">
           {/* AI 智能复盘 */}
           {showAIReview && (
-            <div className="bg-white rounded-xl border border-purple-200 shadow-sm p-4 md:p-6">
+            <div className="bg-card rounded-xl border border-purple-200 shadow-sm p-4 md:p-6">
               <Suspense fallback={<TabLoader />}>
                 <AIReviewPanel onClose={() => setShowAIReview(false)} />
               </Suspense>
             </div>
           )}
-          <div className="bg-white rounded-xl border border-border shadow-sm p-4 md:p-6 space-y-5">
+          <div className="bg-card rounded-xl border border-border shadow-sm p-4 md:p-6 space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1.5">复盘周期</label>
-                <select value={period} onChange={(e) => setPeriod(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white">
+                <select value={period} onChange={(e) => setPeriod(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card">
                   <option value="day">日复盘</option><option value="week">周复盘</option><option value="month">月复盘</option><option value="quarter">季度复盘</option><option value="year">年度复盘</option><option value="custom">自定义范围</option>
                 </select>
               </div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1.5">复盘对象</label>
-                <select value={isTeamView ? '__team__' : viewingMemberId} onChange={(e) => setViewingMember(e.target.value === '__team__' ? null : e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white">
+                <select value={isTeamView ? '__team__' : viewingMemberId} onChange={(e) => setViewingMember(e.target.value === '__team__' ? null : e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card">
                   <option value="__team__">团队整体</option>
                   {state.members.filter(m => m.status === 'active').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
@@ -403,8 +408,8 @@ export default function Insight() {
 
             {period === 'custom' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1.5">开始日期</label><input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white" /></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1.5">结束日期</label><input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1.5">开始日期</label><input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1.5">结束日期</label><input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card" /></div>
               </div>
             )}
 
@@ -429,7 +434,7 @@ export default function Insight() {
 
             <div className="border-t border-border pt-4">
               <h3 className="text-sm font-medium text-gray-700 mb-2">自我反思</h3>
-              <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="记录本周期的工作反思、心得体会和改进计划..." className="w-full h-28 px-3 py-2 border border-border rounded-lg text-sm bg-white resize-y"></textarea>
+              <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="记录本周期的工作反思、心得体会和改进计划..." className="w-full h-28 px-3 py-2 border border-border rounded-lg text-sm bg-card resize-y"></textarea>
               <div className="flex justify-end mt-2">
                 <button onClick={handleSave} disabled={!content.trim()} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                   <Save size={16} />{editingId ? '更新复盘' : '保存复盘'}
@@ -438,7 +443,7 @@ export default function Insight() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-border shadow-sm p-4 md:p-6">
+          <div className="bg-card rounded-xl border border-border shadow-sm p-4 md:p-6">
             <h2 className="text-base font-semibold mb-4 flex items-center gap-2"><FileText size={16} className="text-gray-400" />历史复盘 <span className="text-xs font-normal text-gray-400">({filteredReviews.length})</span></h2>
             {filteredReviews.length === 0 ? (
               <div className="py-12 text-center text-gray-400"><FileText size={40} className="mx-auto mb-2 opacity-40" /><p className="text-sm">暂无复盘记录</p></div>
@@ -481,10 +486,10 @@ export default function Insight() {
         <TabErrorBoundary name="成员对比">
           <Suspense fallback={<TabLoader />}>
         <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-border">
               <h3 className="font-semibold text-sm flex items-center gap-2"><BarChart3 size={16} className="text-primary" />成员对比分析</h3>
-              <p className="text-xs text-muted-foreground mt-1">活跃成员关键指标一览，按完成率排序</p>
+              <EmptyState title="活跃成员关键指标一览，按完成率排序" compact />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -507,7 +512,7 @@ export default function Insight() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <div className="bg-card rounded-xl border border-border shadow-sm p-5">
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-primary" />完成率对比</h3>
               <div className="overflow-x-auto -mx-5 px-5">
                 <div className="min-w-[400px]">
@@ -524,7 +529,7 @@ export default function Insight() {
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <div className="bg-card rounded-xl border border-border shadow-sm p-5">
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><Target size={16} className="text-primary" />任务量分布</h3>
               <div className="overflow-x-auto -mx-5 px-5">
                 <div className="min-w-[400px]">
@@ -554,7 +559,8 @@ export default function Insight() {
           </Suspense>
         </TabErrorBoundary>
       )}
-      </div>
+       </div>
+      </div>{/* end scrollable content area */}
     </div>
   );
 }

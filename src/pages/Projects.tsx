@@ -1,8 +1,11 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useStore, useTags, useViewingMember, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useTags, useViewingMember, usePermissions } from '@/store/hooks';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { Project, ProjectStatus, TaskPriority, Comment } from '@/types';
 import { Plus, FolderKanban, Search, Check, Users, Trash2, X, Filter, ChevronDown } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useCollabPresence } from '@/lib/collab';
 import { useDraftSave } from '@/hooks/useDraftSave';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
@@ -15,6 +18,7 @@ export default function Projects() {
   const { can } = usePermissions();
   const { tags } = useTags();
   const { isTeamView, viewingMember, setViewingMember, viewingMemberId } = useViewingMember();
+  const { onlineUsers } = useCollabPresence(state.currentUser?.id || '', state.currentUser?.name || '');
   const currentUser = state.currentUser;
   const [detailItem, setDetailItem] = useState<{ type: 'project'; id: string } | null>(null);
   useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d && d.itemType === 'project') setDetailItem({ type: 'project', id: d.itemId }); }; window.addEventListener('tbh-open-detail', h); return () => window.removeEventListener('tbh-open-detail', h); }, []);
@@ -132,14 +136,17 @@ export default function Projects() {
   }
 
   function togglePersonFilter(pid: string) { setPersonFilter(prev => prev.includes(pid) ? prev.filter(id => id !== pid) : [...prev, pid]); }
-  const emptyMessage = activeFilterCount > 0 ? '没有匹配的项目，试试调整筛选条件' : '暂无项目，点击「新建项目」开始规划';
+  const emptyMessage = activeFilterCount > 0 ? '没有匹配的项目，试试调整筛选条件' : '暂无项目';
+  const emptyAction = activeFilterCount > 0 ? undefined : '新建项目';
+  const emptyDesc = activeFilterCount > 0 ? undefined : '创建项目，推进目标落地执行';
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold">项目中心</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">管理团队项目，推进目标落地执行</p>
+          {onlineUsers.length > 1 && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground ml-2"><Users size={12} /> {onlineUsers.length}人在线</span>}
+          <EmptyState title="管理团队项目，推进目标落地执行" compact />
         </div>
         <div className="flex items-center gap-2">
           {batchMode && selectedIds.size > 0 && (
@@ -148,11 +155,11 @@ export default function Projects() {
                <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (!can('delete_projects')) return; batchDelete(); }}>
                  <Trash2 size={12} /> 删除
                </button>
-              <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
+              <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-card focus:outline-none">
                 <option value="">改状态</option><option value="todo">待办</option><option value="in_progress">进行中</option><option value="done">已完成</option><option value="blocked">已阻塞</option><option value="cancelled">已取消</option>
               </select>
               {batchStatus && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={() => { batchUpdateStatus(batchStatus); }}>确认</button>}
-              <select value={batchLeader} onChange={e => setBatchLeader(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
+              <select value={batchLeader} onChange={e => setBatchLeader(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-card focus:outline-none">
                 <option value="">分配给</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
               {batchLeader && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={() => { batchAssign(batchLeader); }}>确认</button>}
@@ -166,7 +173,7 @@ export default function Projects() {
 
       <ViewModeSwitch items={viewTabs.map(t => ({ value: t.value, label: t.label, icon: t.icon }))} value={viewMode} onChange={v => setViewMode(v as ViewMode)} />
 
-      <div className="bg-white rounded-xl border p-2.5 md:p-3 flex items-center gap-2 flex-wrap">
+      <div className="bg-card rounded-xl border p-2.5 md:p-3 flex items-center gap-2 flex-wrap">
         <Filter size={14} className="text-muted-foreground flex-shrink-0" />
         <div className="relative flex-1 min-w-[160px] max-w-[260px]"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><input data-search-input className="w-full pl-8 pr-3 py-1.5 text-xs border border-input rounded-lg bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary/20" placeholder="搜索项目..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
         <MultiSelectFilter label="状态" options={statusOptions.filter(o => o.value !== 'all')} selected={selectedStatuses} onToggle={v => setSelectedStatuses(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedStatuses(new Set())} />
@@ -177,13 +184,13 @@ export default function Projects() {
         <div className="relative">
           <button className="text-xs px-2 py-1 rounded-md bg-muted/50 text-muted-foreground hover:text-foreground border border-border flex items-center gap-1" onClick={() => setShowPersonPicker(!showPersonPicker)}>人员筛选 ({personFilter.length || '全部'}) <ChevronDown size={12} /></button>
           {showPersonPicker && (
-            <div className="absolute z-20 bg-white border rounded-lg shadow-lg p-2 max-h-48 overflow-y-auto min-w-[160px]">
+            <div className="absolute z-20 bg-card border rounded-lg shadow-lg p-2 max-h-48 overflow-y-auto min-w-[160px]">
               <label className="flex items-center gap-2 py-0.5 cursor-pointer text-xs"><input type="checkbox" checked={personFilter.length === 0} onChange={() => setPersonFilter([])} />全部人员</label>
               {activeMembers.map(m => <label key={m.id} className="flex items-center gap-2 py-0.5 cursor-pointer text-xs"><input type="checkbox" checked={personFilter.includes(m.id)} onChange={() => togglePersonFilter(m.id)} />{m.name}</label>)}
             </div>
           )}
         </div>
-        <select className="border border-border rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary/20" value={timeFilter} onChange={e => setTimeFilter(e.target.value)}>{timeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+        <select className="border border-border rounded-lg px-2 py-1 text-xs bg-card focus:outline-none focus:ring-1 focus:ring-primary/20" value={timeFilter} onChange={e => setTimeFilter(e.target.value)}>{timeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
         {activeFilterCount > 0 && <button className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1" onClick={clearFilters}><X size={12} />清除 ({activeFilterCount})</button>}
         <span className="text-xs text-muted-foreground ml-auto">{filteredProjects.length} 条</span>
       </div>
@@ -191,20 +198,20 @@ export default function Projects() {
       {viewMode === 'detail' && (
         <div className="space-y-4">
           {topProjects.map(project => <ProjectTreeNode key={project.id} project={project} filteredProjects={filteredProjects} members={state.members} expandedIds={expandedIds} toggleExpand={toggleExpand} tags={tags} depth={0} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} />)}
-          {topProjects.length === 0 && <div className="bg-white rounded-xl border border-border p-12 text-center"><FolderKanban size={40} className="mx-auto text-muted-foreground/30 mb-3" /><p className="text-muted-foreground">{emptyMessage}</p></div>}
+          {topProjects.length === 0 && <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>}
         </div>
       )}
-      {viewMode === 'list' && (filteredProjects.length > 0 ? <ProjectListView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-white rounded-xl border border-border p-12 text-center"><FolderKanban size={40} className="mx-auto text-muted-foreground/30 mb-3" /><p className="text-muted-foreground">{emptyMessage}</p></div>)}
-      {viewMode === 'table' && (filteredProjects.length > 0 ? <ProjectTableView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-white rounded-xl border border-border p-12 text-center"><FolderKanban size={40} className="mx-auto text-muted-foreground/30 mb-3" /><p className="text-muted-foreground">{emptyMessage}</p></div>)}
-      {viewMode === 'kanban' && (filteredProjects.length > 0 ? <ProjectKanbanView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} tags={tags} /> : <div className="bg-white rounded-xl border border-border p-12 text-center"><FolderKanban size={40} className="mx-auto text-muted-foreground/30 mb-3" /><p className="text-muted-foreground">{emptyMessage}</p></div>)}
-      {viewMode === 'matrix' && (filteredProjects.length > 0 ? <ProjectMatrixView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-white rounded-xl border border-border p-12 text-center"><FolderKanban size={40} className="mx-auto text-muted-foreground/30 mb-3" /><p className="text-muted-foreground">{emptyMessage}</p></div>)}
-      {viewMode === 'timeline' && (filteredProjects.length > 0 ? <ProjectTimelineView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-white rounded-xl border border-border p-12 text-center"><FolderKanban size={40} className="mx-auto text-muted-foreground/30 mb-3" /><p className="text-muted-foreground">{emptyMessage}</p></div>)}
+      {viewMode === 'list' && (filteredProjects.length > 0 ? <ProjectListView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
+      {viewMode === 'table' && (filteredProjects.length > 0 ? <ProjectTableView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
+      {viewMode === 'kanban' && (filteredProjects.length > 0 ? <ProjectKanbanView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} tags={tags} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
+      {viewMode === 'matrix' && (filteredProjects.length > 0 ? <ProjectMatrixView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
+      {viewMode === 'timeline' && (filteredProjects.length > 0 ? <ProjectTimelineView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
 
 
       {showCreateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => setShowCreateDialog(false)} />
-          <div className="relative bg-white rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up">
+          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <h3 className="font-semibold">新建项目</h3>
               <button className="p-1 rounded hover:bg-muted" onClick={() => setShowCreateDialog(false)}><X size={16} /></button>

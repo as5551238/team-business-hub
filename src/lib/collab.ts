@@ -10,6 +10,13 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { getSupabaseClient } from '@/supabase/client';
+
+// collabDispatch bridge: injected by StoreProvider at runtime to avoid circular dependency.
+// Uses the same late-injection pattern as shared.ts _asyncDispatch.
+let _collabDispatch: ((action: any) => void) | null = null;
+export function setCollabDispatch(fn: (action: any) => void) { _collabDispatch = fn; }
+function getCollabDispatch(): ((action: any) => void) | null { return _collabDispatch; }
 
 // ===== 类型定义 =====
 
@@ -113,7 +120,8 @@ export class LWWRegister<T> {
 
   set(value: T, userId: string, timestamp?: number): boolean {
     const ts = timestamp || Date.now();
-    if (ts >= this.timestamp) {
+    // P3#21 fix: use > instead of >= for timestamp comparison; add userId as secondary tiebreaker for equal timestamps
+    if (ts > this.timestamp || (ts === this.timestamp && userId > this.userId)) {
       this.value = value;
       this.timestamp = ts;
       this.userId = userId;
@@ -170,13 +178,13 @@ export function useCollabPresence(userId: string, userName: string) {
   const [onlineUsers, setOnlineUsers] = useState<CollabUser[]>([]);
   const channelRef = useRef<any>(null);
   const colorRef = useRef(PRESENCE_COLORS[Math.abs(hashCode(userId)) % PRESENCE_COLORS.length]);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null); // P3#19 fix: track heartbeat interval
 
   useEffect(() => {
     let mounted = true;
 
     const setupPresence = async () => {
       try {
-        const { getSupabaseClient } = await import('@/supabase/client');
         const sb = getSupabaseClient();
         if (!sb || !mounted) return;
 
@@ -219,16 +227,12 @@ export function useCollabPresence(userId: string, userName: string) {
         channelRef.current = channel;
 
         // 心跳
-        const heartbeat = setInterval(() => {
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+        heartbeatRef.current = setInterval(() => {
           if (mounted) {
             channel.track({ ...self, lastActive: Date.now() });
           }
         }, HEARTBEAT_INTERVAL);
-
-        return () => {
-          clearInterval(heartbeat);
-          channel.unsubscribe();
-        };
       } catch {}
     };
 
@@ -236,6 +240,11 @@ export function useCollabPresence(userId: string, userName: string) {
 
     return () => {
       mounted = false;
+      // P3#19 fix: clear heartbeat interval on unmount
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
       if (channelRef.current) {
         try { channelRef.current.unsubscribe(); } catch {}
       }
@@ -268,18 +277,44 @@ export function useCollabBroadcast(userId: string) {
 
     const setup = async () => {
       try {
-        const { getSupabaseClient } = await import('@/supabase/client');
         const sb = getSupabaseClient();
         if (!sb || !mounted) return;
 
-        const channel = sb.channel('collab-ops');
+        const channel = sb.channel('collab-ops', { config: { broadcast: { self: false } } });
+
+        // Listen for remote collab operations
+        channel.on('broadcast', { event: 'collab-op' }, (payload: { payload: CollabOperation }) => {
+          const op = payload.payload;
+          if (!op || op.userId === userId) return;
+          // Apply remote collab operation via the store dispatch bridge
+          try {
+            const dispatch = getCollabDispatch();
+            if (!dispatch) return;
+            const tableName = op.entity === 'goal' ? 'goals' : op.entity === 'project' ? 'projects' : op.entity === 'task' ? 'tasks' : null;
+            if (!tableName) return;
+            if (op.type === 'update' && op.field && op.newValue !== undefined) {
+              dispatch({ type: 'REALTIME_UPSERT', payload: { table: tableName, item: { id: op.entityId, [op.field]: op.newValue, updatedAt: new Date(op.timestamp).toISOString() } } });
+            } else if (op.type === 'delete') {
+              dispatch({ type: 'REALTIME_DELETE', payload: { table: tableName, id: op.entityId } });
+            }
+            // create ops are already handled by postgres_changes Realtime
+          } catch {}
+        });
+
         channelRef.current = channel;
         channel.subscribe();
       } catch {}
     };
 
     setup();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+      // P3#20 fix: unsubscribe channel on cleanup
+      if (channelRef.current) {
+        try { channelRef.current.unsubscribe(); } catch {}
+        channelRef.current = null;
+      }
+    };
   }, [userId]);
 
   const broadcastOp = useCallback((op: Omit<CollabOperation, 'userId' | 'timestamp' | 'vectorClock'>) => {

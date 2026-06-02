@@ -66,7 +66,8 @@ export function sendBrowserNotification(title: string, options?: NotificationOpt
 export function sendUrgentNotification(title: string, options?: NotificationOptions): void {
   // Play notification sound
   try {
-    const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2JkpuTi4F1b2ZxeISOm6OnpKCUjYF5cGtuYoSLmqanqKSmopCNhoJ9eHRyb2VkiZOop6qop6Wljo+Kh4OBfXp4dXJva2dgZGJme4KJk5yhp6ijpKWmj4yGhIJ+eXZ0cW5raWhlb3+EipWcoKeppKKlpo+MhoSCf3p2dHFua2doZG9/hIqVnKCnqaSi paWaPjIaEgn5+dnZ0cW5raWhlb3+EipWcoKeppKKlpo+MhoSCf3p2dHFua2doZG9/hIqVnKCnqaSipaWaPjIaEgn5+dnZ0cW5raWhlb3+EipWcoKeppKKlpo+MhoSCf3p2dHJ=');
+    // P3#24 fix: replaced corrupted base64 with a valid minimal silent WAV
+    const audio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
     audio.volume = 0.3;
     audio.play().catch(() => {});
   } catch {}

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useStore } from '@/store/useStore';
 import { Plus, Trash2, Edit2, FileText, Link2, Eye, Code } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 
@@ -128,7 +129,7 @@ export function MarkdownDocTab() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Doc list */}
         <div className="space-y-1 max-h-[400px] overflow-y-auto">
-          {docs.length === 0 && <p className="text-xs text-muted-foreground py-4 text-center">暂无文档</p>}
+          {docs.length === 0 && <EmptyState title="暂无文档" compact />}
           {docs.map(doc => (
             <div key={doc.id} onClick={() => handleSelect(doc.id)} className={`p-2 rounded-lg cursor-pointer text-sm transition-colors ${selectedId === doc.id ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/50'}`}>
               <div className="font-medium text-xs truncate">{doc.title}</div>

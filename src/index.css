@@ -31,6 +31,8 @@
     --success-foreground: 355.7 100% 97.3%;
     --warning: 38 92% 50%;
     --warning-foreground: 48 96% 89%;
+    --info: 199 89% 48%;
+    --info-foreground: 210 40% 98%;
     --color-bg: #ffffff;
     --color-fg: #111827;
     --color-muted: #6B7280;
@@ -40,13 +42,41 @@
     --color-sidebar: #F9FAFB;
   }
   .dark {
-    --color-bg: #111827;
-    --color-fg: #F9FAFB;
-    --color-muted: #9CA3AF;
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+    --sidebar: 222.2 47.4% 6%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-accent: 217.2 32.6% 12%;
+    --success: 142.1 70.6% 45.3%;
+    --success-foreground: 144.9 80.4% 10%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 48 96% 89%;
+    --info: 199 89% 48%;
+    --info-foreground: 210 40% 98%;
+    --color-bg: #0F172A;
+    --color-fg: #F1F5F9;
+    --color-muted: #94A3B8;
     --color-accent: #60A5FA;
-    --color-border: #374151;
-    --color-card: #1F2937;
-    --color-sidebar: #1F2937;
+    --color-border: #334155;
+    --color-card: #1E293B;
+    --color-sidebar: #0F172A;
   }
 }
 
@@ -111,4 +141,68 @@
     background: rgba(0, 0, 0, 0.5);
     z-index: 40;
   }
+}
+
+/* ── Brand Visual Enhancements ── */
+
+/* Brand gradient — accent strip / hero backgrounds */
+.brand-gradient {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--info)) 100%);
+}
+.brand-gradient-subtle {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.06) 0%, hsl(var(--info) / 0.04) 100%);
+}
+
+/* Glassmorphism card — frosted glass effect */
+.glass-card {
+  background: hsl(var(--card) / 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid hsl(var(--border) / 0.5);
+}
+
+/* Status badge base — pill-shaped with semantic colors */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.badge-primary { background: hsl(var(--primary) / 0.12); color: hsl(var(--primary)); }
+.badge-success { background: hsl(var(--success) / 0.12); color: hsl(var(--success)); }
+.badge-warning { background: hsl(var(--warning) / 0.12); color: hsl(var(--warning)); }
+.badge-destructive { background: hsl(var(--destructive) / 0.12); color: hsl(var(--destructive)); }
+.badge-info { background: hsl(var(--info) / 0.12); color: hsl(var(--info)); }
+.badge-muted { background: hsl(var(--muted) / 0.8); color: hsl(var(--muted-foreground)); }
+
+/* Focus ring — accessible + brand-aligned */
+.focus-ring:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* Card hover lift — interactive card pattern */
+.card-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px -2px hsl(var(--foreground) / 0.08);
+}
+
+/* Shimmer loading skeleton */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted) / 0.5) 50%, hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
 }

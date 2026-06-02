@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, FolderKanban, CheckSquare, Square } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 import { genId } from '@/store/utils';
 import { Section, STATUS_MAP } from './detail-shared';
@@ -126,7 +127,7 @@ return (
                   })}
                 </div>
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1 flex-wrap">
-                  <select className="border border-input rounded px-1 py-0.5 text-[10px] bg-white" value={kr.track || 'okr'} onChange={e => handleUpdateKR(kr.id, { track: e.target.value as KrTrack })}>
+                  <select className="border border-input rounded px-1 py-0.5 text-[10px] bg-card" value={kr.track || 'okr'} onChange={e => handleUpdateKR(kr.id, { track: e.target.value as KrTrack })}>
                     <option value="okr">OKR冲高</option>
                     <option value="kpi">KPI考核</option>
                     <option value="both">双轨</option>
@@ -158,7 +159,7 @@ return (
               <span className={cn('px-1.5 py-0.5 rounded text-[10px]', STATUS_MAP[p.status]?.color)}>{STATUS_MAP[p.status]?.label}</span>
             </div>
           ))}
-          {state.projects.filter(p => p.goalId === goal.id).length === 0 && <p className="text-xs text-muted-foreground">暂无关联项目</p>}
+          {state.projects.filter(p => p.goalId === goal.id).length === 0 && <EmptyState title="暂无关联项目" compact />}
           {showAddProject && (
             <div className="flex gap-2 mt-2">
               <input className="flex-1 px-2 py-1 text-sm border rounded" placeholder="项目名称" value={newProjectTitle} onChange={e => setNewProjectTitle(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddProject(); }} />

@@ -4,6 +4,13 @@ import './index.css'
 import App from './App.tsx'
 import { RefreshCw } from 'lucide-react'
 
+// Register Service Worker — PWA缓存+推送+离线的基础
+import { registerSW } from 'virtual:pwa-register'
+registerSW({
+  onNeedRefresh() { /* 新SW等待激活，App.tsx中已有SKIP_WAITING逻辑 */ },
+  onOfflineReady() { /* 离线资源已缓存就绪 */ },
+})
+
 // Global ErrorBoundary - prevents white screen when StoreProvider or root components crash
 class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
   state = { hasError: false, error: null as Error | null };

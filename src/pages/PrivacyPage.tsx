@@ -117,7 +117,7 @@ export function PrivacyPage({ onBack }: PrivacyPageProps) {
         {/* Sections */}
         <div className="space-y-3">
           {sections.map((section) => (
-            <div key={section.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div key={section.id} className="bg-card dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
               <button
                 onClick={() => setExpandedSection(expandedSection === section.id ? null : section.id)}
                 className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
@@ -139,7 +139,7 @@ export function PrivacyPage({ onBack }: PrivacyPageProps) {
         </div>
 
         {/* Contact */}
-        <div className="mt-8 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="mt-8 bg-card dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">联系方式</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             如有任何关于隐私保护的问题或请求，请联系我们：<br />
@@ -168,15 +168,15 @@ export function ConsentDialog({ onAccept, onDecline }: { onAccept: () => void; o
   if (showPrivacy) {
     return (
       <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto">
-          <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
+        <div className="bg-card dark:bg-gray-800 rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto">
+          <div className="sticky top-0 bg-card dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">隐私政策</h2>
             <button onClick={() => setShowPrivacy(false)} className="text-sm text-indigo-600 hover:underline">返回确认</button>
           </div>
           <div className="p-4">
             <PrivacyContent />
           </div>
-          <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 flex gap-3">
+          <div className="sticky bottom-0 bg-card dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 flex gap-3">
             <button onClick={() => setShowPrivacy(false)} className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700">返回</button>
             <button
               onClick={() => {
@@ -193,7 +193,7 @@ export function ConsentDialog({ onAccept, onDecline }: { onAccept: () => void; o
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md p-6">
+      <div className="bg-card dark:bg-gray-800 rounded-2xl w-full max-w-md p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
             <Shield size={24} className="text-indigo-600" />

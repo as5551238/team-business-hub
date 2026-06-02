@@ -10,6 +10,7 @@ import { useState, useMemo } from 'react';
 import { getAuditStats, readAuditLogs, generateAgentCard, translateGatewayRequest, type AuditLogEntry } from '@/lib/agentGateway';
 import { identifyActiveAgents, calcAgentPerformance, calcHumanAgentStats } from '@/lib/agentCollaboration';
 import { Bot, Shield, AlertTriangle, CheckCircle2, XCircle, Clock, Activity, BarChart3, Users, RefreshCw, Globe, Server, Route, Zap, UserCheck, TrendingUp } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 type AgentTab = 'audit' | 'discovery' | 'collab';
 
@@ -36,19 +37,19 @@ export function AgentAuditTab() {
     <div className="space-y-5">
       {/* 概览统计 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl p-3 border border-border">
+        <div className="bg-card rounded-xl p-3 border border-border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Activity size={12} />总操作数</div>
           <div className="text-xl font-bold">{stats.totalOps}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border border-border">
+        <div className="bg-card rounded-xl p-3 border border-border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><CheckCircle2 size={12} className="text-green-600" />成功率</div>
           <div className="text-xl font-bold text-green-600">{stats.successRate}%</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border border-border">
+        <div className="bg-card rounded-xl p-3 border border-border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><XCircle size={12} className="text-red-500" />错误/拒绝</div>
           <div className="text-xl font-bold">{stats.errors} / {stats.denied}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border border-border">
+        <div className="bg-card rounded-xl p-3 border border-border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Bot size={12} />活跃Agent</div>
           <div className="text-xl font-bold">{agents.length}</div>
         </div>
@@ -56,13 +57,13 @@ export function AgentAuditTab() {
 
       {/* 子 Tab 切换 */}
       <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
-        <button onClick={() => setSubTab('audit')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'audit' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSubTab('audit')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'audit' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Shield size={14} /> 审计日志
         </button>
-        <button onClick={() => setSubTab('discovery')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'discovery' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSubTab('discovery')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'discovery' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Globe size={14} /> Agent发现
         </button>
-        <button onClick={() => setSubTab('collab')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'collab' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSubTab('collab')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'collab' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <UserCheck size={14} /> 人机协同
         </button>
       </div>
@@ -71,7 +72,7 @@ export function AgentAuditTab() {
       {subTab === 'audit' && (
         <div className="space-y-4">
           {/* Agent 列表 + 绩效 */}
-          <div className="bg-white rounded-xl border border-border">
+          <div className="bg-card rounded-xl border border-border">
             <div className="flex items-center justify-between px-4 py-2.5 border-b">
               <h3 className="font-semibold text-sm flex items-center gap-2"><Users size={14} />活跃 Agent</h3>
               <button onClick={() => setRefreshKey(k => k + 1)} className="p-1.5 hover:bg-muted rounded"><RefreshCw size={12} /></button>
@@ -102,7 +103,7 @@ export function AgentAuditTab() {
           </div>
 
           {/* 工具使用排行 */}
-          <div className="bg-white rounded-xl border border-border">
+          <div className="bg-card rounded-xl border border-border">
             <div className="px-4 py-2.5 border-b"><h3 className="font-semibold text-sm flex items-center gap-2"><BarChart3 size={14} />工具使用排行</h3></div>
             <div className="p-3 space-y-1.5">
               {stats.topTools.map((t, i) => (
@@ -118,7 +119,7 @@ export function AgentAuditTab() {
           </div>
 
           {/* 操作日志 */}
-          <div className="bg-white rounded-xl border border-border">
+          <div className="bg-card rounded-xl border border-border">
             <div className="px-4 py-2.5 border-b"><h3 className="font-semibold text-sm flex items-center gap-2"><Shield size={14} />操作日志（最近50条）</h3></div>
             <div className="overflow-x-auto">
               <table className="w-full text-[11px]">
@@ -153,7 +154,7 @@ export function AgentAuditTab() {
       {subTab === 'discovery' && (
         <div className="space-y-4">
           {/* 本平台 Agent Card */}
-          <div className="bg-white rounded-xl border border-border">
+          <div className="bg-card rounded-xl border border-border">
             <div className="px-4 py-2.5 border-b"><h3 className="font-semibold text-sm flex items-center gap-2"><Server size={14} />TBH Agent Card（A2A发现）</h3></div>
             <div className="p-4 space-y-3">
               <div className="flex items-center gap-3">
@@ -189,7 +190,7 @@ export function AgentAuditTab() {
           </div>
 
           {/* 外部 Agent 接入 */}
-          <div className="bg-white rounded-xl border border-border">
+          <div className="bg-card rounded-xl border border-border">
             <div className="px-4 py-2.5 border-b"><h3 className="font-semibold text-sm flex items-center gap-2"><Globe size={14} />外部 Agent 接入</h3></div>
             <div className="p-4 space-y-3">
               <p className="text-xs text-muted-foreground">外部 AI Agent 可通过以下协议接入团队业务中台：</p>
@@ -222,19 +223,19 @@ export function AgentAuditTab() {
       {subTab === 'collab' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><UserCheck size={12} />人机协同次数</div>
               <div className="text-xl font-bold">{humanStats.totalHandoffs}</div>
             </div>
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Bot size={12} />Agent自主完成</div>
               <div className="text-xl font-bold">{humanStats.agentAutonomous}</div>
             </div>
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><TrendingUp size={12} />协同效率</div>
               <div className="text-xl font-bold text-green-600">{humanStats.efficiency}%</div>
             </div>
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Clock size={12} />平均响应时间</div>
               <div className="text-xl font-bold">{humanStats.avgResponseTime}ms</div>
             </div>

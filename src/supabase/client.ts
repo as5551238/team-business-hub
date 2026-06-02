@@ -16,6 +16,10 @@ export function isSupabaseConfigured(): boolean {
 }
 
 export function resetSupabase(): void {
+  // P3#26 fix: remove all Realtime channels before nulling instance to prevent leaks
+  if (supabaseInstance) {
+    try { supabaseInstance.removeAllChannels(); } catch {}
+  }
   supabaseInstance = null;
 }
 

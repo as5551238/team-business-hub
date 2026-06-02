@@ -137,7 +137,10 @@ export function reducer(state: AppState, action: Action): AppState {
       if (conflictCount > 0 && now - lastSyncNotificationTime > 60000) {
         lastSyncNotificationTime = now;
         const desc = conflictCount <= 3 ? conflictNames.join('、') : `${conflictNames.slice(0, 2).join('、')} 等${conflictCount}项`;
-        s.notifications.unshift({ id: `sync-${Date.now()}-conflict`, type: 'sync', title: '数据同步更新', message: `${desc} 已被其他设备更新`, read: false, createdAt: new Date().toISOString(), relatedId: '', relatedType: 'task', memberId: s.currentUser?.id || '' });
+      // P3#3 fix: map state key to entity type instead of hardcoding 'task'
+      const keyToEntityType: Record<string, string> = { goals: 'goal', projects: 'project', tasks: 'task', members: 'member', notifications: 'notification', activities: 'activity', comments: 'comment', tags: 'tag' };
+      const conflictType = keyToEntityType[conflictNames.length > 0 ? (Object.keys(payload).find(k => Array.isArray((payload as any)[k])) || 'tasks') : 'tasks'] || 'task';
+      s.notifications.unshift({ id: `sync-${Date.now()}-conflict`, type: 'sync', title: '数据同步更新', message: `${desc} 已被其他设备更新`, read: false, createdAt: new Date().toISOString(), relatedId: '', relatedType: conflictType, memberId: s.currentUser?.id || '' });
       }
       return ensureAppStateDefaults(s as Partial<AppState> & { members: Member[] });
     }
@@ -168,6 +171,9 @@ export function reducer(state: AppState, action: Action): AppState {
       const { table, item } = action.payload;
       const stateKey = TABLE_TO_STATE_KEY[table];
       if (!stateKey) return state;
+      // P3#30 fix: reject items from other teams
+      const currentTeamId = (state as Record<string, unknown>).currentTeamId as string | undefined;
+      if (currentTeamId && (item as Record<string, unknown>).teamId && (item as Record<string, unknown>).teamId !== currentTeamId) return state;
       const arr = (state as Record<string, unknown>)[stateKey];
       if (!Array.isArray(arr)) return state;
       const itemId = (item as Record<string, unknown>).id as string;
@@ -182,12 +188,13 @@ export function reducer(state: AppState, action: Action): AppState {
         const local = currentArr[idx];
         const localUpdated = new Date((local.updatedAt as string) || 0).getTime();
         const remoteUpdated = new Date((item.updatedAt as string) || (item.updated_at as string) || 0).getTime();
-        if (remoteUpdated >= localUpdated) {
+        if (remoteUpdated > localUpdated) {
           // Remote is newer or same — merge field-by-field
           const merged: Record<string, unknown> = { ...local };
           for (const [key, value] of Object.entries(item)) {
             if (key === 'id') continue; // never overwrite id
-            if (value !== undefined && value !== null) {
+            if (value !== undefined) {
+              // Allow null (intentional field erasure), skip only undefined
               merged[key] = value;
             }
           }
@@ -200,6 +207,11 @@ export function reducer(state: AppState, action: Action): AppState {
         // If local is strictly newer, skip — our optimistic write is more recent
       } else {
         currentArr.push(item);
+      }
+      // Sync currentUser if the updated item is the current user
+      if (table === 'members' && s.currentUser && itemId === s.currentUser.id) {
+        const updatedMember = idx >= 0 ? currentArr[idx] : item;
+        s.currentUser = { ...s.currentUser, ...updatedMember };
       }
       return s;
     }

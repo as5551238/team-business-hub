@@ -6,6 +6,7 @@ import { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { mcpTools, type MCPTool } from '@/lib/mcpServer';
 import { Bot, Play, CheckCircle2, XCircle, Loader2, Terminal, Globe, Route, Zap, Server, Radio } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 type McpSubTab = 'tools' | 'agents' | 'routes';
 
@@ -50,10 +51,10 @@ export function McpToolsTab() {
           timestamp: new Date().toISOString(),
         },
       }));
-    } catch (e: any) {
+    } catch (e: unknown) {
       setResults(prev => ({
         ...prev,
-        [toolName]: { success: false, data: { error: e.message }, timestamp: new Date().toISOString() },
+        [toolName]: { success: false, data: { error: e instanceof Error ? e.message : String(e) }, timestamp: new Date().toISOString() },
       }));
     }
     setExecuting(null);
@@ -147,7 +148,7 @@ export function McpToolsTab() {
                             {result.success ? '执行成功' : '执行失败'}
                             <span className="text-muted-foreground ml-auto">{new Date(result.timestamp).toLocaleTimeString('zh-CN')}</span>
                           </div>
-                          <pre className="text-[11px] bg-white rounded p-2 overflow-x-auto font-mono border">{JSON.stringify(result.data, null, 2)}</pre>
+                          <pre className="text-[11px] bg-card rounded p-2 overflow-x-auto font-mono border">{JSON.stringify(result.data, null, 2)}</pre>
                         </div>
                       )}
                     </div>

@@ -15,7 +15,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'icons.svg'],
+      srcDir: 'public',
+      filename: 'sw-hooks.js',
+      includeAssets: ['favicon.svg', 'icons.svg', 'sw-notifications.js'],
       manifest: {
         name: '团队业务中台',
         short_name: 'TBH',
@@ -34,9 +36,12 @@ export default defineConfig({
         ],
       },
       workbox: {
+        importScripts: ['./sw-notifications.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api\//],
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
@@ -55,7 +60,7 @@ export default defineConfig({
           },
         ],
       },
-      devOptions: { enabled: false },
+      devOptions: { enabled: true },
     }),
   ],
   resolve: {
@@ -79,6 +84,7 @@ export default defineConfig({
             if (id.includes('@radix-ui')) return 'radix';
             if (id.includes('dompurify')) return 'vendor';
             if (id.includes('@dnd-kit') || id.includes('date-fns')) return 'vendor';
+            if (id.includes('framer-motion')) return 'motion';
           }
         },
       },

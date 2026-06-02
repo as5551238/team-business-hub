@@ -2,8 +2,8 @@
  * Dashboard 共享模块 — 常量 + 组件 + Hook + 类型
  */
 import React, { useMemo, useCallback } from 'react';
-import { useStore, useViewingMember, useMemberLookup, useItemLookupMaps } from '@/store/useStore';
-
+import { useStore } from '@/store/useStore';
+import { useViewingMember, useMemberLookup, useItemLookupMaps } from '@/store/hooks';
 // ── 图表颜色 ──
 export const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -40,7 +40,7 @@ export const StatCard = React.memo(function StatCard({ icon, label, value, sub, 
   icon: React.ReactNode; label: string; value: number | string; sub?: string; color: string; onClick?: () => void;
 }) {
   return (
-    <div className={`bg-white rounded-xl p-5 border border-border shadow-sm ${onClick ? 'cursor-pointer hover:shadow-md hover:border-primary/30 transition-all' : ''}`} onClick={onClick}>
+    <div className={`bg-card rounded-xl p-5 border border-border shadow-sm ${onClick ? 'cursor-pointer hover:shadow-md hover:border-primary/30 transition-all' : ''}`} onClick={onClick}>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{label}</p>

@@ -205,10 +205,10 @@ export function RiskRadarTab() {
     <div className="space-y-5">
       {/* Sub-tab 切换 */}
       <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
-        <button onClick={() => setSubTab('radar')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'radar' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSubTab('radar')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'radar' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Shield size={14} /> 风险雷达
         </button>
-        <button onClick={() => setSubTab('backtest')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'backtest' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSubTab('backtest')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'backtest' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <LineChart size={14} /> 回测分析
         </button>
       </div>
@@ -218,26 +218,26 @@ export function RiskRadarTab() {
         <div className="space-y-4">
           {/* 概览统计 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Activity size={12} />样本量</div>
               <div className="text-xl font-bold">{backtest.totalRecords}</div>
             </div>
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Target size={12} />预测准确率</div>
               <div className="text-xl font-bold text-green-600">{backtest.predictionAccuracy}%</div>
             </div>
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><TrendingUp size={12} />平均偏差</div>
               <div className={`text-xl font-bold ${backtest.avgDeviation > 0.2 ? 'text-red-600' : backtest.avgDeviation > 0 ? 'text-amber-600' : 'text-green-600'}`}>{backtest.avgDeviation > 0 ? '+' : ''}{Math.round(backtest.avgDeviation * 100)}%</div>
             </div>
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><TrendingDown size={12} />低估率</div>
               <div className="text-xl font-bold text-orange-600">{backtest.underestimateRate}%</div>
             </div>
           </div>
 
           {/* 置信度校准 */}
-          <div className="bg-white rounded-xl border p-4 space-y-3">
+          <div className="bg-card rounded-xl border p-4 space-y-3">
             <h3 className="font-semibold text-sm flex items-center gap-2"><Target size={14} />置信度校准</h3>
             <p className="text-xs text-muted-foreground">高置信度预测的实际准确率应更高，否则需调整模型</p>
             <div className="grid grid-cols-3 gap-3">
@@ -259,7 +259,7 @@ export function RiskRadarTab() {
 
           {/* 月度偏差趋势 */}
           {backtest.trend.length > 0 && (
-            <div className="bg-white rounded-xl border p-4 space-y-3">
+            <div className="bg-card rounded-xl border p-4 space-y-3">
               <h3 className="font-semibold text-sm flex items-center gap-2"><LineChart size={14} />月度偏差趋势</h3>
               <div className="space-y-1.5">
                 {backtest.trend.map((t) => {
@@ -286,7 +286,7 @@ export function RiskRadarTab() {
 
           {/* 按优先级偏差 */}
           {Object.keys(backtest.byPriority).length > 0 && (
-            <div className="bg-white rounded-xl border p-4 space-y-2">
+            <div className="bg-card rounded-xl border p-4 space-y-2">
               <h3 className="font-semibold text-sm flex items-center gap-2"><BarChart3 size={14} />按优先级偏差</h3>
               <div className="grid grid-cols-4 gap-2">
                 {Object.entries(backtest.byPriority).map(([p, d]) => (
@@ -301,7 +301,7 @@ export function RiskRadarTab() {
 
           {/* 按负责人偏差 */}
           {backtest.byLeader.length > 0 && (
-            <div className="bg-white rounded-xl border p-4 space-y-2">
+            <div className="bg-card rounded-xl border p-4 space-y-2">
               <h3 className="font-semibold text-sm flex items-center gap-2"><Users size={14} />按负责人偏差 Top5</h3>
               {backtest.byLeader.slice(0, 5).map(l => {
                 const memberName = state.members.find(m => m.id === l.leaderId)?.name || l.leaderId.slice(0, 8);

@@ -64,11 +64,10 @@ export function memberReducer(state: AppState, action: Action): AppState | null 
         if (changed) { t.updatedAt = now; supabaseUpdate('tasks', t.id, { leader_id: t.leaderId, supporter_ids: t.supporterIds, updated_at: now }); }
       });
       s.comments.forEach(c => {
-        if (c.memberId === mid) { c.memberId = ''; supabaseUpdate('comments', c.id, { member_id: '' }); }
+        if (c.memberId === mid) { c.memberId = null; supabaseUpdate('comments', c.id, { member_id: null }); } // P3#8 fix: use null instead of ''
       });
       s.members = s.members.filter(m => m.id !== mid);
-      supabaseUpdate('members', mid, { status: 'inactive' });
-      supabaseDelete('members', mid);
+      supabaseDelete('members', mid); // P3#7 fix: removed conflicting supabaseUpdate('members', mid, { status: 'inactive' })
       return s;
     }
   }

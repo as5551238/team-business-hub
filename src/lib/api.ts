@@ -78,8 +78,8 @@ export async function apiCreate(table: string, record: Record<string, any>): Pro
     if (record.title && record.title.length > 200) return { success: false, error: '标题不能超过200字符' };
     const result = await supabaseInsert(table, record);
     return { success: true, data: result };
-  } catch (e: any) {
-    return { success: false, error: e.message };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -89,8 +89,8 @@ export async function apiUpdate(table: string, id: string, updates: Record<strin
     if (updates.title && updates.title.length > 200) return { success: false, error: '标题不能超过200字符' };
     const result = await supabaseUpdate(table, id, updates);
     return { success: true, data: result };
-  } catch (e: any) {
-    return { success: false, error: e.message };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -99,8 +99,8 @@ export async function apiDelete(table: string, id: string): Promise<ApiResponse>
   try {
     await supabaseDelete(table, id);
     return { success: true };
-  } catch (e: any) {
-    return { success: false, error: e.message };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 

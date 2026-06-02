@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useStore, useNotes } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useNotes } from '@/store/hooks';
 import {
   Plus, Trash2, Tag, Search, Pin, PinOff, Palette, StickyNote, Eye, Edit3
 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import DOMPurify from 'dompurify';
 import { NOTE_COLORS, FOLDERS } from '../admin/constants';
 import { renderMarkdown } from '../admin/MarkdownDocTab';

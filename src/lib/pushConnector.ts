@@ -7,6 +7,8 @@
  * - OAuth 集成框架：预留钉钉/飞书 OAuth
  */
 
+import { getSupabaseClient } from '@/supabase/client';
+
 // ===== 类型定义 =====
 
 export type PushChannel = 'wechat_work' | 'dingtalk' | 'feishu' | 'webhook';
@@ -76,8 +78,8 @@ async function pushToWeChatWork(config: PushConfig, msg: PushMessage): Promise<P
 
     const result = await resp.json();
     return { success: result.errcode === 0, channel: 'wechat_work', responseCode: resp.status, error: result.errcode !== 0 ? result.errmsg : undefined };
-  } catch (e: any) {
-    return { success: false, channel: 'wechat_work', error: e.message };
+  } catch (e: unknown) {
+    return { success: false, channel: 'wechat_work', error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -85,7 +87,6 @@ async function pushToWeChatWork(config: PushConfig, msg: PushMessage): Promise<P
 
 async function pushToDingTalk(config: PushConfig, msg: PushMessage): Promise<PushResult> {
   if (!config.webhookUrl) return { success: false, channel: 'dingtalk', error: 'Webhook URL 未配置' };
-
   try {
     const body: Record<string, any> = {
       msgtype: 'markdown',
@@ -94,30 +95,16 @@ async function pushToDingTalk(config: PushConfig, msg: PushMessage): Promise<Pus
         text: `### ${msg.title}\n\n${msg.content}${msg.url ? `\n\n[查看详情](${msg.url})` : ''}`,
       },
     };
-    if (config.secret) {
-      const timestamp = Date.now();
-      // DingTalk HMAC-SHA256 signing
-      const enc = new TextEncoder();
-      const key = await crypto.subtle.importKey('raw', enc.encode(config.secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-      const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`${timestamp}\n${config.secret}`));
-      const sign = btoa(String.fromCharCode(...new Uint8Array(sig)));
-      body.timestamp = `${timestamp}`;
-      body.sign = sign;
-    }
+    if (config.secret) body.secret = config.secret;
     if (msg.mentionedList && msg.mentionedList.length > 0) {
       body.markdown.text += `\n\n@${msg.mentionedList.join(' @')}`;
     }
-
-    const resp = await fetch(config.webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    const result = await resp.json();
-    return { success: result.errcode === 0, channel: 'dingtalk', responseCode: resp.status, error: result.errcode !== 0 ? result.errmsg : undefined };
-  } catch (e: any) {
-    return { success: false, channel: 'dingtalk', error: e.message };
+    const sb = getSupabaseClient();
+    const { data, error } = await sb.rpc('send_webhook', { channel: 'dingtalk', url: config.webhookUrl, body: JSON.stringify(body), secret: config.secret || null });
+    if (error) return { success: false, channel: 'dingtalk', error: error.message };
+    return { success: true, channel: 'dingtalk' };
+  } catch (e: unknown) {
+    return { success: false, channel: 'dingtalk', error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -125,7 +112,6 @@ async function pushToDingTalk(config: PushConfig, msg: PushMessage): Promise<Pus
 
 async function pushToFeishu(config: PushConfig, msg: PushMessage): Promise<PushResult> {
   if (!config.webhookUrl) return { success: false, channel: 'feishu', error: 'Webhook URL 未配置' };
-
   try {
     const body = {
       msg_type: 'interactive',
@@ -137,17 +123,12 @@ async function pushToFeishu(config: PushConfig, msg: PushMessage): Promise<PushR
         ],
       },
     };
-
-    const resp = await fetch(config.webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    const result = await resp.json();
-    return { success: result.code === 0, channel: 'feishu', responseCode: resp.status, error: result.code !== 0 ? result.msg : undefined };
-  } catch (e: any) {
-    return { success: false, channel: 'feishu', error: e.message };
+    const sb = getSupabaseClient();
+    const { data, error } = await sb.rpc('send_webhook', { channel: 'feishu', url: config.webhookUrl, body: JSON.stringify(body), secret: config.secret || null });
+    if (error) return { success: false, channel: 'feishu', error: error.message };
+    return { success: true, channel: 'feishu' };
+  } catch (e: unknown) {
+    return { success: false, channel: 'feishu', error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -164,8 +145,8 @@ async function pushToWebhook(config: PushConfig, msg: PushMessage): Promise<Push
     });
 
     return { success: resp.ok, channel: 'webhook', responseCode: resp.status, error: resp.ok ? undefined : `HTTP ${resp.status}` };
-  } catch (e: any) {
-    return { success: false, channel: 'webhook', error: e.message };
+  } catch (e: unknown) {
+    return { success: false, channel: 'webhook', error: e instanceof Error ? e.message : String(e) };
   }
 }
 

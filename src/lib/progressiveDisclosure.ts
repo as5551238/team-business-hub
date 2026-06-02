@@ -116,6 +116,10 @@ export function isFeatureVisible(feature: string, level?: UserLevel): boolean {
     'retro_tracking': 'advanced',
     'comment_to_task': 'intermediate',
     'goal_change_cascade': 'advanced',
+    // L6: 页面内部特性精简
+    'goals_matrix_view': 'intermediate',
+    'goals_okr_view': 'advanced',
+    'admin_non_essential': 'advanced',
   };
 
   const requiredLevel = featureLevels[feature];
@@ -123,6 +127,31 @@ export function isFeatureVisible(feature: string, level?: UserLevel): boolean {
 
   const levelOrder: UserLevel[] = ['beginner', 'intermediate', 'advanced'];
   return levelOrder.indexOf(userLevel) >= levelOrder.indexOf(requiredLevel);
+}
+
+/** 过滤页面视图模式 — 根据用户等级移除高级视图 */
+export function filterViewModes(page: string, modes: string[], level?: UserLevel): string[] {
+  const userLevel = level || computeUserLevel();
+  if (userLevel === 'advanced') return modes; // 高级用户全部可见
+
+  const pageFeatureMap: Record<string, Record<string, UserLevel>> = {
+    goals: {
+      detail: 'beginner',
+      list: 'beginner',
+      matrix: 'intermediate',
+      okr: 'advanced',
+    },
+  };
+
+  const featureMap = pageFeatureMap[page];
+  if (!featureMap) return modes;
+
+  const levelOrder: UserLevel[] = ['beginner', 'intermediate', 'advanced'];
+  return modes.filter(m => {
+    const required = featureMap[m];
+    if (!required) return true;
+    return levelOrder.indexOf(userLevel) >= levelOrder.indexOf(required);
+  });
 }
 
 /** 获取当前等级的功能解锁描述 */

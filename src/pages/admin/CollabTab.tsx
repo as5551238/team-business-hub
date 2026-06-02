@@ -18,6 +18,7 @@ import {
   Activity,
   Shield,
 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 // ===== 模拟冲突历史（演示用） =====
 
@@ -127,13 +128,13 @@ export function CollabTab() {
     <div className="space-y-4">
       {/* Sub-tab */}
       <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
-        <button onClick={() => setSubTab('status')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'status' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSubTab('status')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'status' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Users size={14} />协作状态
         </button>
-        <button onClick={() => setSubTab('conflicts')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'conflicts' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSubTab('conflicts')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'conflicts' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <GitMerge size={14} />冲突历史
         </button>
-        <button onClick={() => setSubTab('architecture')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'architecture' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setSubTab('architecture')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${subTab === 'architecture' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Activity size={14} />架构说明
         </button>
       </div>
@@ -142,19 +143,19 @@ export function CollabTab() {
         <>
           {/* 概览 */}
           <div className="grid grid-cols-4 gap-3">
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Users size={12} />在线人数</div>
               <div className="text-xl font-bold text-green-600">{collabStats.onlineCount}</div>
             </div>
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Shield size={12} />协作模式</div>
               <div className="text-xl font-bold">CRDT</div>
             </div>
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><GitMerge size={12} />冲突次数</div>
               <div className="text-xl font-bold">{collabStats.conflictCount}</div>
             </div>
-            <div className="bg-white rounded-xl p-3 border">
+            <div className="bg-card rounded-xl p-3 border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Radio size={12} />通道状态</div>
               <div className="text-xl font-bold text-green-600">已连接</div>
             </div>

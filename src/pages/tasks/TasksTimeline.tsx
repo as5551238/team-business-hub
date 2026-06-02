@@ -2,6 +2,7 @@ import React from 'react';
 import type { Task } from '@/types';
 import { cn } from '@/lib/utils';
 import { Calendar, MessageSquare } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge, PriorityBadge } from './TasksComponents';
 import { getTodayStr, isOverdue, type BatchProps } from './constants';
 
@@ -19,7 +20,7 @@ export function TaskTimelineView({ timelineBuckets, commentCounts, batchProps, o
   const todayStr = getTodayStr();
   return (
     <div className="space-y-4">
-      {timelineBuckets.length === 0 && <div className="bg-white rounded-xl border border-border px-5 py-12 text-center"><Calendar className="w-9 h-9 mx-auto text-muted-foreground/30 mb-3" /><p className="text-sm text-muted-foreground">暂无匹配任务</p></div>}
+      {timelineBuckets.length === 0 && <div className="bg-card rounded-xl border border-border px-5 py-12 text-center"><Calendar className="w-9 h-9 mx-auto text-muted-foreground/30 mb-3" /><EmptyState title="暂无匹配任务" compact /></div>}
       {timelineBuckets.map(([dateKey, tasks]) => {
         const od = dateKey !== '无截止日期' && dateKey < todayStr;
         const isToday = dateKey === todayStr;
@@ -32,7 +33,7 @@ export function TaskTimelineView({ timelineBuckets, commentCounts, batchProps, o
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
               {tasks.map(task => (
-                <div key={task.id} className="bg-white rounded-lg border border-border shadow-sm p-3 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer" onClick={() => onOpenDetail(task)}>
+                <div key={task.id} className="bg-card rounded-lg border border-border shadow-sm p-3 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer" onClick={() => onOpenDetail(task)}>
       {batchProps.batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded" onChange={() => batchProps.onToggleSelect(task.id)} /></div>}
                   <div className="flex items-center gap-2 mb-1.5">
                     <PriorityBadge priority={task.priority} />

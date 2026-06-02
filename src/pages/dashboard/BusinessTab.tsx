@@ -3,12 +3,12 @@
  */
 import { useMemo } from 'react';
 import { Target, FolderKanban, CheckCircle2, AlertTriangle, TrendingUp, Clock, BarChart3 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { getFunnelMetrics } from '@/lib/analytics';
 import { CHART_COLORS, StatCard, useFilteredData } from './shared';
 import type { DashboardTabProps } from './shared';
 import { AIFocusWidget } from '@/components/AIFocusWidget';
-import { MyTodayView } from './MyTodayView';
 
 export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTabProps) {
   const { state, memberGoals, memberTasks, memberProjects, todayStr, getMemberName, commentCountMap } = useFilteredData();
@@ -73,8 +73,32 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
 
   return (
     <div className="space-y-6">
-      {/* 我的今日 — 执行者视角首屏 (F1断裂点修复) */}
-      <MyTodayView onOpenDetail={onOpenDetail} />
+      {/* 关键风险信号 — D1信息流畅度提升 */}
+      {(() => {
+        const blockedTasks = memberTasks.filter(t => t.status === 'blocked');
+        const stalledGoals = memberGoals.filter(g => g.status === 'in_progress' && g.progress < 20 && g.startDate && (Date.now() - new Date(g.startDate).getTime() > 7 * 86400000));
+        const signals = [
+          ...(blockedTasks.length > 0 ? [{ type: 'blocked' as const, msg: `${blockedTasks.length} 个任务被阻塞`, color: 'text-amber-600 bg-amber-50' }] : []),
+          ...(stalledGoals.length > 0 ? [{ type: 'stalled' as const, msg: `${stalledGoals.length} 个目标进度停滞`, color: 'text-red-600 bg-red-50' }] : []),
+          ...(stats.overdueTasks > 0 ? [{ type: 'overdue' as const, msg: `${stats.overdueTasks} 项已逾期`, color: 'text-red-600 bg-red-50' }] : []),
+        ];
+        if (signals.length === 0) return null;
+        return (
+          <div className="bg-card rounded-xl border border-border shadow-sm p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle size={16} className="text-amber-500" />
+              <span className="text-xs font-semibold text-muted-foreground">关键信号</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {signals.map(s => (
+                <span key={s.type} className={`text-xs px-2.5 py-1 rounded-lg font-medium ${s.color}`}>
+                  {s.msg}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 4 统计卡片 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -86,18 +110,18 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
 
       {/* 饼图行：状态分布 + 优先级分布 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => onPageChange('tasks')}>
+        <div className="bg-card rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => onPageChange('tasks')}>
           <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold text-muted-foreground">任务状态分布</span><BarChart3 size={14} className="text-muted-foreground/50" /></div>
           <div className="h-[120px]">{taskStatusData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={taskStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>{taskStatusData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={(v: number, n: string) => [`${v} 项`, n]} /></PieChart></ResponsiveContainer>) : (<div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>)}</div>
         </div>
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => onPageChange('tasks')}>
+        <div className="bg-card rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => onPageChange('tasks')}>
           <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold text-muted-foreground">优先级分布</span><BarChart3 size={14} className="text-muted-foreground/50" /></div>
           <div className="h-[120px]">{taskPriorityData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={taskPriorityData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>{taskPriorityData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={(v: number, n: string) => [`${v} 项`, n]} /></PieChart></ResponsiveContainer>) : (<div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>)}</div>
         </div>
       </div>
 
       {/* 近7天趋势 */}
-      <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+      <div className="bg-card rounded-xl border border-border shadow-sm p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-semibold text-muted-foreground">近7天任务趋势</span>
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
@@ -123,7 +147,7 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
       </div>
 
       {/* 目标进度 */}
-      <div className="bg-white rounded-xl border border-border shadow-sm">
+      <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2"><TrendingUp size={18} className="text-primary" /><h2 className="font-semibold text-sm md:text-base">目标进度</h2></div>
         </div>
@@ -155,7 +179,7 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
       </div>
 
       {/* 管理员效能概览 */}
-      {state.currentUser?.role === 'admin' && (() => { const m = getFunnelMetrics(); return m.totalSessions > 0 ? (<div className="bg-white rounded-xl border border-border shadow-sm p-4"><div className="flex items-center gap-2 mb-2"><BarChart3 size={16} className="text-indigo-500" /><span className="text-xs font-semibold text-muted-foreground">效能概览</span></div><div className="text-xs text-muted-foreground space-y-1"><p>平均步数 <span className="font-medium text-foreground">{m.avgSteps.toFixed(1)}</span> · 平均耗时 <span className="font-medium text-foreground">{(m.avgDurationMs / 1000).toFixed(0)}s</span> · 闭环率 <span className="font-medium text-foreground">{(m.completionRate * 100).toFixed(0)}%</span></p><p>共 <span className="font-medium text-foreground">{m.totalSessions}</span> 个会话</p></div></div>) : null; })()}
+      {state.currentUser?.role === 'admin' && (() => { const m = getFunnelMetrics(); return m.totalSessions > 0 ? (<div className="bg-card rounded-xl border border-border shadow-sm p-4"><div className="flex items-center gap-2 mb-2"><BarChart3 size={16} className="text-indigo-500" /><span className="text-xs font-semibold text-muted-foreground">效能概览</span></div><div className="text-xs text-muted-foreground space-y-1"><p>平均步数 <span className="font-medium text-foreground">{m.avgSteps.toFixed(1)}</span> · 平均耗时 <span className="font-medium text-foreground">{(m.avgDurationMs / 1000).toFixed(0)}s</span> · 闭环率 <span className="font-medium text-foreground">{(m.completionRate * 100).toFixed(0)}%</span></p><p>共 <span className="font-medium text-foreground">{m.totalSessions}</span> 个会话</p></div></div>) : null; })()}
 
       {/* AI 关注焦点 */}
       <AIFocusWidget />

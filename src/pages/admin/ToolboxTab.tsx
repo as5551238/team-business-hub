@@ -1,7 +1,9 @@
 import { useState, useRef, useMemo } from 'react';
-import { useStore, useTemplates } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useTemplates } from '@/store/hooks';
 import { uploadFile, BUCKET_NAMES } from '@/supabase/storage';
 import { Plus, Search, Copy, Edit2, Trash2, Eye, Tag, FileText, Upload, Download } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { inputCls, btnCls, primaryBtnCls, typeLabels, typeColors, emptyForm, formFromTemplate } from './constants';
 import type { TForm } from './constants';
 
@@ -50,10 +52,10 @@ export function ToolboxTab() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div><h2 className="text-lg font-bold">工具库 / 模板管理</h2><p className="text-sm text-muted-foreground mt-0.5">创建和管理可复用的模板</p></div>
+        <div><h2 className="text-lg font-bold">工具库 / 模板管理</h2><EmptyState title="创建和管理可复用的模板" compact /></div>
         <button onClick={openCreate} className={primaryBtnCls}><Plus size={16} /> 新建模板</button>
       </div>
-      <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+      <div className="bg-card rounded-xl border border-border shadow-sm p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
             <Search size={16} className="text-muted-foreground" />
@@ -69,7 +71,7 @@ export function ToolboxTab() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(tpl => (
-          <div key={tpl.id} className="bg-white rounded-xl border border-border shadow-sm p-5 hover:shadow-md transition-shadow">
+          <div key={tpl.id} className="bg-card rounded-xl border border-border shadow-sm p-5 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-sm truncate">{tpl.title}</span><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${typeColors[tpl.type]}`}>{typeLabels[tpl.type]}</span>{tpl.isPublic && <Eye size={12} className="text-muted-foreground" />}</div>
@@ -86,12 +88,12 @@ export function ToolboxTab() {
             </div>
           </div>
         ))}
-        {filtered.length === 0 && <div className="col-span-full py-16 text-center"><FileText size={40} className="mx-auto text-muted-foreground/40" /><p className="text-sm text-muted-foreground mt-3">暂无模板</p><button onClick={openCreate} className={primaryBtnCls + ' mt-3'}><Plus size={16} /> 创建第一个模板</button></div>}
+        {filtered.length === 0 && <div className="col-span-full py-16 text-center"><FileText size={40} className="mx-auto text-muted-foreground/40" /><EmptyState title="暂无模板" compact /><button onClick={openCreate} className={primaryBtnCls + ' mt-3'}><Plus size={16} /> 创建第一个模板</button></div>}
       </div>
       {showDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => setShowDialog(false)} />
-          <div className="relative bg-white rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-border"><h3 className="font-semibold">{editingId ? '编辑模板' : '新建模板'}</h3></div>
             <div className="px-6 py-4 space-y-4">
               <div><label className="block text-sm font-medium mb-1">标题 *</label><input className={inputCls} placeholder="模板标题" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>

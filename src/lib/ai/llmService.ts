@@ -6,6 +6,7 @@ import type { AIConfig, AIInsight, AnalysisPeriod, TaskComplexity } from './type
 import type { TeamAnalysis } from './types';
 import type { PeriodSnapshot } from './dataCollector';
 import { PROVIDER_PRESETS, loadAIConfig, COST_ROUTING_MAP, detectTaskComplexity } from './types';
+import { getSupabaseClient } from '@/supabase/client'; // TDZ fix: static import instead of dynamic import
 
 /** 简易响应缓存（相同prompt→直接返回，3分钟TTL） */
 const responseCache = new Map<string, { result: string; expire: number }>();
@@ -158,14 +159,18 @@ export async function callLLM(prompt: string, config: AIConfig, complexity?: Tas
     if (isNetworkError || isTimeout) {
       console.warn('[LLM] Direct fetch failed (' + (isNetworkError ? 'CORS/network' : 'timeout') + '), falling back to Supabase RPC proxy...');
       try {
-        const { getSupabaseClient } = await import('@/supabase/client');
         const sb = getSupabaseClient();
         if (sb) {
-          const { data, error } = await sb.rpc('call_llm_proxy', {
+          // P3#27 fix: add 30s timeout for RPC proxy to prevent UI hang
+          const rpcPromise = sb.rpc('call_llm_proxy', {
             p_url: url,
             p_body: JSON.stringify(requestBody),
             p_api_key: config.apiKey,
           });
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('RPC代理超时(30s)')), 30000)
+          );
+          const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
           if (error) {
             console.error('[LLM] RPC proxy error:', error);
             throw error;
@@ -186,8 +191,8 @@ export async function callLLM(prompt: string, config: AIConfig, complexity?: Tas
           }
           return typeof data === 'string' ? data : JSON.stringify(data);
         }
-      } catch (proxyErr: any) {
-        console.error('[LLM] RPC proxy also failed:', proxyErr);
+      } catch (proxyErr: unknown) {
+        console.error('[LLM] RPC proxy also failed:', proxyErr instanceof Error ? proxyErr.message : String(proxyErr));
         // Fall through to throw with helpful message
       }
 

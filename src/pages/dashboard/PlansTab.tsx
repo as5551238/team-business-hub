@@ -3,6 +3,7 @@
  */
 import { useMemo } from 'react';
 import { Zap, CheckCircle2, Calendar } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { priorityColors, priorityLabels, useFilteredData } from './shared';
 import type { DashboardTabProps } from './shared';
 
@@ -22,7 +23,7 @@ export default function PlansTab({ onOpenDetail }: DashboardTabProps) {
   return (
     <div className="space-y-6">
       {/* 今日待办 */}
-      <div className="bg-white rounded-xl border border-border shadow-sm">
+      <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <Zap size={18} className="text-amber-500" />
@@ -33,7 +34,7 @@ export default function PlansTab({ onOpenDetail }: DashboardTabProps) {
         </div>
         <div className="divide-y divide-border">
           {todayTodos.length === 0 ? (
-            <div className="px-5 py-10 text-center text-muted-foreground text-sm">今日暂无待办任务，可以放松一下</div>
+            <EmptyState icon={CheckCircle2} title="今日暂无待办任务，可以放松一下" variant="positive" compact />
           ) : todayTodos.map(task => {
             const doneSubs = (task.subtasks ?? []).filter(s => s.completed).length;
             const totalSubs = (task.subtasks ?? []).length;
@@ -51,7 +52,7 @@ export default function PlansTab({ onOpenDetail }: DashboardTabProps) {
                       {taskComments > 0 && <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">{taskComments}</span>}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <select className="text-[10px] border border-border rounded px-1 py-0.5 bg-white text-muted-foreground cursor-pointer hover:border-primary/30" value={task.status} onClick={e => e.stopPropagation()} onChange={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_TASK', payload: { id: task.id, updates: { status: e.target.value, completedAt: e.target.value === 'done' ? new Date().toISOString() : null } } }); }}>
+                      <select className="text-[10px] border border-border rounded px-1 py-0.5 bg-card text-muted-foreground cursor-pointer hover:border-primary/30" value={task.status} onClick={e => e.stopPropagation()} onChange={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_TASK', payload: { id: task.id, updates: { status: e.target.value, completedAt: e.target.value === 'done' ? new Date().toISOString() : null } } }); }}>
                         <option value="todo">待处理</option>
                         <option value="in_progress">进行中</option>
                         <option value="done">已完成</option>
@@ -74,13 +75,13 @@ export default function PlansTab({ onOpenDetail }: DashboardTabProps) {
       </div>
 
       {/* 即将到期 */}
-      <div className="bg-white rounded-xl border border-border shadow-sm">
+      <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2"><Calendar size={18} className="text-rose-500" /><h2 className="font-semibold text-sm md:text-base">即将到期</h2><span className="text-xs text-muted-foreground">近7天</span></div>
         </div>
         <div className="divide-y divide-border">
           {upcomingTasks.length === 0 ? (
-            <div className="px-5 py-10 text-center text-muted-foreground text-sm">近7天暂无到期任务</div>
+            <EmptyState icon={Calendar} title="近7天暂无到期任务" variant="positive" compact />
           ) : upcomingTasks.map(task => {
             const daysLeft = Math.ceil((new Date(task.dueDate!).getTime() - new Date(todayStr).getTime()) / 86400000);
             const urgency = daysLeft <= 1 ? 'text-red-600 bg-red-50' : daysLeft <= 3 ? 'text-orange-600 bg-orange-50' : 'text-blue-600 bg-blue-50';
@@ -92,7 +93,7 @@ export default function PlansTab({ onOpenDetail }: DashboardTabProps) {
                     <span className="text-sm font-medium truncate">{task.title}</span>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                    <select className="text-[10px] border border-border rounded px-1 py-0.5 bg-white text-muted-foreground cursor-pointer hover:border-primary/30" value={task.status} onClick={e => e.stopPropagation()} onChange={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_TASK', payload: { id: task.id, updates: { status: e.target.value, completedAt: e.target.value === 'done' ? new Date().toISOString() : null } } }); }}>
+                    <select className="text-[10px] border border-border rounded px-1 py-0.5 bg-card text-muted-foreground cursor-pointer hover:border-primary/30" value={task.status} onClick={e => e.stopPropagation()} onChange={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_TASK', payload: { id: task.id, updates: { status: e.target.value, completedAt: e.target.value === 'done' ? new Date().toISOString() : null } } }); }}>
                       <option value="todo">待处理</option>
                       <option value="in_progress">进行中</option>
                       <option value="done">已完成</option>

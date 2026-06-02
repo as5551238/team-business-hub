@@ -26,8 +26,6 @@ const UNDOABLE_ACTIONS = new Set([
   'DELETE_GOAL', 'RESTORE_GOAL',
   'DELETE_PROJECT', 'RESTORE_PROJECT',
   'DELETE_TASK', 'RESTORE_TASK',
-  // ADD → DELETE (创建的逆操作是删除,需要 payload 中有 id)
-  'ADD_GOAL', 'ADD_PROJECT', 'ADD_TASK',
   // TOGGLE 自逆
   'TOGGLE_SUBTASK',
 ]);
@@ -96,14 +94,15 @@ function computeInverse(action: Action): Action | null {
   }
 }
 
-export function pushUndo(action: Action) {
-  if (!UNDOABLE_ACTIONS.has(action.type)) return;
+export function pushUndo(action: Action): boolean {
+  if (!UNDOABLE_ACTIONS.has(action.type)) return false;
   const inverse = computeInverse(action);
-  if (!inverse) return; // 无法计算逆操作则不入栈,避免栈卡死
+  if (!inverse) return false; // 无法计算逆操作则不入栈,避免栈卡死
   undoStack.push({ action, inverseAction: inverse, label: getActionLabel(action), timestamp: Date.now() });
   if (undoStack.length > MAX_UNDO_STACK) undoStack.shift();
   // 新操作清空redo栈
   redoStack = [];
+  return true;
 }
 
 export function canUndo(): boolean {
@@ -139,3 +138,4 @@ export function getRedoLabel(): string | null {
 
 export function getUndoStackSize() { return undoStack.length; }
 export function getRedoStackSize() { return redoStack.length; }
+export function clearUndoStack() { undoStack = []; redoStack = []; }

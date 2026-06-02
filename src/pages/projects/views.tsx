@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useStore, useMemberLookup, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useMemberLookup, usePermissions } from '@/store/hooks';
 import type { Project, ProjectStatus, TaskPriority } from '@/types';
 import { FolderKanban, Calendar, MoreHorizontal, Edit2, Trash2, GripVertical, ChevronRight, MessageSquare, CheckCircle2, Target, Tag } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { statusLabels, statusColors, priorityLabels, priorityColors, bpLabels, bpFromPriority, getTouchPos } from './constants';
 import type { BatchProps } from './constants';
 import { useVirtualScroll } from '@/hooks/useVirtualScroll';
@@ -22,7 +24,7 @@ const ProjectCard = React.memo(function ProjectCard({ project, members, expanded
   const uniqueTags = [...new Set((project.tags || []))];
 
   return (
-    <div className="bg-white rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md border-border">
+    <div className="bg-card rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md border-border">
       <div className="p-5">
         <div className="flex items-start gap-3 mb-3">
           {batchMode && <div onClick={e => e.stopPropagation()}><input type="checkbox" checked={isSelected} readOnly className="mt-1 rounded cursor-pointer" onClick={() => onToggleSelect(project.id)} /></div>}
@@ -47,7 +49,7 @@ const ProjectCard = React.memo(function ProjectCard({ project, members, expanded
             {showMenu && (
               <div className="relative">
                 <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
-                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border border-border z-50 py-1">
+                <div className="absolute right-0 top-full mt-1 w-36 bg-card rounded-lg shadow-lg border border-border z-50 py-1">
                   <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); onClick(); setShowMenu(false); }}><Edit2 size={14} /> 编辑</button>
                   {can('edit_projects') && project.status !== 'done' && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, updates: { status: 'done' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 完成</button>}
                   {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除</button>}
@@ -155,7 +157,7 @@ export function ProjectListView({ projects, members, setDetailItem, commentCount
           {showMenuId === project.id && (
             <div className="relative">
               <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
-              <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-border z-50 py-1">
+              <div className="absolute right-0 top-full mt-1 w-32 bg-card rounded-lg shadow-lg border border-border z-50 py-1">
                 <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); setShowMenuId(null); }}><Edit2 size={12} /> 编辑</button>
                 {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
               </div>
@@ -168,7 +170,7 @@ export function ProjectListView({ projects, members, setDetailItem, commentCount
 
   if (needsVirtual) {
     return (
-      <div className="bg-white rounded-xl border border-border overflow-hidden">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div ref={virtual.scrollRef} className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }} onScroll={virtual.onScroll}>
           <div style={{ height: virtual.totalHeight, overflow: 'hidden' }}>
             <div style={{ transform: `translateY(${virtual.startIdx * LIST_ROW_H}px)` }}>
@@ -181,7 +183,7 @@ export function ProjectListView({ projects, members, setDetailItem, commentCount
   }
 
   return (
-    <div className="bg-white rounded-xl border border-border divide-y divide-border/50">
+    <div className="bg-card rounded-xl border border-border divide-y divide-border/50">
       {projects.map(listItem)}
     </div>
   );
@@ -215,7 +217,7 @@ export function ProjectTableView({ projects, members, setDetailItem, commentCoun
   const visibleSorted = needsVirtual ? sorted.slice(virtual.startIdx, virtual.endIdx) : sorted;
 
   return (
-    <div className="bg-white rounded-xl border border-border overflow-x-auto">
+    <div className="bg-card rounded-xl border border-border overflow-x-auto">
       <div className={needsVirtual ? 'overflow-y-auto' : ''} style={needsVirtual ? { maxHeight: 'calc(100vh - 220px)' } : undefined} ref={needsVirtual ? virtual.scrollRef : undefined} onScroll={needsVirtual ? virtual.onScroll : undefined}>
         <table className="w-full text-sm">
           <thead className={`border-b border-border bg-muted/30${needsVirtual ? ' sticky top-0 z-10' : ''}`}>
@@ -249,7 +251,7 @@ export function ProjectTableView({ projects, members, setDetailItem, commentCoun
                     {showMenuId === project.id && (
                       <div className="relative">
                         <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
-                        <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-border z-50 py-1">
+                        <div className="absolute right-0 top-full mt-1 w-32 bg-card rounded-lg shadow-lg border border-border z-50 py-1">
                           <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); setShowMenuId(null); }}><Edit2 size={12} /> 编辑</button>
                           {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
                         </div>
@@ -271,7 +273,7 @@ export function ProjectTableView({ projects, members, setDetailItem, commentCoun
 const KanbanMiniCard = React.memo(function KanbanMiniCard({ p, members, setDetailItem, commentCounts, batchProps, enableDrag }: { p: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; enableDrag?: boolean }) {
   const leader = (members || []).find(m => m.id === p.leaderId);
   return (
-    <div className="bg-white rounded-lg border border-border p-3 hover:shadow-sm transition-shadow cursor-pointer" draggable={enableDrag} onDragStart={(e: React.DragEvent) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => setDetailItem({ type: 'project', id: p.id })}>
+    <div className="bg-card rounded-lg border border-border p-3 hover:shadow-sm transition-shadow cursor-pointer" draggable={enableDrag} onDragStart={(e: React.DragEvent) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => setDetailItem({ type: 'project', id: p.id })}>
       {batchProps.batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(p.id)} className="rounded" onChange={() => batchProps.onToggleSelect(p.id)} /></div>}
       <div className="font-medium text-sm mb-1.5 truncate">{p.title}</div>
       <div className="flex items-center gap-2 mb-2">
@@ -339,7 +341,7 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
   const groupByBtns = (
     <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-1 px-1">
       {GROUP_OPTIONS.map(opt => (
-        <button key={opt.key} className={`text-xs px-2.5 py-1 rounded-md transition-colors whitespace-nowrap flex-shrink-0 ${kanbanGroupBy === opt.key ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setKanbanGroupBy(opt.key as any)}>{opt.label}</button>
+        <button key={opt.key} className={`text-xs px-2.5 py-1 rounded-md transition-colors whitespace-nowrap flex-shrink-0 ${kanbanGroupBy === opt.key ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setKanbanGroupBy(opt.key as any)}>{opt.label}</button>
       ))}
     </div>
   );
@@ -419,7 +421,7 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">{groupByBtns}</div>
-        {personCols.length > 0 ? renderCols(personCols, col => projects.filter(p => p.leaderId === col)) : <p className="text-xs text-muted-foreground text-center py-12">暂无数据</p>}
+        {personCols.length > 0 ? renderCols(personCols, col => projects.filter(p => p.leaderId === col)) : <EmptyState title="暂无数据" compact />}
       </div>
     );
   }
@@ -479,7 +481,7 @@ const MatrixQuadrantCard = React.memo(function MatrixQuadrantCard({ project, mem
   const { can } = usePermissions();
   const leader = (members || []).find(m => m.id === project.leaderId);
   return (
-    <div className="bg-white rounded-lg border border-border p-3 hover:shadow-sm transition-shadow group cursor-pointer select-none" onMouseDown={e => { if (e.button !== 0) return; e.preventDefault(); dragMovedRef.current = false; dragRef.current = { id: project.id, el: e.currentTarget }; e.currentTarget.classList.add('opacity-30', 'scale-95'); }} onTouchStart={e => { const t = e.touches[0]; if (!t) return; dragMovedRef.current = false; dragRef.current = { id: project.id, el: e.currentTarget as HTMLElement }; (e.currentTarget as HTMLElement).classList.add('opacity-30', 'scale-95'); }} onClick={() => { if (!dragMovedRef.current) setDetailItem({ type: 'project', id: project.id }); }}>
+    <div className="bg-card rounded-lg border border-border p-3 hover:shadow-sm transition-shadow group cursor-pointer select-none" onMouseDown={e => { if (e.button !== 0) return; e.preventDefault(); dragMovedRef.current = false; dragRef.current = { id: project.id, el: e.currentTarget }; e.currentTarget.classList.add('opacity-30', 'scale-95'); }} onTouchStart={e => { const t = e.touches[0]; if (!t) return; dragMovedRef.current = false; dragRef.current = { id: project.id, el: e.currentTarget as HTMLElement }; (e.currentTarget as HTMLElement).classList.add('opacity-30', 'scale-95'); }} onClick={() => { if (!dragMovedRef.current) setDetailItem({ type: 'project', id: project.id }); }}>
       <div className="flex items-center gap-1 mb-1">
         {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(project.id)} className="rounded" onChange={() => batchProps.onToggleSelect(project.id)} /></span>}
         <span className="text-xs font-medium truncate flex-1">{project.title}</span>
@@ -652,7 +654,7 @@ export function ProjectTimelineView({ projects, members, setDetailItem, commentC
             {items.map(p => {
               const leader = (members || []).find(m => m.id === p.leaderId);
               return (
-                <div key={p.id} className="bg-white rounded-lg border border-border p-3 hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setDetailItem({ type: 'project', id: p.id })}>
+                <div key={p.id} className="bg-card rounded-lg border border-border p-3 hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setDetailItem({ type: 'project', id: p.id })}>
                   {batchProps.batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(p.id)} className="rounded" onChange={() => batchProps.onToggleSelect(p.id)} /></div>}
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusColors[p.status]}`}>{statusLabels[p.status]}</span>
@@ -752,7 +754,7 @@ export function ProjectCanvasView({ projects, members, setDetailItem, batchProps
   }, [projects]);
 
   return (
-    <div ref={containerRef} className="relative bg-white rounded-xl border border-border shadow-sm overflow-hidden" style={{ height: '70vh' }} onMouseDown={startPan} onTouchStart={startPan}>
+    <div ref={containerRef} className="relative bg-card rounded-xl border border-border shadow-sm overflow-hidden" style={{ height: '70vh' }} onMouseDown={startPan} onTouchStart={startPan}>
       <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, #e5e7eb 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
       <div ref={innerRef} className="relative w-full h-full" data-scale={canvasScale} style={{ transform: `scale(${canvasScale}) translate(${canvasPanX}px,${canvasPanY}px)`, transformOrigin: '0 0' }}>
         <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
@@ -771,7 +773,7 @@ export function ProjectCanvasView({ projects, members, setDetailItem, batchProps
           const y = project.canvasY ?? (Math.floor(index * 220 / 800) * 160) + 40;
           const leader = members.find(m => m.id === project.leaderId);
           return (
-            <div key={project.id} className={`absolute w-48 bg-white rounded-lg border-2 ${statusBorderColors[project.status] || 'border-gray-300'} shadow-md p-3 cursor-move hover:shadow-lg transition-shadow`} style={{ left: x, top: y }} onMouseDown={e => startItemDrag(e, project.id)} onTouchStart={e => startItemDrag(e, project.id)} onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); }}>
+            <div key={project.id} className={`absolute w-48 bg-card rounded-lg border-2 ${statusBorderColors[project.status] || 'border-gray-300'} shadow-md p-3 cursor-move hover:shadow-lg transition-shadow`} style={{ left: x, top: y }} onMouseDown={e => startItemDrag(e, project.id)} onTouchStart={e => startItemDrag(e, project.id)} onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); }}>
               {batchProps.batchMode && <div className="mb-1" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(project.id)} className="rounded" onChange={e => { e.stopPropagation(); batchProps.onToggleSelect(project.id); }} /></div>}
               <div className="flex items-center justify-between mt-1">
                 <span className="text-[10px] text-muted-foreground">{project.progress}%</span>

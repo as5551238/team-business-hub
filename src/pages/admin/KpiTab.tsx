@@ -11,6 +11,7 @@ import { useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { calcDualTrack, calcKpiGoalScore, getKpiStatusColor, getKpiStatusLabel } from '@/lib/kpiScoring';
 import { Target, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Users, BarChart3 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { Goal, KeyResult } from '@/types';
 
 // ===== KPI 汇总计算 =====

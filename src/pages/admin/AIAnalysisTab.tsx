@@ -8,12 +8,13 @@ import {
   RefreshCw, ChevronDown, ChevronRight, Bot, User, ArrowUpRight, ArrowDownRight, Minus,
   BarChart3, Target, FolderKanban, CheckCircle2, XCircle, Clock, Ban, UserX,
 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useStore } from '@/store/useStore';
 import { collectSnapshot, analyzeTeam, generateLocalInsights, getAIInsights, loadAIConfig, PERIOD_LABELS, HEALTH_LEVEL_LABELS, HEALTH_LEVEL_COLORS, HEALTH_LEVEL_BG, RISK_SEVERITY_LABELS, RISK_SEVERITY_COLORS, RISK_TYPE_LABELS } from '@/lib/ai';
 import type { AnalysisPeriod, TeamAnalysis, AIInsight, HealthScore, RiskItem, MemberAnalysis } from '@/lib/ai';
 
-const CARD = 'bg-white rounded-xl border border-border p-4 space-y-3';
-const STAT_CARD = 'bg-white rounded-xl border border-border p-4';
+const CARD = 'bg-card rounded-xl border border-border p-4 space-y-3';
+const STAT_CARD = 'bg-card rounded-xl border border-border p-4';
 
 function StatCard({ label, value, sub, icon: Icon, color }: { label: string; value: string | number; sub?: string; icon: typeof Heart; color?: string }) {
   return (
@@ -77,7 +78,7 @@ function InsightCard({ insight, onExecute, handled }: { insight: AIInsight; onEx
   const cfg = typeConfig[insight.type] || typeConfig.improvement;
   const Icon = cfg.icon;
   return (
-    <div className={`border rounded-lg overflow-hidden ${handled ? 'opacity-40' : ''} ${insight.fromLLM ? 'border-purple-200 bg-purple-50/30' : 'border-border bg-white'}`}>
+    <div className={`border rounded-lg overflow-hidden ${handled ? 'opacity-40' : ''} ${insight.fromLLM ? 'border-purple-200 bg-purple-50/30' : 'border-border bg-card'}`}>
       <div onClick={() => setOpen(!open)} className="w-full flex items-start gap-2.5 p-3 text-left hover:bg-muted/30 transition-colors cursor-pointer">
         <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
           <Icon size={14} className={cfg.color} />
@@ -247,7 +248,7 @@ export default function AIAnalysisTab({ viewingMemberId, isTeamView }: { viewing
           {/* 周期选择 */}
           <div className="flex gap-1 bg-muted rounded-lg p-0.5">
             {(Object.keys(PERIOD_LABELS) as AnalysisPeriod[]).map((p) => (
-              <button key={p} onClick={() => setPeriod(p)} className={`px-2.5 py-1 text-xs rounded-md transition-colors ${period === p ? 'bg-white shadow-sm font-medium' : 'hover:bg-white/50'}`}>
+              <button key={p} onClick={() => setPeriod(p)} className={`px-2.5 py-1 text-xs rounded-md transition-colors ${period === p ? 'bg-card shadow-sm font-medium' : 'hover:bg-white/50'}`}>
                 {PERIOD_LABELS[p]}
               </button>
             ))}

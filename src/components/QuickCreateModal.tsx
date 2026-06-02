@@ -64,7 +64,7 @@ export function QuickCreateModal({ open, onClose, initialType = 'task' }: QuickC
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center pt-[15vh] bg-black/30" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-[480px] overflow-hidden" onClick={e => e.stopPropagation()} onKeyDown={handleKeyDown}>
+      <div className="bg-card rounded-2xl shadow-2xl w-[480px] overflow-hidden" onClick={e => e.stopPropagation()} onKeyDown={handleKeyDown}>
         {/* Header with type switcher */}
         <div className="flex items-center gap-1 px-4 pt-4 pb-2">
           {(['task', 'goal', 'project'] as ItemType[]).map(t => (
@@ -85,13 +85,13 @@ export function QuickCreateModal({ open, onClose, initialType = 'task' }: QuickC
         <div className="px-4 pb-3 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
             <label className="text-[10px] text-muted-foreground">负责人</label>
-            <select className="text-xs border border-input rounded-lg px-2 py-1 bg-white" value={leaderId} onChange={e => setLeaderId(e.target.value)}>
+            <select className="text-xs border border-input rounded-lg px-2 py-1 bg-card" value={leaderId} onChange={e => setLeaderId(e.target.value)}>
               {activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
           <div className="flex items-center gap-1.5">
             <label className="text-[10px] text-muted-foreground">优先级</label>
-            <select className="text-xs border border-input rounded-lg px-2 py-1 bg-white" value={priority} onChange={e => setPriority(e.target.value as TaskPriority)}>
+            <select className="text-xs border border-input rounded-lg px-2 py-1 bg-card" value={priority} onChange={e => setPriority(e.target.value as TaskPriority)}>
               <option value="urgent">紧急(S)</option>
               <option value="high">高(A)</option>
               <option value="medium">中(B)</option>

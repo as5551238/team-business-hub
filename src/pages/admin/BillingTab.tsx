@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { CreditCard, Crown, Check, Zap, Users, Bot, Shield } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useStore } from '@/store/useStore';
 import { getTeamPlan, getPlanName } from '@/lib/featureGating';
 import { getPricingDisplay, getUsageInfo, createCheckoutSession, cancelSubscription } from '@/lib/stripeIntegration';
@@ -133,7 +134,7 @@ export function BillingTab() {
 
       <div className="rounded-lg border bg-card p-4">
         <h3 className="text-sm font-medium text-muted-foreground mb-2">账单历史</h3>
-        <p className="text-sm text-muted-foreground">暂无账单记录</p>
+        <EmptyState title="暂无账单记录" compact />
       </div>
     </div>
   );

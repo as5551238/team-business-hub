@@ -47,7 +47,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
     }
 
     case 'UPDATE_GOAL': {
-      const s = needMutate(state, ['goals', 'notifications']);
+      const s = needMutate(state, ['goals', 'notifications', 'projects', 'tasks']);
       const now = tsNow();
       const idx = s.goals.findIndex(g => g.id === action.payload.id);
       if (idx !== -1) {
@@ -174,11 +174,13 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
         s.goals[idx].parentId = action.payload.newParentId;
         s.goals[idx].level = calcGoalLevel(s.goals, action.payload.goalId, action.payload.newParentId);
         s.goals[idx].updatedAt = now;
-        function recalcDescendants(parentId: string) {
+        function recalcDescendants(parentId: string, visited = new Set<string>()) {
+          if (visited.has(parentId)) return; // cycle guard
+          visited.add(parentId);
           s.goals.filter(g => g.parentId === parentId).forEach(child => {
             const p = s.goals.find(pp => pp.id === parentId);
             child.level = (p ? p.level : 0) + 1;
-            recalcDescendants(child.id);
+            recalcDescendants(child.id, visited);
           });
         }
         recalcDescendants(action.payload.goalId);
@@ -208,7 +210,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
     case 'SUBMIT_GOAL_APPROVAL': {
       const s = needMutate(state, ['goals', 'approvalAudits']);
       const g = s.goals.find(g => g.id === action.payload);
-      if (!g) return null;
+      if (!g) return state;
       const now = tsNow();
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'pending', updatedAt: now };
@@ -220,7 +222,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
     case 'APPROVE_GOAL': {
       const s = needMutate(state, ['goals', 'approvalAudits']);
       const g = s.goals.find(g => g.id === action.payload.id);
-      if (!g || g.approvalStatus !== 'pending') return null;
+      if (!g || g.approvalStatus !== 'pending') return state;
       const now = tsNow();
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'approved', updatedAt: now };
@@ -232,7 +234,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
     case 'REJECT_GOAL': {
       const s = needMutate(state, ['goals', 'approvalAudits']);
       const g = s.goals.find(g => g.id === action.payload.id);
-      if (!g || g.approvalStatus !== 'pending') return null;
+      if (!g || g.approvalStatus !== 'pending') return state;
       const now = tsNow();
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'rejected', updatedAt: now };
@@ -244,7 +246,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
     case 'RECALL_GOAL_APPROVAL': {
       const s = needMutate(state, ['goals', 'approvalAudits']);
       const g = s.goals.find(g => g.id === action.payload);
-      if (!g || g.approvalStatus !== 'pending') return null;
+      if (!g || g.approvalStatus !== 'pending') return state;
       const now = tsNow();
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'draft', updatedAt: now };

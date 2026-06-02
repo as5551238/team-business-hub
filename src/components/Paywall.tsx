@@ -74,7 +74,7 @@ export default function Paywall({ feature, currentTier, onClose, onUpgrade }: Pa
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="relative w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl p-6"
+        className="relative w-full max-w-lg mx-4 bg-card rounded-2xl shadow-2xl p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <button

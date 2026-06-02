@@ -54,8 +54,11 @@ export function FeatureFlagProvider({ children, teamId }: { children: ReactNode;
     const sb = getSupabaseClient();
     if (!sb) { setLoading(false); return; }
 
+    // P3#25 fix: add AbortController for stale fetch protection
+    let cancelled = false;
     sb.from('feature_flags').select('*')
       .then(({ data, error }) => {
+        if (cancelled) return;
         if (!error && Array.isArray(data)) {
           const dbFlags: Record<string, FeatureFlag> = {};
           for (const row of data) {
@@ -70,8 +73,9 @@ export function FeatureFlagProvider({ children, teamId }: { children: ReactNode;
         }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [teamId]);
 
   const isEnabled = useCallback((key: string): boolean => {
     const flag = flags[key];

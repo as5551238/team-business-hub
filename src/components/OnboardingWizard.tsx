@@ -108,7 +108,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
         {/* 进度条 */}
         <div className="flex items-center gap-1 px-6 pt-5 pb-3">
           {steps.map((s, i) => (

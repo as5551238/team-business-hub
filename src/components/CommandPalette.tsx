@@ -95,7 +95,7 @@ export function CommandPalette({ open, onClose, onNavigate, onPageChange, onNavi
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center pt-[15vh]" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl border w-[520px] max-h-[60vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="bg-card rounded-xl shadow-2xl border w-[520px] max-h-[60vh] overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-4 py-3 border-b">
           <Command size={16} className="text-muted-foreground" />
           <input

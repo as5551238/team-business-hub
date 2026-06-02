@@ -24,7 +24,7 @@ export function RecycleBin() {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden">
+    <div className="bg-card dark:bg-gray-800 rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-3 p-4 hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-colors"

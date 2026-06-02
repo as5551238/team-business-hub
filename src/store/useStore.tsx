@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState, useMemo, useSyncExternalStore, type ReactNode } from 'react';
-import type { AppState, Goal, Project, BackupData, Tag, Permission, Category, Template, ScheduleEvent, Note, ItemType, Comment, Member, Bookmark, Knowledge } from '@/types';
+import type { AppState } from '@/types';
 import { getSupabaseClient, initSupabase, resetSupabase } from '@/supabase/client';
 import type { ConnectionMode, SupabaseConfig, Action } from './types';
 import { SUPABASE_CONFIG_KEY, ensureAppStateDefaults } from './types';
@@ -14,7 +14,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 import { toCamel } from './types';
 import { reducer, hasPermission } from './reducer';
-import { pushUndo, popUndo, popRedo, canUndo, canRedo, getUndoLabel, getRedoLabel } from './undo';
+import { pushUndo, popUndo, popRedo, canUndo, canRedo, getUndoLabel, getRedoLabel, clearUndoStack } from './undo';
 import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError, setCurrentTeamId } from './supabase';
 import { setRLSContext } from '@/supabase/client';
 import { CURRENT_USER_KEY } from './types';
@@ -37,6 +37,13 @@ interface ActionsContextType {
 const StateContext = createContext<AppState | null>(null);
 const ActionsContext = createContext<ActionsContextType | null>(null);
 
+import { setAsyncDispatch } from '@/store/shared';
+import { setCollabDispatch } from '@/lib/collab';
+
+// Module-level dispatch bridge for collab operations (set by StoreProvider)
+let _collabDispatch: ((action: any) => void) | null = null;
+export function collabDispatch(action: any) { _collabDispatch?.(action); }
+
 // Store context approach (stable and proven)
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, null, loadLocalState);
@@ -47,6 +54,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const offlineWriteCountRef = useRef(0);
 
   const [undoCounter, setUndoCounter] = useState(0);
+
+  // P3#9 fix: Realtime dedup — shared lastWriteAt map accessible to trackedDispatch
+  const lastWriteAtRef = useRef<Record<string, number>>({});
+  const ACTION_TO_TABLE: Record<string, string> = {
+    ADD_GOAL: 'goals', UPDATE_GOAL: 'goals', DELETE_GOAL: 'goals',
+    ADD_PROJECT: 'projects', UPDATE_PROJECT: 'projects', DELETE_PROJECT: 'projects',
+    ADD_TASK: 'tasks', UPDATE_TASK: 'tasks', DELETE_TASK: 'tasks',
+    ADD_NOTIFICATION: 'notifications', UPDATE_NOTIFICATION: 'notifications', DELETE_NOTIFICATION: 'notifications',
+    ADD_MEMBER: 'members', UPDATE_MEMBER: 'members', DELETE_MEMBER: 'members',
+    ADD_COMMENT: 'comments', UPDATE_COMMENT: 'comments', DELETE_COMMENT: 'comments',
+  };
+  const ACTION_TO_EVENT: Record<string, string> = {
+    ADD_GOAL: 'INSERT', ADD_PROJECT: 'INSERT', ADD_TASK: 'INSERT',
+    ADD_NOTIFICATION: 'INSERT', ADD_MEMBER: 'INSERT', ADD_COMMENT: 'INSERT',
+    UPDATE_GOAL: 'UPDATE', UPDATE_PROJECT: 'UPDATE', UPDATE_TASK: 'UPDATE',
+    UPDATE_NOTIFICATION: 'UPDATE', UPDATE_MEMBER: 'UPDATE', UPDATE_COMMENT: 'UPDATE',
+    DELETE_GOAL: 'DELETE', DELETE_PROJECT: 'DELETE', DELETE_TASK: 'DELETE',
+    DELETE_NOTIFICATION: 'DELETE', DELETE_MEMBER: 'DELETE', DELETE_COMMENT: 'DELETE',
+  };
 
   // Dispatch proxy that tracks offline writes for Layout.tsx badge + undo/redo
   const trackedDispatch = useCallback((action: any) => {
@@ -64,9 +90,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dispatch(action);
     // Notify selector subscribers of state change
     notifySelectorListeners();
-    // Track for undo
-    if (action.type) pushUndo(action);
-    setUndoCounter(c => c + 1);
+    // Track for undo — P3#29 fix: only increment counter when action was actually undoable
+    if (action.type) { const pushed = pushUndo(action); if (pushed) setUndoCounter(c => c + 1); }
+    // P3#9 fix: record lastWriteAt for Realtime dedup
+    if (action.type && typeof action.type === 'string' && (action.type.startsWith('ADD_') || action.type.startsWith('UPDATE_') || action.type.startsWith('DELETE_'))) {
+      const table = ACTION_TO_TABLE[action.type];
+      const evtType = ACTION_TO_EVENT[action.type];
+      if (table && evtType) {
+        const writeKey = `${table}:${evtType}`;
+        lastWriteAtRef.current[writeKey] = Date.now();
+      }
+    }
     // Track offline writes
     if (action.type && action.type !== 'MERGE_STATE' && action.type !== 'SET_STATE' && action.type !== 'MARK_NOTIFICATION_READ' && action.type !== 'MARK_ALL_NOTIFICATIONS_READ') {
       try {
@@ -85,6 +119,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
     return () => { setOnWriteError(() => {}); };
   }, [dispatch]);
+
+  // Bridge collab dispatch (used by collab.ts + ai_action pipeline)
+  useEffect(() => {
+    _collabDispatch = trackedDispatch;
+    setAsyncDispatch(trackedDispatch);
+    setCollabDispatch(trackedDispatch);
+    return () => { _collabDispatch = null; setAsyncDispatch(() => {}); setCollabDispatch(() => {}); };
+  }, [trackedDispatch]);
 
   useEffect(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -253,13 +295,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!sb) return;
 
     // --- Supabase Realtime postgres_changes subscriptions ---
-    // Dedup: skip events within 2s of a local write to avoid echoing our own changes
-    const lastWriteAt: Record<string, number> = {};
+    // Dedup: skip events within 2s of a local write to avoid echoing our own changes (P3#9: uses shared lastWriteAtRef from trackedDispatch)
+    const lastWriteAt = lastWriteAtRef.current;
     const origDispatch = dispatch;
     const dedupedDispatch = (action: Action) => {
-      if (action.type && typeof action.type === 'string' && action.type.startsWith('ADD_') || action.type.startsWith('UPDATE_') || action.type.startsWith('DELETE_')) {
-        lastWriteAt[action.type] = Date.now();
-      }
       origDispatch(action);
     };
 
@@ -280,14 +319,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const teamId = state.currentTeamId;
-    const realtimeChannel = sb.channel('db-changes')
+    const teamId = stateRef.current?.currentTeamId;
+    const channelId = teamId ? `db-changes-${teamId}` : 'db-changes';
+    const realtimeChannel = sb.channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('goals', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('projects', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('tasks', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, (p) => handleDbChange('members', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, (p) => handleDbChange('notifications', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'comments', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('comments', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'automation_rules', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('automation_rules', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'status_flow_rules', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('status_flow_rules', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_links', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('item_links', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('tags', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sprints', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('sprints', p))
       .subscribe();
 
     // --- Fallback REST polling (120s) for missed Realtime events ---
@@ -296,13 +341,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       status_flow_rules: 'statusFlowRules', automation_rules: 'automationRules',
     };
     const allTables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules'];
+    const teamScopedTables = new Set(['goals', 'projects', 'tasks', 'notifications', 'activities', 'item_links', 'comments', 'categories', 'templates', 'schedule_events', 'notes', 'reviews', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules', 'sprints', 'knowledge']);
     let polling = false;
     const fallbackPoll = async () => {
       if (polling || document.visibilityState === 'hidden') return;
       polling = true;
       try {
+        const teamId = stateRef.current?.currentTeamId;
         const results = await Promise.allSettled(allTables.map(table => {
-          const query = table === 'members' ? sb.from(table).select('*').eq('status', 'active') : sb.from(table).select('*');
+          let query: any;
+          if (table === 'members') {
+            query = sb.from(table).select('*').eq('status', 'active');
+          } else {
+            query = sb.from(table).select('*');
+          }
+          // P3#1 fix: scope team-scoped tables by currentTeamId
+          if (teamId && teamScopedTables.has(table)) {
+            query = query.eq('team_id', teamId);
+          }
           return query.then(({ data }) => {
             const key = tableKeyMap[table] || table;
             return { key, data: Array.isArray(data) ? data.map(toCamel) : [] };
@@ -311,6 +367,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const payload: Record<string, any> = {};
         results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; } });
         dispatch({ type: 'MERGE_STATE', payload });
+        notifySelectorListeners();
         try { bc.postMessage({ type: 'MERGE_STATE', payload }); } catch {}
       } catch (e) {
         console.error('[fallbackPoll] data sync failed:', e);
@@ -324,7 +381,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try { bc = new BroadcastChannel('tbh-sync'); } catch {}
     const onBcMessage = (e: MessageEvent) => {
       if (e.data && e.data.type === 'MERGE_STATE' && e.data.payload) {
+        // P2#3 fix: reject cross-team data contamination
+        if (e.data.payload.currentTeamId && e.data.payload.currentTeamId !== stateRef.current?.currentTeamId) return;
         dispatch({ type: 'MERGE_STATE', payload: e.data.payload });
+        notifySelectorListeners();
       }
     };
     if (bc) bc.addEventListener('message', onBcMessage);
@@ -390,6 +450,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const disconnect = useCallback(() => {
     cleanupRealtime();
     resetSupabase();
+    clearUndoStack();
     try { localStorage.removeItem(SUPABASE_CONFIG_KEY); } catch {}
     setConnectionMode('local');
     setConnectionError(null);
@@ -398,6 +459,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // State ref for selector-based subscriptions (avoids full context re-render)
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // Re-establish Realtime subscriptions when currentTeamId changes
+  // P3#34 fix: sole trigger for setupRealtime — doConnect no longer calls setupRealtime directly
+  useEffect(() => {
+    if (connectionMode === 'supabase' && state.currentTeamId) {
+      setupRealtime();
+    }
+  }, [state.currentTeamId, connectionMode]);
 
   // Undo/redo info (derived from module-level stacks + counter)
   const undoInfo = useMemo(() => ({
@@ -462,19 +531,27 @@ function notifySelectorListeners() {
   selectorListeners.forEach(l => l());
 }
 
-// Shallow equality comparison
+// Shallow equality comparison (handles Date and NaN)
 function shallowEqual<T>(a: T, b: T): boolean {
   if (a === b) return true;
+  // Handle NaN
+  if (a !== a && b !== b) return true; // NaN check
   if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false;
+  // Handle Date
+  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) return false; }
+    for (let i = 0; i < a.length; i++) { if (a[i] !== b[i] && !(a[i] !== a[i] && b[i] !== b[i])) return false; }
     return true;
   }
   const keysA = Object.keys(a as Record<string, unknown>);
   const keysB = Object.keys(b as Record<string, unknown>);
   if (keysA.length !== keysB.length) return false;
-  for (const k of keysA) { if ((a as Record<string, unknown>)[k] !== (b as Record<string, unknown>)[k]) return false; }
+  for (const k of keysA) {
+    const va = (a as Record<string, unknown>)[k];
+    const vb = (b as Record<string, unknown>)[k];
+    if (va !== vb && !(va !== va && vb !== vb)) return false;
+  }
   return true;
 }
 
@@ -508,262 +585,4 @@ export function useStoreSelector<T>(selector: (state: AppState) => T): T {
 
   // version change triggers re-read via getSnapshot
   return getSnapshot();
-}
-
-export function useDashboardStats() {
-  const { goals, projects, tasks, notifications, currentUser } = useStore().state;
-  const [todayStr, setTodayStr] = useState(() => new Date().toISOString().split('T')[0]);
-  const now = useMemo(() => new Date(), [todayStr]);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const newToday = new Date().toISOString().split('T')[0];
-      if (newToday !== todayStr) setTodayStr(newToday);
-    }, 60000);
-    return () => clearInterval(timer);
-  }, [todayStr]);
-  return useMemo(() => {
-    const activeGoals = goals.filter(g => g.status === 'in_progress');
-    const activeProjects = projects.filter(p => p.status === 'in_progress');
-    const myTasks = tasks.filter(t => t.leaderId === currentUser?.id && t.status !== 'done');
-    const overdueTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < todayStr);
-    const todayTodos = tasks.filter(t => t.leaderId === currentUser?.id && t.status !== 'done' && t.dueDate === todayStr);
-    const completedThisWeek = tasks.filter(t => {
-      if (!t.completedAt) return false;
-      const d = new Date(t.completedAt);
-      const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
-      return d >= weekAgo;
-    });
-    return {
-      activeGoals: activeGoals.length, activeProjects: activeProjects.length,
-      myTasks: myTasks.length, overdueTasks: overdueTasks.length, todayTodos,
-      completedThisWeek: completedThisWeek.length,
-      overallGoalProgress: activeGoals.length > 0 ? Math.round(activeGoals.reduce((s, g) => s + g.progress, 0) / activeGoals.length) : 0,
-      unreadNotifications: notifications.filter(n => !n.read).length,
-    };
-  }, [goals, projects, tasks, notifications, currentUser, todayStr, now]);
-}
-
-export function useGoalTree() {
-  const goals = useStore().state.goals;
-  return useMemo(() => {
-    function buildTree(parentId: string | null, visited?: Set<string>): (Goal & { children: Goal[] })[] {
-      const visitedSet = visited || new Set<string>();
-      return goals.filter(g => g.parentId === parentId).map(g => {
-        if (visitedSet.has(g.id)) return { ...g, children: [] };
-        visitedSet.add(g.id);
-        return { ...g, children: buildTree(g.id, visitedSet) };
-      });
-    }
-    return buildTree(null);
-  }, [goals]);
-}
-
-export function useProjectTasks(projectId: string) {
-  const tasks = useStore().state.tasks;
-  return useMemo(() => tasks.filter(t => t.projectId === projectId), [tasks, projectId]);
-}
-
-export function useGoalProjects(goalId: string) {
-  const { projects, goals } = useStore().state;
-  return useMemo(() => {
-    function getProjectsForGoal(gid: string): Project[] {
-      return [...projects.filter(p => p.goalId === gid), ...goals.filter(g => g.parentId === gid).flatMap(cg => getProjectsForGoal(cg.id))];
-    }
-    return getProjectsForGoal(goalId);
-  }, [projects, goals, goalId]);
-}
-
-export function useItemLinks(sourceId: string, sourceType: 'goal' | 'project' | 'task') {
-  const itemLinks = useStore().state.itemLinks;
-  return useMemo(() => itemLinks.filter(l => l.sourceId === sourceId && l.sourceType === sourceType), [itemLinks, sourceId, sourceType]);
-}
-
-export function useMemberTasks(memberId: string) {
-  const tasks = useStore().state.tasks;
-  return useMemo(() => tasks.filter(t => t.leaderId === memberId || (t.supporterIds ?? []).includes(memberId)), [tasks, memberId]);
-}
-
-export function useBackupExport(): BackupData {
-  const { members, goals, projects, tasks, notifications, activities, itemLinks, tags, categories, templates, scheduleEvents, notes, reviews, comments, bookmarks, savedViews, statusFlowRules, automationRules, sprints } = useStore().state;
-  return {
-    version: '3.0',
-    exportedAt: new Date().toISOString(),
-    members, goals, projects, tasks, notifications, activities, itemLinks,
-    tags, categories, templates, scheduleEvents, notes, reviews,
-    comments: comments || [], bookmarks: bookmarks || [], savedViews: savedViews || [],
-    statusFlowRules: statusFlowRules || [], automationRules: automationRules || [], sprints: sprints || [],
-  };
-}
-
-export function usePermissions() {
-  const store = useStore();
-  const { state, dispatch } = store;
-  const user = state.currentUser;
-  return {
-    can: (permission: Permission) => user ? hasPermission(state, user.id, permission) : false,
-    isAdmin: user?.role === 'admin',
-    isManager: user?.role === 'manager' || user?.role === 'leader' || user?.role === 'admin',
-    setMemberPermissions: (memberId: string, permissions: Permission[]) => {
-      dispatch({ type: 'UPDATE_MEMBER', payload: { id: memberId, updates: { permissions } } });
-    },
-  };
-}
-
-export function useTags() {
-  const tags = useStore().state.tags;
-  const dispatch = useStore().dispatch;
-  return {
-    tags,
-    addTag: (tag: Omit<Tag, 'id' | 'createdAt'>) => dispatch({ type: 'ADD_TAG', payload: tag }),
-    updateTag: (id: string, updates: Partial<Tag>) => dispatch({ type: 'UPDATE_TAG', payload: { id, updates } }),
-    deleteTag: (id: string) => dispatch({ type: 'DELETE_TAG', payload: id }),
-  };
-}
-
-export function useCategories() {
-  const categories = useStore().state.categories;
-  const dispatch = useStore().dispatch;
-  return {
-    categories,
-    addCategory: (cat: Omit<Category, 'id' | 'createdAt'>) => dispatch({ type: 'ADD_CATEGORY', payload: cat }),
-    updateCategory: (id: string, updates: Partial<Category>) => dispatch({ type: 'UPDATE_CATEGORY', payload: { id, updates } }),
-    deleteCategory: (id: string) => dispatch({ type: 'DELETE_CATEGORY', payload: id }),
-    setCategories: (cats: Category[]) => dispatch({ type: 'SET_CATEGORIES', payload: cats }),
-    getCategoriesForType: (itemType: ItemType) => categories.filter(c => (c.appliesTo || []).includes(itemType)),
-  };
-}
-
-export function useTemplates() {
-  const templates = useStore().state.templates;
-  const dispatch = useStore().dispatch;
-  return {
-    templates,
-    addTemplate: (tpl: Omit<Template, 'id' | 'createdAt' | 'updatedAt'>) => dispatch({ type: 'ADD_TEMPLATE', payload: tpl }),
-    updateTemplate: (id: string, updates: Partial<Template>) => dispatch({ type: 'UPDATE_TEMPLATE', payload: { id, updates } }),
-    deleteTemplate: (id: string) => dispatch({ type: 'DELETE_TEMPLATE', payload: id }),
-    getTemplatesByType: (type: 'goal' | 'project' | 'task' | 'document') => templates.filter(t => t.type === type),
-  };
-}
-
-export function useScheduleEvents(memberId?: string) {
-  const scheduleEvents = useStore().state.scheduleEvents;
-  const dispatch = useStore().dispatch;
-  const filtered = memberId ? scheduleEvents.filter(e => e.memberId === memberId) : scheduleEvents;
-  return {
-    events: filtered,
-    addEvent: (evt: Omit<ScheduleEvent, 'id' | 'createdAt' | 'updatedAt'>) => dispatch({ type: 'ADD_SCHEDULE_EVENT', payload: evt }),
-    updateEvent: (id: string, updates: Partial<ScheduleEvent>) => dispatch({ type: 'UPDATE_SCHEDULE_EVENT', payload: { id, updates } }),
-    deleteEvent: (id: string) => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id }),
-  };
-}
-
-export function useNotes(folder?: string) {
-  const notes = useStore().state.notes;
-  const dispatch = useStore().dispatch;
-  const filtered = folder ? notes.filter(n => n.folder === folder) : notes;
-  return {
-    notes: filtered,
-    allNotes: notes,
-    addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => dispatch({ type: 'ADD_NOTE', payload: note }),
-    updateNote: (id: string, updates: Partial<Note>) => dispatch({ type: 'UPDATE_NOTE', payload: { id, updates } }),
-    deleteNote: (id: string) => dispatch({ type: 'DELETE_NOTE', payload: id }),
-    pinnedNotes: notes.filter(n => n.isPinned),
-  };
-}
-
-export function useKnowledge() {
-  const knowledge = useStore().state.knowledge;
-  const dispatch = useStore().dispatch;
-  return {
-    knowledge: knowledge || [],
-    addKnowledge: (k: Omit<Knowledge, 'id' | 'createdAt' | 'updatedAt'>) => dispatch({ type: 'ADD_KNOWLEDGE', payload: k }),
-    updateKnowledge: (id: string, updates: Partial<Knowledge>) => dispatch({ type: 'UPDATE_KNOWLEDGE', payload: { id, updates } }),
-    deleteKnowledge: (id: string) => dispatch({ type: 'DELETE_KNOWLEDGE', payload: id }),
-  };
-}
-
-export function useBookmarks() {
-  const bookmarks = useStore().state.bookmarks;
-  const dispatch = useStore().dispatch;
-  return {
-    bookmarks: bookmarks || [],
-    addBookmark: (bm: Omit<Bookmark, 'id' | 'createdAt'>) => dispatch({ type: 'ADD_BOOKMARK', payload: bm }),
-    updateBookmark: (id: string, updates: Partial<Bookmark>) => dispatch({ type: 'UPDATE_BOOKMARK', payload: { id, updates } }),
-    deleteBookmark: (id: string) => dispatch({ type: 'DELETE_BOOKMARK', payload: id }),
-    reorderBookmarks: (bms: Bookmark[]) => dispatch({ type: 'REORDER_BOOKMARKS', payload: bms }),
-    setBookmarks: (bms: Bookmark[]) => dispatch({ type: 'SET_BOOKMARKS', payload: bms }),
-  };
-}
-
-export function useViewingMember() {
-  const viewingMemberId = useStore().state.viewingMemberId;
-  const members = useStore().state.members;
-  const dispatch = useStore().dispatch;
-  const viewingMember = viewingMemberId ? members.find(m => m.id === viewingMemberId) || null : null;
-  const isTeamView = viewingMemberId === null;
-  const setViewingMember = useCallback((id: string | null) => {
-    dispatch({ type: 'SET_VIEWING_MEMBER', payload: id });
-  }, [dispatch]);
-  return { viewingMemberId, setViewingMember, viewingMember, isTeamView };
-}
-
-export function useMemberData(memberId: string) {
-  const { goals, projects, tasks, activities } = useStore().state;
-  const memberGoals = goals.filter(g => g.leaderId === memberId || (g.supporterIds ?? []).includes(memberId));
-  const memberProjects = projects.filter(p => p.leaderId === memberId || (p.supporterIds ?? []).includes(memberId));
-  const memberTasks = tasks.filter(t => t.leaderId === memberId || (t.supporterIds ?? []).includes(memberId));
-  const memberActivities = activities.filter(a => a.memberId === memberId);
-  return { goals: memberGoals, projects: memberProjects, tasks: memberTasks, activities: memberActivities };
-}
-
-export function useReviewList(memberId?: string) {
-  const reviews = useStore().state.reviews;
-  if (memberId) {
-    return reviews.filter(r => r.memberId === memberId);
-  }
-  return reviews;
-}
-
-// --- Shared lookup hooks (perf: pre-compute Maps to avoid O(n) find in render loops) ---
-
-/** O(1) member name/lookup by id - replaces repeated state.members.find() across components */
-export function useMemberLookup() {
-  const members = useStore().state.members;
-  const { nameMap, avatarMap, memberMap } = useMemo(() => {
-    const nameMap = new Map<string, string>();
-    const avatarMap = new Map<string, string>();
-    const memberMap = new Map<string, Member>();
-    for (const m of members) {
-      nameMap.set(m.id, m.name);
-      avatarMap.set(m.id, m.avatar);
-      memberMap.set(m.id, m);
-    }
-    return { nameMap, avatarMap, memberMap };
-  }, [members]);
-  const getName = useCallback((id: string | undefined) => id ? nameMap.get(id) || '未知' : '未知', [nameMap]);
-  const getAvatar = useCallback((id: string | undefined) => id ? avatarMap.get(id) || '' : '', [avatarMap]);
-  const getMember = useCallback((id: string | undefined) => id ? memberMap.get(id) : undefined, [memberMap]);
-  return { getName, getAvatar, getMember, nameMap, avatarMap, memberMap };
-}
-
-/** Pre-computed active members list + count - replaces repeated state.members.filter(m => m.status === 'active') */
-export function useActiveMembers() {
-  const members = useStore().state.members;
-  const activeMembers = useMemo(() => members.filter(m => m.status === 'active'), [members]);
-  const activeCount = activeMembers.length;
-  return { activeMembers, activeCount };
-}
-
-/** Pre-computed project/goal/task lookup maps */
-export function useItemLookupMaps() {
-  const { goals, projects, tasks } = useStore().state;
-  const { goalMap, projectMap, taskMap } = useMemo(() => ({
-    goalMap: new Map(goals.map(g => [g.id, g])),
-    projectMap: new Map(projects.map(p => [p.id, p])),
-    taskMap: new Map(tasks.map(t => [t.id, t])),
-  }), [goals, projects, tasks]);
-  const getGoalTitle = useCallback((id: string | undefined) => id ? goalMap.get(id)?.title || '' : '', [goalMap]);
-  const getProjectTitle = useCallback((id: string | undefined) => id ? projectMap.get(id)?.title || '' : '', [projectMap]);
-  const getTaskTitle = useCallback((id: string | undefined) => id ? taskMap.get(id)?.title || '' : '', [taskMap]);
-  return { goalMap, projectMap, taskMap, getGoalTitle, getProjectTitle, getTaskTitle };
 }

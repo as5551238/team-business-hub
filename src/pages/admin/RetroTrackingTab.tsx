@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Plus, CheckCircle2, Circle, ArrowRight, Trash2 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 import type { ReviewPeriod, ReviewEntry } from '@/types';
 import { periodLabels } from './constants';

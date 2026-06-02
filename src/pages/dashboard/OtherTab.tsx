@@ -3,7 +3,9 @@
  */
 import { useState, useMemo, useEffect } from 'react';
 import { Target, FolderKanban, ListTodo, Plus, Users, Zap, Globe, Search, Edit2, Trash2, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
-import { useBookmarks } from '@/store/useStore';
+import { EmptyState } from '@/components/ui/EmptyState';
+
+import { useBookmarks } from '@/store/hooks';
 import { actionLabels, useFilteredData } from './shared';
 import { RecycleBin } from './RecycleBin';
 import type { Bookmark as BookmarkType } from '@/types';
@@ -95,7 +97,7 @@ function BookmarksWidget() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm">
+    <div className="bg-card rounded-xl border border-border shadow-sm">
       <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-border">
         <div className="flex items-center gap-2"><Globe size={18} className="text-indigo-500" /><h2 className="font-semibold text-sm md:text-base">常用网址</h2><span className="text-xs text-muted-foreground">{bookmarks.length}个</span></div>
         <button className="text-xs px-2.5 py-1 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-1" onClick={() => { setShowAdd(true); setEditId(null); setFormTitle(''); setFormUrl(''); setFormCategory('工作'); setFormIcon(''); }}><Plus size={12} />添加</button>
@@ -114,7 +116,7 @@ function BookmarksWidget() {
             <span className="text-xs">emoji图标:</span><input type="text" className="w-12 text-xs border border-border rounded-lg px-2 py-1.5 text-center" value={formIcon} onChange={e => setFormIcon(e.target.value)} />
           </div>
           <div className="flex items-center gap-2">
-            <select className="text-xs border border-border rounded-lg px-2 py-1.5 bg-white" value={formCategory} onChange={e => setFormCategory(e.target.value)}>{DEFAULT_CATEGORIES.slice(1).map(c => <option key={c} value={c}>{c}</option>)}</select>
+            <select className="text-xs border border-border rounded-lg px-2 py-1.5 bg-card" value={formCategory} onChange={e => setFormCategory(e.target.value)}>{DEFAULT_CATEGORIES.slice(1).map(c => <option key={c} value={c}>{c}</option>)}</select>
             <button className="text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleSave}>{editId ? '保存' : '添加'}</button>
             <button className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-muted" onClick={() => setShowAdd(false)}>取消</button>
           </div>
@@ -178,7 +180,7 @@ export default function OtherTab({ onOpenDetail, onPageChange }: DashboardTabPro
   return (
     <div className="space-y-6">
       {/* 快捷操作 */}
-      <div className="bg-white rounded-xl border border-border shadow-sm">
+      <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border"><Zap size={18} className="text-amber-500" /><h2 className="font-semibold text-sm md:text-base">快捷操作</h2></div>
         <div className="grid grid-cols-3 gap-3 p-4">
           <button className="flex flex-col items-center gap-2 p-3 md:p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 transition-colors" onClick={() => handleQuickAction('newGoal')}>
@@ -197,7 +199,7 @@ export default function OtherTab({ onOpenDetail, onPageChange }: DashboardTabPro
       </div>
 
       {/* 团队工作量 */}
-      <div className="bg-white rounded-xl border border-border shadow-sm">
+      <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-border"><div className="flex items-center gap-2"><Users size={18} className="text-indigo-500" /><h2 className="font-semibold text-sm md:text-base">团队工作量</h2></div></div>
         <div className="divide-y divide-border">
           {memberTaskCounts.length === 0 ? (
@@ -228,7 +230,7 @@ export default function OtherTab({ onOpenDetail, onPageChange }: DashboardTabPro
       <BookmarksWidget />
 
       {/* 最近动态 */}
-      <div className="bg-white rounded-xl border border-border shadow-sm">
+      <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-border"><h2 className="font-semibold text-sm md:text-base">最近动态</h2></div>
         <div className="divide-y divide-border">
           {recentActivities.length === 0 && <div className="px-5 py-10 text-center text-muted-foreground text-sm">暂无动态</div>}

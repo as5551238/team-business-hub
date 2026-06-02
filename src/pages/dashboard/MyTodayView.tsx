@@ -172,7 +172,7 @@ export function MyTodayView({ onOpenDetail }: MyTodayProps) {
         <div
           key={item.id}
           onClick={() => onOpenDetail(item.id, item.type)}
-          className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-indigo-300 transition-colors cursor-pointer"
+          className="flex items-center gap-3 p-3 bg-card dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-indigo-300 transition-colors cursor-pointer"
         >
           {typeIcon(item.type)}
           <div className="flex-1 min-w-0">

@@ -52,9 +52,9 @@ export function AISettingsSection() {
         setTestResult('fail');
         setTestError('模型返回了空响应，请检查模型名称是否正确');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult('fail');
-      setTestError(err?.message || '未知错误');
+      setTestError(err instanceof Error ? err.message : '未知错误');
     } finally {
       setTesting(false);
     }
@@ -81,7 +81,7 @@ export function AISettingsSection() {
         <label className="text-xs font-medium text-muted-foreground">模型供应商</label>
         <div className="flex gap-2">
           {(Object.keys(PROVIDER_PRESETS) as AIModelProvider[]).map((p) => (
-            <button key={p} onClick={() => handleProviderChange(p)} className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${config.provider === p ? 'bg-primary text-primary-foreground border-primary' : 'bg-white border-border hover:bg-muted/50'}`}>
+            <button key={p} onClick={() => handleProviderChange(p)} className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${config.provider === p ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border hover:bg-muted/50'}`}>
               {PROVIDER_PRESETS[p].label}
             </button>
           ))}
@@ -114,7 +114,7 @@ export function AISettingsSection() {
                 <div className="relative" ref={modelSelectRef}>
                   <button type="button" onClick={() => setShowModelSelect(!showModelSelect)} className="px-2 py-1 border border-border rounded-md text-muted-foreground hover:bg-muted/50"><ChevronDown size={14} /></button>
                   {showModelSelect && (
-                    <div className="absolute right-0 top-8 z-10 bg-white border border-border rounded-md shadow-lg min-w-[160px]">
+                    <div className="absolute right-0 top-8 z-10 bg-card border border-border rounded-md shadow-lg min-w-[160px]">
                       {preset.models.map((m) => (
                         <button key={m} type="button" onClick={() => { update({ model: m }); setShowModelSelect(false); }} className={`w-full text-left px-3 py-1.5 hover:bg-muted/50 ${(config.model || preset.model) === m ? 'text-primary font-medium' : ''}`}>{m}</button>
                       ))}

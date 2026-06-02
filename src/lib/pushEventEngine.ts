@@ -9,6 +9,8 @@
 import { pushNotification, triggerZapierWebhook, getPushConfigs, formatTaskNotification } from './pushConnector';
 import type { PushMessage } from './pushConnector';
 
+import { fireAutomationRules } from '@/store/shared';
+
 // ===== 渠道类型 =====
 
 export type NotificationChannel = 'sw' | 'wechat_work' | 'dingtalk' | 'feishu' | 'webhook' | 'email' | 'in-app';
@@ -97,11 +99,8 @@ function isDuplicate(eventKey: string): boolean {
 
 // ===== 推送调度 =====
 
+// P3#22 fix: removed duplicate LEVEL_MAP, kept single LEVEL_PRIORITY
 const LEVEL_PRIORITY: Record<string, number> = {
-  none: 0, low: 1, medium: 2, high: 3, critical: 4,
-};
-
-const LEVEL_MAP: Record<string, number> = {
   none: 0, low: 1, medium: 2, high: 3, critical: 4,
 };
 
@@ -112,6 +111,12 @@ export async function dispatchPushEvent(event: PushEvent): Promise<void> {
   const configs = loadPushEventConfigs();
   const eventCfg = configs[event.type];
   if (!eventCfg || !eventCfg.enabled) return;
+
+  // P3#22 fix: filter by minLevel using LEVEL_PRIORITY
+  const eventPriority = LEVEL_PRIORITY[eventCfg.minLevel] ?? 0;
+  // If the event has a priority level, check it against minLevel threshold
+  const evtLevel = (event.data?.priority as string) || 'none';
+  if (LEVEL_PRIORITY[evtLevel] !== undefined && LEVEL_PRIORITY[evtLevel] < eventPriority) return;
 
   // 去重
   const eventKey = `${event.type}:${event.data?.id || event.title}`;
@@ -261,6 +266,7 @@ export function dispatchAiPushEvent(event: AiPushEvent): void {
       dispatchPushEvent(pushEvent);
       break;
     case 'low':
+      console.debug('[PushEngine] Low-priority event dropped:', event.type, event.targetId);
       break;
   }
 }
@@ -334,6 +340,10 @@ export function startAiPushScan(
             targetType: 'goal',
             priority: 'medium',
           });
+          // Fire kr_lag automation trigger for goal-level rules
+          try {
+            fireAutomationRules({ goals, tasks } as any, g.id, 'goal', g.title, 'kr_lag', { updatedAt: g.updatedAt }, g as any);
+          } catch {}
         }
       }
     }

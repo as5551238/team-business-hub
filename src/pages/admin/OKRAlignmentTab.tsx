@@ -13,6 +13,8 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useStore } from '@/store/useStore';
 import type { Goal } from '@/types';
 import { ZoomIn, ZoomOut, Maximize2, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { dispatchAiPushEvent } from '@/lib/pushEventEngine';
 
 const STATUS_COLORS: Record<string, string> = { todo: '#94a3b8', in_progress: '#3b82f6', done: '#22c55e', blocked: '#f59e0b', cancelled: '#ef4444' };
 
@@ -140,16 +142,14 @@ export function OKRAlignmentView() {
         pushedRedRef.current.add(goalId);
         const goal = state.goals.find(g => g.id === goalId);
         if (goal) {
-          import('@/lib/pushEventEngine').then(({ dispatchAiPushEvent }) => {
-            dispatchAiPushEvent({
-              type: 'alignment_health',
-              title: '对齐健康度告警',
-              body: `「${goal.title}」的子目标对齐度仅 ${h.percent}%，低于60%警戒线`,
-              targetId: goalId,
-              targetType: 'goal',
-              priority: 'high',
-            });
-          }).catch(() => {});
+          dispatchAiPushEvent({
+            type: 'alignment_health',
+            title: '对齐健康度告警',
+            body: `「${goal.title}」的子目标对齐度仅 ${h.percent}%，低于60%警戒线`,
+            targetId: goalId,
+            targetType: 'goal',
+            priority: 'high',
+          });
         }
       }
     }
@@ -170,7 +170,7 @@ export function OKRAlignmentView() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-sm">OKR 对齐视图</h3>
-          <p className="text-xs text-muted-foreground">展示目标层级对齐关系与级联进度穿透，点击节点跳转详情</p>
+          <EmptyState title="展示目标层级对齐关系与级联进度穿透，点击节点跳转详情" compact />
         </div>
         <div className="flex items-center gap-1">
           <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} className="p-1.5 hover:bg-muted rounded"><ZoomOut size={14} /></button>
@@ -182,7 +182,7 @@ export function OKRAlignmentView() {
 
       <div className="flex gap-4">
         {/* SVG 对齐图 */}
-        <div className="flex-1 border border-border rounded-lg bg-white overflow-auto" style={{ maxHeight: 550 }}>
+        <div className="flex-1 border border-border rounded-lg bg-card overflow-auto" style={{ maxHeight: 550 }}>
           <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', transition: 'transform 0.2s' }}>
             <svg width={maxX + 80} height={maxY + 40} className="min-w-full">
               {/* 贝塞尔曲线连线 */}
@@ -237,7 +237,7 @@ export function OKRAlignmentView() {
 
         {/* 选中目标详情面板 */}
         {selectedGoal && selectedNode && (
-          <div className="w-64 shrink-0 border border-border rounded-lg bg-white p-3 space-y-2 self-start sticky top-0">
+          <div className="w-64 shrink-0 border border-border rounded-lg bg-card p-3 space-y-2 self-start sticky top-0">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[selectedGoal.status] }} />
               <span className="text-sm font-semibold truncate">{selectedGoal.title}</span>

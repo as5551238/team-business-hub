@@ -3,6 +3,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Shuffle, ArrowRightLeft, Eye, GraduationCap, Dna } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { optimizeAssignmentsLocal, optimizeAssignmentsDeep } from '@/lib/ai/aiConstraintSolver';
 import type { OptimizationResult } from '@/lib/ai/aiConstraintSolver';
 import { reallocateResourcesLocal, reallocateResourcesDeep } from '@/lib/ai/aiResourceReallocator';
@@ -36,7 +37,7 @@ export function AIConstraintSolverWidget({ state }: { state: AppState }) {
   const emptyMsg = tab === 'new' ? '所有任务已分配' : '当前分配无优化空间';
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm">
+    <div className="bg-card rounded-xl border border-border shadow-sm">
       <div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border">
         <Shuffle size={18} className="text-violet-500" />
         <h2 className="font-semibold text-sm md:text-base">约束求解</h2>
@@ -92,7 +93,7 @@ export function AIResourceReallocWidget({ state }: { state: AppState }) {
   const ACTION_LABELS: Record<string, string> = { move: '迁移', share: '共享', defer: '延缓', escalate: '升级', split: '拆分' };
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm">
+    <div className="bg-card rounded-xl border border-border shadow-sm">
       <div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border">
         <ArrowRightLeft size={18} className="text-teal-500" />
         <h2 className="font-semibold text-sm md:text-base">资源再分配</h2>
@@ -109,7 +110,7 @@ export function AIResourceReallocWidget({ state }: { state: AppState }) {
             <div><p className="text-xs font-semibold text-green-600 mb-1">闲置容量</p>{result.imbalance.underloadedMembers.map((m, i) => <p key={i} className="text-xs text-muted-foreground pl-2">• {m.memberName}: 余{m.capacityRemaining}%</p>)}</div>
           )}
           {result.suggestions.length === 0 ? (
-            <p className="text-xs text-muted-foreground">资源分配均衡，无需调整</p>
+            <EmptyState title="资源分配均衡，无需调整" compact />
           ) : result.suggestions.slice(0, 5).map((s, i) => (
             <div key={i} className="flex items-start gap-2 py-1.5">
               <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${URGENCY_COLORS[s.urgency] || 'bg-gray-50 text-gray-600'}`}>{URGENCY_LABELS[s.urgency] || s.urgency}</span>
@@ -148,7 +149,7 @@ export function AIVisionStrategyWidget({ state }: { state: AppState }) {
   const SEVERITY_COLORS: Record<string, string> = { high: 'bg-red-50 text-red-700', medium: 'bg-amber-50 text-amber-700', low: 'bg-blue-50 text-blue-700' };
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm">
+    <div className="bg-card rounded-xl border border-border shadow-sm">
       <div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border">
         <Eye size={18} className="text-sky-500" />
         <h2 className="font-semibold text-sm md:text-base">愿景策略级联</h2>
@@ -200,7 +201,7 @@ export function AICapabilityGapWidget({ state }: { state: AppState }) {
   const STRATEGY_LABELS: Record<string, string> = { training: '培训', hiring: '招聘', reassignment: '调配', outsourcing: '外协', tooling: '工具' };
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm">
+    <div className="bg-card rounded-xl border border-border shadow-sm">
       <div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border">
         <GraduationCap size={18} className="text-orange-500" />
         <h2 className="font-semibold text-sm md:text-base">能力缺口诊断</h2>
@@ -211,7 +212,7 @@ export function AICapabilityGapWidget({ state }: { state: AppState }) {
       {result && (
         <div className="p-4 md:px-5 space-y-3">
           {result.gaps.length === 0 ? (
-            <p className="text-xs text-muted-foreground">团队能力充足，无显著缺口</p>
+            <EmptyState title="团队能力充足，无显著缺口" compact />
           ) : result.gaps.slice(0, 4).map((g, i) => (
             <div key={i} className="py-1.5">
               <div className="flex items-center gap-2">
@@ -247,7 +248,7 @@ export function AIMethodologyEvolutionWidget({ state }: { state: AppState }) {
   }, [state, deepLoading]);
 
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm">
+    <div className="bg-card rounded-xl border border-border shadow-sm">
       <div className="flex items-center gap-2 px-4 md:px-5 py-4 border-b border-border">
         <Dna size={18} className="text-pink-500" />
         <h2 className="font-semibold text-sm md:text-base">方法论进化</h2>
@@ -258,7 +259,7 @@ export function AIMethodologyEvolutionWidget({ state }: { state: AppState }) {
       {result && (
         <div className="p-4 md:px-5 space-y-3">
           {result.weightAdjustments.length === 0 ? (
-            <p className="text-xs text-muted-foreground">方法论权重稳定，暂无调整</p>
+            <EmptyState title="方法论权重稳定，暂无调整" compact />
           ) : result.weightAdjustments.map((w, i) => (
             <div key={i} className="flex items-center gap-2 py-1">
               <span className={`text-xs px-1.5 py-0.5 rounded ${w.newWeight > w.oldWeight ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{w.newWeight > w.oldWeight ? '↑' : '↓'}</span>

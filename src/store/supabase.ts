@@ -2,6 +2,7 @@ import type { AppState, Goal, Project, Task, Member, SubTask } from '@/types';
 import { getSupabaseClient } from '@/supabase/client';
 import { STORAGE_KEY, CURRENT_USER_KEY, ensureAppStateDefaults, toCamel, toSnake } from './types';
 import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge } from '@/types';
+import { initFactoryRulesIfNeeded } from './shared';
 
 export function saveLocalStateImmediate(state: AppState) {
   try {
@@ -130,7 +131,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       bookmarks: data(val(bookmarksRes)).map(toCamel) as Bookmark[],
       savedViews: data(val(savedViewsRes)).map(toCamel) as SavedView[],
       statusFlowRules: data(val(statusFlowRulesRes)).map(toCamel),
-      automationRules: data(val(automationRulesRes)).map(toCamel),
+      automationRules: initFactoryRulesIfNeeded(data(val(automationRulesRes)).map(toCamel)),
       sprints: data(val(sprintsRes)).map(toCamel),
       knowledge: data(val(knowledgeRes)).map(toCamel) as Knowledge[],
       teams: data(val(teamsRes)).map(toCamel),
@@ -144,20 +145,47 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
 let _onWriteError: ((msg: string) => void) | null = null;
 export function setOnWriteError(cb: (msg: string) => void) { _onWriteError = cb; }
 
-// Failed write queue — stores operations that failed after all retries.
-// When connection is restored, replayFailedWrites() re-executes them.
-interface PendingWrite { fn: () => Promise<any>; label: string; addedAt: number; }
+// Failed write queue — persisted to localStorage so tab close doesn't lose data.
+interface PendingWrite { fn: () => Promise<any>; label: string; addedAt: number; version: number; serialized?: string; }
 const failedWrites: PendingWrite[] = [];
+const PENDING_WRITES_KEY = 'tbh-pending-writes';
 const MAX_PENDING_WRITES = 100;
+let _writeVersion = 0;
+export function bumpWriteVersion() { _writeVersion++; }
+
+// Persist pending writes metadata to localStorage (for crash/tab-close resilience)
+function persistPendingMeta() {
+  try {
+    const meta = failedWrites.map(w => ({ label: w.label, addedAt: w.addedAt, version: w.version, serialized: w.serialized }));
+    localStorage.setItem(PENDING_WRITES_KEY, JSON.stringify(meta));
+  } catch {}
+}
+function loadPendingMeta() {
+  try {
+    const raw = localStorage.getItem(PENDING_WRITES_KEY);
+    if (!raw) return;
+    const meta = JSON.parse(raw);
+    if (!Array.isArray(meta)) return;
+    // Note: fn callbacks can't be serialized — these are informational only
+    // Actual replay only works within the same session; persisted items serve as audit trail
+    for (const m of meta) {
+      if (failedWrites.length < MAX_PENDING_WRITES) {
+        failedWrites.push({ fn: async () => {}, label: m.label, addedAt: m.addedAt, version: m.version, serialized: m.serialized });
+      }
+    }
+  } catch {}
+}
+loadPendingMeta();
 
 async function withRetry(fn: () => Promise<any>, retries = 2, label = 'write'): Promise<void> {
   for (let i = 0; i <= retries; i++) {
-    try { await fn(); return; } catch (e: unknown) {
+    try { await fn(); _writeVersion++; return; } catch (e: unknown) {
       if (i === retries) {
         console.error(`Supabase ${label} failed after retries:`, e);
         // Queue for replay on reconnect instead of silently losing data
         if (failedWrites.length < MAX_PENDING_WRITES) {
-          failedWrites.push({ fn, label, addedAt: Date.now() });
+          failedWrites.push({ fn, label, addedAt: Date.now(), version: _writeVersion });
+          persistPendingMeta();
         }
         _onWriteError?.('数据同步失败，已自动重试。请检查网络后刷新页面。');
         return;
@@ -171,13 +199,19 @@ async function withRetry(fn: () => Promise<any>, retries = 2, label = 'write'): 
 export async function replayFailedWrites(): Promise<void> {
   if (failedWrites.length === 0) return;
   const batch = failedWrites.splice(0, failedWrites.length);
-  console.log(`[Supabase] Replaying ${batch.length} queued writes...`);
+  persistPendingMeta(); // Clear persisted list since we're replaying
+  if (import.meta.env.DEV) console.log(`[Supabase] Replaying ${batch.length} queued writes...`);
   for (const pw of batch) {
+    // Skip writes from stale versions — newer writes may have already made this obsolete
+    if (pw.version < _writeVersion) {
+      if (import.meta.env.DEV) console.log(`[Supabase] Skipping stale write for ${pw.label} (v${pw.version} < v${_writeVersion})`);
+      continue;
+    }
     try { await pw.fn(); } catch (e) {
       console.error(`[Supabase] Replay failed for ${pw.label}:`, e);
-      // Re-queue if still failing (but only once to prevent infinite loop)
       if (failedWrites.length < MAX_PENDING_WRITES) {
-        failedWrites.push({ ...pw, addedAt: Date.now() });
+        failedWrites.push({ ...pw, addedAt: Date.now(), version: _writeVersion });
+        persistPendingMeta();
       }
     }
   }

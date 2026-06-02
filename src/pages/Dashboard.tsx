@@ -1,16 +1,19 @@
 /**
- * 工作台 — 5 Tab 布局（参照 Admin.tsx）
- * Tab: 业务现况 / 风险智能 / 后续计划 / 甘特图 / 其他
+ * 工作台 — 6 Tab 布局
+ * Tab: 我的今日 / 业务现况 / 风险智能 / 后续计划 / 甘特图 / 其他
+ * 非管理员默认"我的今日"，管理员/经理默认"业务现况"
  */
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
-import { useStore, useViewingMember } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useViewingMember } from '@/store/hooks';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import { GanttModal } from '@/components/GanttModal';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
-import { TrendingUp, AlertTriangle, Calendar, BarChart3, Settings, CheckCircle2, X, Rocket, UserPlus, Sparkles, Target, Zap, ListTodo } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Calendar, BarChart3, Settings, CheckCircle2, X, Rocket, UserPlus, Sparkles, Target, Zap, ListTodo, Sun } from 'lucide-react';
 
 // ── 懒加载 Tab 组件 ──
+const MyTodayTab = lazy(() => import('./dashboard/MyTodayTab'));
 const BusinessTab = lazy(() => import('./dashboard/BusinessTab'));
 const RiskAITab = lazy(() => import('./dashboard/RiskAITab'));
 const PlansTab = lazy(() => import('./dashboard/PlansTab'));
@@ -18,9 +21,10 @@ const GanttTab = lazy(() => import('./dashboard/GanttTab'));
 const OtherTab = lazy(() => import('./dashboard/OtherTab'));
 
 // ── Tab 类型 & 配置 ──
-type DashboardTab = 'business' | 'riskAI' | 'plans' | 'gantt' | 'other';
+type DashboardTab = 'myToday' | 'business' | 'riskAI' | 'plans' | 'gantt' | 'other';
 
 const tabItems: { key: DashboardTab; label: string; icon: typeof TrendingUp }[] = [
+  { key: 'myToday', label: '我的今日', icon: Sun },
   { key: 'business', label: '业务现况', icon: TrendingUp },
   { key: 'riskAI', label: '风险智能', icon: AlertTriangle },
   { key: 'plans', label: '后续计划', icon: Calendar },
@@ -29,7 +33,7 @@ const tabItems: { key: DashboardTab; label: string; icon: typeof TrendingUp }[] 
 ];
 
 const TAB_LABELS: Record<DashboardTab, string> = {
-  business: '业务现况', riskAI: '风险智能', plans: '后续计划', gantt: '甘特图', other: '其他',
+  myToday: '我的今日', business: '业务现况', riskAI: '风险智能', plans: '后续计划', gantt: '甘特图', other: '其他',
 };
 
 // ── 新手引导模板 ──
@@ -48,7 +52,10 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
   const { state, dispatch } = useStore();
   const { isTeamView, viewingMember } = useViewingMember();
 
-  const [tab, setTab] = useState<DashboardTab>('business');
+  // 非管理员默认"我的今日"，管理员/经理默认"业务现况"
+  const userRole = state.currentUser?.role;
+  const defaultTab: DashboardTab = (userRole === 'admin' || userRole === 'manager' || userRole === 'leader') ? 'business' : 'myToday';
+  const [tab, setTab] = useState<DashboardTab>(defaultTab);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedItemType, setSelectedItemType] = useState<'goal' | 'project' | 'task' | null>(null);
   const [ganttModalOpen, setGanttModalOpen] = useState(false);
@@ -86,9 +93,10 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
   }, []);
 
   return (
-    <div className="h-full flex flex-col p-4 md:p-6 space-y-4 animate-fade-in">
-      {/* 标题行 */}
-      <div className="flex items-center justify-between gap-2">
+    <div className="h-full flex flex-col animate-fade-in">
+      {/* 标题行 — 固定不滚动 */}
+      <div className="flex-shrink-0 px-4 md:px-6 pt-4 md:pt-6 pb-2">
+        <div className="flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0">
           {!isTeamView && viewingMember ? (
             <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2">
@@ -106,9 +114,14 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
           )}
         </div>
       </div>
+      </div>
 
-      <ViewModeSwitch items={tabItems.map(t => ({ value: t.key, label: t.label, icon: t.icon }))} value={tab} onChange={v => setTab(v as DashboardTab)} size="sm" />
+      <div className="flex-shrink-0 px-4 md:px-6 pb-2">
+        <ViewModeSwitch items={tabItems.map(t => ({ value: t.key, label: t.label, icon: t.icon }))} value={tab} onChange={v => setTab(v as DashboardTab)} size="sm" />
+      </div>
 
+      {/* 可滚动内容区域 — 移动端额外底部留白避免被底栏遮挡 */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pb-20 md:pb-4">
       {/* 新手引导 OR Tab 内容 */}
       {isNewUser ? (
         <div className="bg-gradient-to-br from-primary/5 via-white to-primary/10 rounded-2xl border border-primary/20 shadow-sm p-6 md:p-8 space-y-6 animate-fade-in">
@@ -131,9 +144,9 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
               {ONBOARDING_TEMPLATES.map(t => (
                 <button key={t.id} onClick={() => {
                   if (t.id === 'okr') {
-                    dispatch({ type: 'ADD_GOAL', payload: { title: 'Q1 核心目标', description: '本季度最重要的目标', priority: 'high', status: 'in_progress', leaderId: state.currentUser?.id || '', supporterIds: [], tags: ['OKR'], keyResults: [{ title: '关键结果1', targetValue: 100, currentValue: 0 }, { title: '关键结果2', targetValue: 100, currentValue: 0 }], startDate: new Date().toISOString().split('T')[0], dueDate: new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0] } });
+                    dispatch({ type: 'ADD_GOAL', payload: { title: 'Q1 核心目标', description: '本季度最重要的目标', priority: 'high', status: 'in_progress', leaderId: state.currentUser?.id || '', supporterIds: [], tags: ['OKR'], keyResults: [{ title: '关键结果1', targetValue: 100, currentValue: 0 }, { title: '关键结果2', targetValue: 100, currentValue: 0 }], startDate: new Date().toISOString().split('T')[0], endDate: new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0] } });
                   } else if (t.id === 'agile') {
-                    dispatch({ type: 'ADD_PROJECT', payload: { title: '首个冲刺项目', description: '敏捷迭代项目', priority: 'medium', status: 'in_progress', leaderId: state.currentUser?.id || '', supporterIds: [], tags: ['敏捷'], startDate: new Date().toISOString().split('T')[0], dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0] } });
+                    dispatch({ type: 'ADD_PROJECT', payload: { title: '首个冲刺项目', description: '敏捷迭代项目', priority: 'medium', status: 'in_progress', leaderId: state.currentUser?.id || '', supporterIds: [], tags: ['敏捷'], startDate: new Date().toISOString().split('T')[0], endDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0] } });
                   } else {
                     dispatch({ type: 'ADD_TASK', payload: { title: '第一个任务', description: '从简单任务开始', priority: 'medium', status: 'todo', leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], category: '', subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', blockedBy: [], dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0], startDate: new Date().toISOString().split('T')[0] } });
                   }
@@ -178,6 +191,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
         </div>
       ) : (
         <div key={tab} className="animate-fade-in">
+          {tab === 'myToday' && <TabErrorBoundary key="myToday" name={TAB_LABELS.myToday}><Suspense fallback={<TabLoader />}><MyTodayTab onOpenDetail={openDetail} onPageChange={onPageChange} /></Suspense></TabErrorBoundary>}
           {tab === 'business' && <TabErrorBoundary key="business" name={TAB_LABELS.business}><Suspense fallback={<TabLoader />}><BusinessTab {...tabCallbacks} /></Suspense></TabErrorBoundary>}
           {tab === 'riskAI' && <TabErrorBoundary key="riskAI" name={TAB_LABELS.riskAI}><Suspense fallback={<TabLoader />}><RiskAITab {...tabCallbacks} /></Suspense></TabErrorBoundary>}
           {tab === 'plans' && <TabErrorBoundary key="plans" name={TAB_LABELS.plans}><Suspense fallback={<TabLoader />}><PlansTab {...tabCallbacks} /></Suspense></TabErrorBoundary>}
@@ -185,6 +199,8 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
           {tab === 'other' && <TabErrorBoundary key="other" name={TAB_LABELS.other}><Suspense fallback={<TabLoader />}><OtherTab {...tabCallbacks} /></Suspense></TabErrorBoundary>}
         </div>
       )}
+
+      </div>{/* end scrollable content area */}
 
       {/* 全局浮层：详情面板 + 甘特图弹窗 */}
       {selectedItemId && selectedItemType && (

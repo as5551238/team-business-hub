@@ -174,8 +174,8 @@ export async function callMCPTool(
 
   try {
     return await tool.execute(args, context);
-  } catch (e: any) {
-    return { success: false, error: e.message };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 

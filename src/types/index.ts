@@ -402,8 +402,8 @@ export interface StatusFlowAutoAction {
 }
 
 // ==================== 自动化规则 ====================
-export type AutomationTrigger = 'status_change' | 'due_arrive' | 'item_created' | 'field_change';
-export type AutomationAction = 'notify' | 'set_field' | 'create_subtask' | 'assign' | 'escalation';
+export type AutomationTrigger = 'status_change' | 'due_arrive' | 'item_created' | 'field_change' | 'kr_lag' | 'overdue';
+export type AutomationAction = 'notify' | 'set_field' | 'create_subtask' | 'assign' | 'escalation' | 'ai_action';
 
 export interface AutomationRule {
   id: string;
@@ -411,7 +411,7 @@ export interface AutomationRule {
   enabled: boolean;
   itemType: ItemType;
   trigger: AutomationTrigger;
-  condition: { field: string; operator: 'eq' | 'neq' | 'contains' | 'empty' | 'not_empty'; value: string };
+  condition: { field: string; operator: 'eq' | 'neq' | 'contains' | 'empty' | 'not_empty' | 'gt' | 'lt'; value: string };
   actions: { type: AutomationAction; config: Record<string, string> }[];
   createdAt: string;
   updatedAt: string;

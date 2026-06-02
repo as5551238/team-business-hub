@@ -27,7 +27,7 @@ export const TaskCard = React.memo(function TaskCard({ task, compact, tags, comm
   const cc = commentCounts[task.id] || 0;
   const uniqueTags = (task.tags || []).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
   return (
-    <div data-item-id={task.id} data-item-type="task" className={cn('bg-white rounded-lg border border-border shadow-sm p-3 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer group', overdue && 'border-l-4 border-l-red-400', compact && 'p-2')} draggable={!!enableDrag} onDragStart={(e: React.DragEvent) => { e.dataTransfer.setData('text/plain', task.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => onOpenDetail(task)}>
+    <div data-item-id={task.id} data-item-type="task" className={cn('bg-card rounded-lg border border-border shadow-sm p-3 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer group', overdue && 'border-l-4 border-l-red-400', compact && 'p-2')} draggable={!!enableDrag} onDragStart={(e: React.DragEvent) => { e.dataTransfer.setData('text/plain', task.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => onOpenDetail(task)}>
       {batchProps.batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded" onChange={e => { e.stopPropagation(); batchProps.onToggleSelect(task.id); }} /></div>}
       <div className="flex items-center gap-2 mb-1.5">
         <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-bold', bpC.color)}>{bpC.label}</span>

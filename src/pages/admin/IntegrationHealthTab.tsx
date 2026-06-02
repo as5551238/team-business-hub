@@ -11,6 +11,7 @@ import { useState, useMemo } from 'react';
 import { getPushConfigs } from '@/lib/pushConnector';
 import { loadOAuthStatuses, PROVIDER_LABELS, type OAuthProvider } from '@/lib/oauthIntegration';
 import { CheckCircle2, XCircle, AlertTriangle, Activity, Globe, Bell, Link2, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface HealthStatus {
   name: string;
@@ -95,15 +96,15 @@ export function IntegrationHealthTab() {
 
       {/* 概览 */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Wifi size={12} className="text-green-500" />已连接</div>
           <div className="text-xl font-bold text-green-600">{connectedCount}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><WifiOff size={12} className="text-red-500" />断开</div>
           <div className="text-xl font-bold text-red-600">{totalChannels - connectedCount}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Globe size={12} />总通道</div>
           <div className="text-xl font-bold">{totalChannels}</div>
         </div>

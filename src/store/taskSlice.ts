@@ -3,6 +3,7 @@ import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete, logActivity } from './supabase';
 import { genId } from './utils';
 import { needMutate, reducerCanDelete, notifyAssigned, calcProjectProgress, calcGoalProgress, clampTitle, clampDesc, markPendingDelete, diffAssigned, resolveInheritedPriority, matchCondition, executeAutomationActions, validateStatusFlow, tsNow, fireAutomationRules } from './shared';
+import { calcDualTrack } from '@/lib/kpiScoring';
 import { learnFromCompletedTask } from '@/lib/delayPrediction';
 
 const BLOCKED_BY_MAX = 20;
@@ -117,6 +118,19 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
             const pIdx = s.projects.findIndex(p => p.id === oldTask.projectId);
             if (pIdx !== -1) s.projects[pIdx].progress = calcProjectProgress(s.tasks, oldTask.projectId);
           }
+          // Auto-recalculate goal progress when task status changes (OKR↔Task closed loop)
+          const goalIds = new Set<string>();
+          const currentGoalId = updates.goalId !== undefined ? updates.goalId : oldTask.goalId;
+          if (currentGoalId) goalIds.add(currentGoalId);
+          if (oldTask.goalId && oldTask.goalId !== currentGoalId) goalIds.add(oldTask.goalId);
+          // Also update parent goal chain
+          for (const gid of goalIds) {
+            const gIdx = s.goals.findIndex(g => g.id === gid);
+            if (gIdx !== -1) {
+              s.goals[gIdx].progress = calcGoalProgress(s.goals, gid);
+              s.goals[gIdx].dualTrack = calcDualTrack(s.goals[gIdx].keyResults) ?? undefined;
+            }
+          }
         }
         // projectId 变更时，更新新老两个项目的进度和任务数
         if (updates.projectId !== undefined && updates.projectId !== oldTask.projectId) {
@@ -135,11 +149,19 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
             }
           }
         }
-        supabaseUpdate('tasks', action.payload.id, { ...updates, updated_at: now }, oldTask.updatedAt);
-        if ('leaderId' in updates || 'supporterIds' in updates) {
-          const newlyAssigned = diffAssigned(oldTask.leaderId, oldTask.supporterIds, updates.leaderId ?? oldTask.leaderId, updates.supporterIds ?? oldTask.supporterIds);
-          notifyAssigned(s, state.currentUser?.id, newlyAssigned, s.tasks[tIdx].title, s.tasks[tIdx].id, 'task');
+        // goalId 变更时，更新新老两个目标的进度 (OKR↔Task closed loop)
+        if (updates.goalId !== undefined && updates.goalId !== oldTask.goalId) {
+          if (oldTask.goalId) {
+            const gIdx = s.goals.findIndex(g => g.id === oldTask.goalId);
+            if (gIdx !== -1) { s.goals[gIdx].progress = calcGoalProgress(s.goals, oldTask.goalId); s.goals[gIdx].dualTrack = calcDualTrack(s.goals[gIdx].keyResults) ?? undefined; }
+          }
+          if (updates.goalId) {
+            const gIdx = s.goals.findIndex(g => g.id === updates.goalId);
+            if (gIdx !== -1) { s.goals[gIdx].progress = calcGoalProgress(s.goals, updates.goalId); s.goals[gIdx].dualTrack = calcDualTrack(s.goals[gIdx].keyResults) ?? undefined; }
+          }
         }
+        // Check blocked status BEFORE writing to Supabase to avoid two competing writes
+        let effectiveStatus = updates.status;
         if (updates.status && updates.status !== oldTask.status && (updates.status === 'in_progress' || updates.status === 'done')) {
           const currentBlockedBy = updates.blockedBy !== undefined ? updates.blockedBy : oldTask.blockedBy ?? [];
           const uncompleted = currentBlockedBy.filter(bid => {
@@ -148,11 +170,18 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
           });
           if (uncompleted.length > 0) {
             const names = uncompleted.map(bid => { const bt = s.tasks.find(t => t.id === bid); return bt ? bt.title : '已删除的任务'; });
+            effectiveStatus = 'blocked';
             s.tasks[tIdx].status = 'blocked';
             s.tasks[tIdx].updatedAt = now;
-            supabaseUpdate('tasks', action.payload.id, { status: 'blocked', updated_at: now }, oldTask.updatedAt);
             s.notifications.unshift({ id: genId('n'), type: 'sync', title: '任务被阻塞', message: `「${s.tasks[tIdx].title}」的前置任务「${names.join('、')}」尚未完成，已自动标记为阻塞`, relatedId: s.tasks[tIdx].id, relatedType: 'task', memberId: s.tasks[tIdx].leaderId || state.currentUser?.id || '', read: false, createdAt: new Date().toISOString() });
           }
+        }
+        // Single supabase write with resolved status (avoids race condition)
+        const finalUpdates = effectiveStatus === 'blocked' ? { ...updates, status: 'blocked' } : updates;
+        supabaseUpdate('tasks', action.payload.id, { ...finalUpdates, updated_at: now }, oldTask.updatedAt);
+        if ('leaderId' in updates || 'supporterIds' in updates) {
+          const newlyAssigned = diffAssigned(oldTask.leaderId, oldTask.supporterIds, updates.leaderId ?? oldTask.leaderId, updates.supporterIds ?? oldTask.supporterIds);
+          notifyAssigned(s, state.currentUser?.id, newlyAssigned, s.tasks[tIdx].title, s.tasks[tIdx].id, 'task');
         }
         // P1: 任务完成时学习偏差率（用于延期预测自学习）
         if (updates.status === 'done' && s.tasks[tIdx].status === 'done') {

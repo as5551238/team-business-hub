@@ -1,4 +1,4 @@
-export type AdminTab = 'team' | 'flow' | 'automation' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates';
+export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates';
 
 export const tabItems: { key: AdminTab; label: string; icon: any }[] = [
   { key: 'team', label: '团队', icon: 'Users' as any },

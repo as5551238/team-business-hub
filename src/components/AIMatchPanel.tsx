@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { X, Sparkles, Zap, UserPlus, Users, ListChecks, UserCheck } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useStore } from '@/store/useStore';
 import { matchTasksLocal, matchTasksDeep, type MatchResult, type TaskMatchResult } from '@/lib/ai/aiMatcher';
 import { loadAIConfig } from '@/lib/ai/types';
@@ -103,7 +104,7 @@ export function AIMatchPanel({ onClose }: AIMatchPanelProps) {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl border border-border w-[680px] max-h-[80vh] flex flex-col animate-fade-in" onClick={e => e.stopPropagation()}>
+      <div className="bg-card rounded-xl shadow-xl border border-border w-[680px] max-h-[80vh] flex flex-col animate-fade-in" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-lg font-bold">智能匹配</h2>
@@ -217,7 +218,7 @@ function TaskMatchCard({ match, memberMap, onAssign, taskAssigned }: TaskMatchCa
         {taskAssigned && <span className="text-[10px] text-green-600 font-medium">已分配</span>}
       </div>
       {match.candidates.length === 0 ? (
-        <p className="text-xs text-muted-foreground">无候选人</p>
+        <EmptyState title="无候选人" compact />
       ) : (
         <div className="space-y-1.5">
           {match.candidates.map((c, idx) => {

@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react';
-import { useStore, useActiveMembers } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useActiveMembers } from '@/store/hooks';
 import type { Goal, Project, Task, ItemType } from '@/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Users, AlertTriangle } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 import { Section } from './detail-shared';
 
@@ -49,7 +51,7 @@ export function DetailPeople({ itemType, itemId, goal, project, task, canEdit, u
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground">主导人</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1 bg-white" value={leaderId} onChange={e => handleLeaderChange(e.target.value)}>
+            <select className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1 bg-card" value={leaderId} onChange={e => handleLeaderChange(e.target.value)}>
               <option value="">未指定</option>
               {activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
@@ -72,7 +74,7 @@ export function DetailPeople({ itemType, itemId, goal, project, task, canEdit, u
       {itemType === 'task' && (
         <Section title="前置任务" icon={<AlertTriangle className="w-3.5 h-3.5" />}>
           <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">设置前置任务后，这些任务完成前无法开始或完成当前任务</p>
+            <EmptyState title="设置前置任务后，这些任务完成前无法开始或完成当前任务" compact />
             {blockedBy.length > 0 && (
               <div className="space-y-1">
                 {blockedBy.map(bid => {

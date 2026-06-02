@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useStore, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { usePermissions } from '@/store/hooks';
 import type { Goal, TaskPriority } from '@/types';
 import { useVirtualScroll } from '@/hooks/useVirtualScroll';
 import {
@@ -55,7 +56,7 @@ export const GoalCard = React.memo(function GoalCard({ goal, members, projects, 
   }
 
   return (
-    <div data-item-id={goal.id} data-item-type="goal" className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all ${dragOver ? 'border-primary ring-2 ring-primary/30 shadow-md' : 'border-border'}`} draggable onDragStart={handleDragStart} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={onOpenDetail}>
+    <div data-item-id={goal.id} data-item-type="goal" className={`bg-card rounded-xl border shadow-sm overflow-hidden transition-all ${dragOver ? 'border-primary ring-2 ring-primary/30 shadow-md' : 'border-border'}`} draggable onDragStart={handleDragStart} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={onOpenDetail}>
       <div className="p-3 md:p-4">
         <div className="flex items-start gap-2 md:gap-3 mb-3">
           {batchMode ? (
@@ -102,7 +103,7 @@ export const GoalCard = React.memo(function GoalCard({ goal, members, projects, 
             {showMenu && (
               <div className="relative">
                 <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
-                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border z-50 py-1">
+                <div className="absolute right-0 top-full mt-1 w-36 bg-card rounded-lg shadow-lg border z-50 py-1">
                   {can('goals_edit') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setShowMenu(false); }}><Edit2 size={14} /> 编辑目标</button>}
                   {can('goals_edit') && goal.status !== 'done' && (
                     <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_GOAL', payload: { id: goal.id, updates: { status: 'done' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 标记完成</button>
@@ -315,7 +316,7 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
           {showMenuId === goal.id && (
             <div className="relative">
               <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
-              <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border z-50 py-1">
+              <div className="absolute right-0 top-full mt-1 w-32 bg-card rounded-lg shadow-lg border z-50 py-1">
                 <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); }}><Edit2 size={12} /> 编辑</button>
                 {can('goals_delete') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此目标？')) return; dispatch({ type: 'DELETE_GOAL', payload: goal.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
               </div>
@@ -328,7 +329,7 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
 
   if (needsVirtual) {
     return (
-      <div className="bg-white rounded-xl border overflow-hidden">
+      <div className="bg-card rounded-xl border overflow-hidden">
         <div ref={virtual.scrollRef} className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }} onScroll={virtual.onScroll}>
           <div style={{ height: virtual.totalHeight, overflow: 'hidden' }}>
             <div style={{ transform: `translateY(${virtual.startIdx * LIST_ROW_H}px)` }}>
@@ -341,7 +342,7 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
   }
 
   return (
-    <div className="bg-white rounded-xl border divide-y">
+    <div className="bg-card rounded-xl border divide-y">
       {visibleItems.map(listItem)}
     </div>
   );
@@ -357,7 +358,7 @@ const GoalMatrixQuadrantCard = React.memo(function GoalMatrixQuadrantCard({ goal
     e.currentTarget.classList.add('opacity-30', 'scale-95');
   };
   return (
-    <div className="bg-white rounded-lg border p-2.5 md:p-3 hover:shadow-sm transition-shadow cursor-pointer select-none" onMouseDown={handleDown} onTouchStart={handleDown} onClick={() => onOpenDetail(goal.id)}>
+    <div className="bg-card rounded-lg border p-2.5 md:p-3 hover:shadow-sm transition-shadow cursor-pointer select-none" onMouseDown={handleDown} onTouchStart={handleDown} onClick={() => onOpenDetail(goal.id)}>
       <div className="flex items-center justify-between gap-1 mb-1.5">
         <span className="text-xs font-medium truncate flex-1">{goal.title}</span>
         <span className={`text-[10px] px-1 py-0.5 rounded flex-shrink-0 ${bizColors[goal.priority]}`}>{bizLabels[goal.priority]}</span>

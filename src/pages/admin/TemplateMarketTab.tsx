@@ -24,6 +24,7 @@ import {
   Tag,
   FileText,
 } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 // ===== 类型定义 =====
 
@@ -213,7 +214,7 @@ function TemplateCard({
             <div className="text-[10px] font-semibold text-muted-foreground">包含项目</div>
             <div className="flex flex-wrap gap-2">
               {template.projects.map((p, pi) => (
-                <div key={pi} className="flex items-center gap-1 px-2 py-1 rounded bg-white border text-[11px]">
+                <div key={pi} className="flex items-center gap-1 px-2 py-1 rounded bg-card border text-[11px]">
                   <FileText size={10} className="text-muted-foreground" />
                   <span className="font-medium">{p.title}</span>
                   <span className="text-muted-foreground">({p.taskCount}个任务)</span>
@@ -319,19 +320,19 @@ export function TemplateMarketTab() {
     <div className="space-y-4">
       {/* 概览 */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><LayoutTemplate size={12} />模板总数</div>
           <div className="text-xl font-bold">{TEMPLATE_CATALOG.length}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Download size={12} />总部署次数</div>
           <div className="text-xl font-bold text-green-600">{TEMPLATE_CATALOG.reduce((s, t) => s + t.useCount, 0)}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Lightbulb size={12} />分类数</div>
           <div className="text-xl font-bold">{Object.keys(CATEGORY_CONFIG).length - 1}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><CheckCircle2 size={12} />已部署</div>
           <div className="text-xl font-bold text-blue-600">{deployedIds.size}</div>
         </div>

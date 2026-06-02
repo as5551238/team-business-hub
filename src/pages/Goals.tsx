@@ -1,12 +1,16 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { useStore, useTags, useViewingMember, useMemberLookup, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useTags, useViewingMember, useMemberLookup, usePermissions } from '@/store/hooks';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
-import { Trash2, Edit2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check } from 'lucide-react';
+import { Trash2, Edit2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check, Users } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import { FilterChipSelect } from '@/components/FilterChipSelect';
 import { cn } from '@/lib/utils';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
+import { filterViewModes, computeUserLevel } from '@/lib/progressiveDisclosure';
 import {
   GoalCard, GoalTreeNode, GoalListView, GoalMatrixView
 } from './goals/views';
@@ -21,10 +25,15 @@ export default function Goals() {
   const { can } = usePermissions();
   const { tags } = useTags();
   const { isTeamView, viewingMember, viewingMemberId, setViewingMember } = useViewingMember();
+  const { onlineUsers } = useCollabPresence(state.currentUser?.id || '', state.currentUser?.name || '');
+  const { broadcastOp } = useCollabBroadcast(state.currentUser?.id || '');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showAIFlow, setShowAIFlow] = useState(false);
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('detail');
+  // L6: 渐进披露 — 如果当前 viewMode 被过滤掉，回退到 detail
+  const allowedGoalModes = filterViewModes('goals', VALID_VIEW_MODES);
+  const effectiveViewMode = allowedGoalModes.includes(viewMode) ? viewMode : 'detail';
   const [detailItem, setDetailItem] = useState<{ type: 'goal'; id: string } | null>(null);
   useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d && d.itemType === 'goal') setDetailItem({ type: 'goal', id: d.itemId }); }; window.addEventListener('tbh-open-detail', h); return () => window.removeEventListener('tbh-open-detail', h); }, []);
   useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (!d || d.page !== 'goals') return; if (d.statuses) setSelectedStatuses(new Set(d.statuses as string[])); }; window.addEventListener('tbh-nav-filter', h); return () => window.removeEventListener('tbh-nav-filter', h); }, []);
@@ -48,63 +57,12 @@ export default function Goals() {
   const [batchAssignee, setBatchAssignee] = useState('');
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
-  // Keyboard event handlers for j/k/e/d/x navigation + batch toggle
-  useEffect(() => {
-    const getFilteredIds = () => filteredGoals.map(g => g.id);
-    const onNavDown = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : -1; setFocusedId(ids[Math.min(idx + 1, ids.length - 1)]); };
-    const onNavUp = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : 0; setFocusedId(ids[Math.max(idx - 1, 0)]); };
-    const onEdit = () => { if (focusedId) setDetailItem({ type: 'goal', id: focusedId }); };
-    const onOpen = () => { if (focusedId) setDetailItem({ type: 'goal', id: focusedId }); };
-    const onDelete = () => { if (focusedId && can('goal_delete')) dispatch({ type: 'DELETE_GOAL', payload: focusedId }); };
-    const onComplete = () => { if (focusedId) { const goal = state.goals.find(g => g.id === focusedId); if (goal) dispatch({ type: 'UPDATE_GOAL', payload: { id: focusedId, updates: { status: goal.status === 'done' ? 'in_progress' : 'done' } } }); } };
-    const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
-    const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (VALID_VIEW_MODES.includes(mode as ViewMode)) setViewMode(mode as ViewMode); };
-    const onToggleBatch = () => { setBatchMode(prev => !prev); if (batchMode) setSelectedIds(new Set()); };
-    window.addEventListener('tbh-nav-down', onNavDown);
-    window.addEventListener('tbh-nav-up', onNavUp);
-    window.addEventListener('tbh-edit-selected', onEdit);
-    window.addEventListener('tbh-open-selected', onOpen);
-    window.addEventListener('tbh-delete-selected', onDelete);
-    window.addEventListener('tbh-complete-selected', onComplete);
-    window.addEventListener('tbh-focus-filter', onFilter);
-    window.addEventListener('tbh-switch-view', onViewSwitch);
-    window.addEventListener('tbh-toggle-batch', onToggleBatch);
-    return () => {
-      window.removeEventListener('tbh-nav-down', onNavDown);
-      window.removeEventListener('tbh-nav-up', onNavUp);
-      window.removeEventListener('tbh-edit-selected', onEdit);
-      window.removeEventListener('tbh-open-selected', onOpen);
-      window.removeEventListener('tbh-delete-selected', onDelete);
-      window.removeEventListener('tbh-complete-selected', onComplete);
-      window.removeEventListener('tbh-focus-filter', onFilter);
-      window.removeEventListener('tbh-switch-view', onViewSwitch);
-      window.removeEventListener('tbh-toggle-batch', onToggleBatch);
-    };
-  }, [focusedId, filteredGoals, can, dispatch, batchMode]);
-
   const activeMembers = useMemo(() => state.members.filter(m => m.status === 'active'), [state.members]);
   const goalTemplates = useMemo(() => state.templates.filter(t => t.type === 'goal'), [state.templates]);
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
-  // All users default to team view — no auto-switch to personal view
-
-  const toggleExpand = useCallback((id: string) => {
-    setExpandedGoals(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
+  // filteredGoals MUST be declared before useEffect that references it (TDZ fix)
   const filteredGoals = useMemo(() => {
     let result = [...state.goals];
     if (selectedStatuses.size > 0) result = result.filter(g => selectedStatuses.has(g.status));
@@ -139,6 +97,63 @@ export default function Goals() {
     return result;
   }, [state.goals, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, selectedMembers, searchText, timeRange, todayStr, isTeamView, viewingMember]);
 
+  // P3#11 fix: reset focusedId when it's no longer in the filtered list
+  useEffect(() => {
+    if (focusedId && !filteredGoals.some(g => g.id === focusedId)) {
+      setFocusedId(null);
+    }
+  }, [filteredGoals, focusedId]);
+
+  // Keyboard event handlers for j/k/e/d/x navigation + batch toggle
+  useEffect(() => {
+    const getFilteredIds = () => filteredGoals.map(g => g.id);
+    const onNavDown = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : -1; setFocusedId(ids[Math.min(idx + 1, ids.length - 1)]); };
+    const onNavUp = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : 0; setFocusedId(ids[Math.max(idx - 1, 0)]); };
+    const onEdit = () => { if (focusedId) setDetailItem({ type: 'goal', id: focusedId }); };
+    const onOpen = () => { if (focusedId) setDetailItem({ type: 'goal', id: focusedId }); };
+    const onDelete = () => { if (focusedId && can('goal_delete')) dispatch({ type: 'DELETE_GOAL', payload: focusedId }); };
+    const onComplete = () => { const id = focusedId; if (id) { const goal = state.goals.find(g => g.id === id); if (goal) { const oldStatus = goal.status; const newStatus = goal.status === 'done' ? 'in_progress' : 'done'; dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: oldStatus, newValue: newStatus }); } } };
+    const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
+    const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (VALID_VIEW_MODES.includes(mode as ViewMode)) setViewMode(mode as ViewMode); };
+    const onToggleBatch = () => { setBatchMode(prev => !prev); setSelectedIds(new Set()); setBatchStatus(''); setBatchAssignee(''); };
+    window.addEventListener('tbh-nav-down', onNavDown);
+    window.addEventListener('tbh-nav-up', onNavUp);
+    window.addEventListener('tbh-edit-selected', onEdit);
+    window.addEventListener('tbh-open-selected', onOpen);
+    window.addEventListener('tbh-delete-selected', onDelete);
+    window.addEventListener('tbh-complete-selected', onComplete);
+    window.addEventListener('tbh-focus-filter', onFilter);
+    window.addEventListener('tbh-switch-view', onViewSwitch);
+    window.addEventListener('tbh-toggle-batch', onToggleBatch);
+    return () => {
+      window.removeEventListener('tbh-nav-down', onNavDown);
+      window.removeEventListener('tbh-nav-up', onNavUp);
+      window.removeEventListener('tbh-edit-selected', onEdit);
+      window.removeEventListener('tbh-open-selected', onOpen);
+      window.removeEventListener('tbh-delete-selected', onDelete);
+      window.removeEventListener('tbh-complete-selected', onComplete);
+      window.removeEventListener('tbh-focus-filter', onFilter);
+      window.removeEventListener('tbh-switch-view', onViewSwitch);
+      window.removeEventListener('tbh-toggle-batch', onToggleBatch);
+    };
+  }, [focusedId, filteredGoals, can, dispatch, batchMode]);
+
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedGoals(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
   const commentCounts = useMemo(() => {
     const map = new Map<string, number>();
     state.comments.forEach(c => {
@@ -151,7 +166,9 @@ export default function Goals() {
 
   const topGoals = useMemo(() => filteredGoals.filter(g => !g.parentId), [filteredGoals]);
   const goalsByStatus = useMemo(() => { const m: Record<string, Goal[]> = {}; filteredGoals.forEach(g => { (m[g.status] ||= []).push(g); }); return m; }, [filteredGoals]);
-  const emptyMessage = filteredGoals.length < state.goals.length ? '没有匹配的目标，试试调整筛选条件' : '暂无目标，点击「新建目标」开始规划';
+  const emptyMessage = filteredGoals.length < state.goals.length ? '没有匹配的目标，试试调整筛选条件' : '暂无目标';
+  const emptyAction = filteredGoals.length < state.goals.length ? undefined : '新建目标';
+  const emptyDesc = filteredGoals.length < state.goals.length ? undefined : '设定团队目标，驱动关键结果达成';
 
   const activeFilterCount = (selectedStatuses.size > 0 ? 1 : 0) + (selectedPriorities.size > 0 ? 1 : 0) + (selectedLevels.size > 0 ? 1 : 0) + (selectedCategories.size > 0 ? 1 : 0) + (selectedTags.size > 0 ? 1 : 0) + (selectedMembers.size > 0 ? 1 : 0) + (timeRange !== 'all' ? 1 : 0) + (searchText.trim().length > 0 ? 1 : 0);
 
@@ -174,6 +191,7 @@ export default function Goals() {
     if (!batchStatus) return;
     selectedIds.forEach(id => {
       dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: batchStatus as GoalStatus } } });
+      broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: '', newValue: batchStatus });
     });
     setSelectedIds(new Set());
     setBatchStatus('');
@@ -245,7 +263,12 @@ export default function Goals() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold">目标管理</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">管理团队目标，确保业务方向一致性</p>
+          {onlineUsers.length > 1 && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground ml-2">
+              <Users size={12} /> {onlineUsers.length}人在线
+            </span>
+          )}
+          <EmptyState title="管理团队目标，确保业务方向一致性" compact />
         </div>
         <div className="flex items-center gap-2">
           {batchMode && selectedIds.size > 0 && (
@@ -254,7 +277,7 @@ export default function Goals() {
                <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (!can('goals_delete')) return; handleBatchDelete(); }}>
                  <Trash2 size={12} /> 删除
                </button>
-              <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
+              <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-card focus:outline-none">
                 <option value="">改状态</option>
                 <option value="todo">待办</option>
                 <option value="in_progress">进行中</option>
@@ -263,7 +286,7 @@ export default function Goals() {
                 <option value="cancelled">已取消</option>
               </select>
               {batchStatus && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={handleBatchStatus}>确认</button>}
-              <select value={batchAssignee} onChange={e => setBatchAssignee(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-white focus:outline-none">
+              <select value={batchAssignee} onChange={e => setBatchAssignee(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-card focus:outline-none">
                 <option value="">分配给</option>
                 {activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
@@ -285,7 +308,7 @@ export default function Goals() {
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <ViewModeSwitch items={viewTabs.map(t => ({ value: t.value, label: t.label, icon: t.icon }))} value={viewMode} onChange={v => setViewMode(v as ViewMode)} />
+        <ViewModeSwitch items={viewTabs.filter(t => filterViewModes('goals', VALID_VIEW_MODES).includes(t.value)).map(t => ({ value: t.value, label: t.label, icon: t.icon }))} value={viewMode} onChange={v => setViewMode(v as ViewMode)} />
       </div>
 
       <div className="flex items-center gap-2 flex-wrap py-2">
@@ -304,42 +327,35 @@ export default function Goals() {
         <span className="text-xs text-muted-foreground ml-auto">{filteredGoals.length} 条</span>
       </div>
 
-      {viewMode === 'detail' && (
+      {effectiveViewMode === 'detail' && (
         <div className="space-y-4">
           {topGoals.map(goal => (
             <GoalTreeNode key={goal.id} goal={goal} filteredGoals={filteredGoals} members={state.members} projects={state.projects} expandedGoals={expandedGoals} toggleExpand={toggleExpand} tags={tags} depth={0} onOpenDetail={() => setDetailItem({ type: 'goal', id: goal.id })} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
           ))}
           {topGoals.length === 0 && (
-            <div className="bg-white rounded-xl border p-12 text-center">
-              <Target size={40} className="mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-muted-foreground">{emptyMessage}</p>
+            <div className="bg-card rounded-xl border">
+              <EmptyState icon={Target} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} />
             </div>
           )}
         </div>
       )}
 
-      {viewMode === 'list' && (
+      {effectiveViewMode === 'list' && (
         <div>
           {filteredGoals.length > 0 ? (
             <GoalListView goals={filteredGoals} members={state.members} onOpenDetail={id => setDetailItem({ type: 'goal', id })} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
           ) : (
-            <div className="bg-white rounded-xl border p-12 text-center">
-              <Target size={40} className="mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-muted-foreground">{emptyMessage}</p>
-            </div>
+            <div className="bg-card rounded-xl border"><EmptyState icon={Target} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>
           )}
         </div>
       )}
 
-      {viewMode === 'matrix' && (
+      {effectiveViewMode === 'matrix' && (
         <div>
           {filteredGoals.length > 0 ? (
             <GoalMatrixView goals={filteredGoals} members={state.members} onOpenDetail={id => setDetailItem({ type: 'goal', id })} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
           ) : (
-            <div className="bg-white rounded-xl border p-12 text-center">
-              <Target size={40} className="mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-muted-foreground">{emptyMessage}</p>
-            </div>
+            <div className="bg-card rounded-xl border"><EmptyState icon={Target} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>
           )}
         </div>
       )}
@@ -347,7 +363,7 @@ export default function Goals() {
       {showCreateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => { setShowCreateDialog(false); setShowTemplateDropdown(false); }} />
-          <div className="relative bg-white rounded-xl shadow-xl border w-full max-w-lg animate-slide-up max-h-[90vh] flex flex-col">
+          <div className="relative bg-card rounded-xl shadow-xl border w-full max-w-lg animate-slide-up max-h-[90vh] flex flex-col">
             <div className="px-5 md:px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
               <h3 className="font-semibold">新建目标</h3>
               <button onClick={() => { setShowCreateDialog(false); setShowTemplateDropdown(false); }} className="p-1 rounded hover:bg-muted"><X size={16} /></button>
@@ -358,7 +374,7 @@ export default function Goals() {
                   <FileText size={14} /> 从模板创建 <ChevronDown size={12} />
                 </button>
                 {showTemplateDropdown && goalTemplates.length > 0 && (
-                  <div className="absolute z-30 bg-white border rounded-lg shadow-lg min-w-[200px] max-h-48 overflow-y-auto" style={{ marginTop: '-2px' }}>
+                  <div className="absolute z-30 bg-card border rounded-lg shadow-lg min-w-[200px] max-h-48 overflow-y-auto" style={{ marginTop: '-2px' }}>
                     {goalTemplates.map(tpl => (
                       <button key={tpl.id} className="w-full text-left px-3 py-2 text-xs hover:bg-muted" onClick={() => applyTemplate(tpl)}>
                         <div className="font-medium">{tpl.title}</div>
@@ -461,9 +477,9 @@ export default function Goals() {
          </div>
        )}
 
-      {viewMode === 'okr' && <OKRAlignmentView />}
+      {effectiveViewMode === 'okr' && <OKRAlignmentView />}
       </div>
-      {detailItem && <div className="flex-shrink-0 border-l border-border bg-white" style={{ width: 480 }}><ItemDetailPanel key={detailItem.id} inline isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} /></div>}
+      {detailItem && <div className="flex-shrink-0 border-l border-border bg-card" style={{ width: 480 }}><ItemDetailPanel key={detailItem.id} inline isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} /></div>}
 
       {showAIFlow && <AIItemFlow onClose={() => setShowAIFlow(false)} />}
     </div>

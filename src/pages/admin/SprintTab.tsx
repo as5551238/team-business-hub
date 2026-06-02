@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react';
-import { useStore, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { usePermissions } from '@/store/hooks';
 import type { Sprint, SprintStatus, Task } from '@/types';
 import { Plus, Trash2, Edit2, Play, CheckCircle, BarChart3, Clock, AlertTriangle } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const STATUS_LABELS: Record<SprintStatus, string> = { planning: '规划中', active: '进行中', completed: '已完成' };
@@ -112,13 +114,13 @@ export function SprintTab() {
          {canManage && <button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm({ name: '', startDate: '', endDate: '', goalIds: [], status: 'planning' }); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"><Plus size={14} /> 新建迭代</button>}
        </div>
 
-      {sprints.length === 0 && <p className="text-xs text-muted-foreground py-4 text-center">暂无迭代，创建第一个Sprint开始敏捷管理</p>}
+      {sprints.length === 0 && <EmptyState title="暂无迭代，创建第一个Sprint开始敏捷管理" compact />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {sprints.map(sp => {
           const stats = sprintStatsMap[sp.id];
           return (
-          <div key={sp.id} onClick={() => setSelectedSprintId(sp.id)} className={`p-3 border rounded-lg cursor-pointer transition-colors ${selectedSprintId === sp.id ? 'border-primary bg-primary/5' : 'border-border bg-white hover:bg-muted/30'}`}>
+          <div key={sp.id} onClick={() => setSelectedSprintId(sp.id)} className={`p-3 border rounded-lg cursor-pointer transition-colors ${selectedSprintId === sp.id ? 'border-primary bg-primary/5' : 'border-border bg-card hover:bg-muted/30'}`}>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">{sp.name}</span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLORS[sp.status]}`}>{STATUS_LABELS[sp.status]}</span>
@@ -152,7 +154,7 @@ export function SprintTab() {
       </div>
 
       {selectedSprint && (
-        <div className="border border-border rounded-lg p-4 space-y-4 bg-white">
+        <div className="border border-border rounded-lg p-4 space-y-4 bg-card">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold flex items-center gap-2"><BarChart3 size={16} className="text-primary" /> {selectedSprint.name}</h4>
             <div className="flex gap-3 text-xs">
@@ -210,13 +212,13 @@ export function SprintTab() {
             </div>
           )}
           {sprintTasks.length === 0 && selectedSprint && (
-            <p className="text-xs text-muted-foreground text-center py-2">该迭代暂无关联任务，请在任务详情中将任务分配到此迭代</p>
+            <EmptyState title="该迭代暂无关联任务，请在任务详情中将任务分配到此迭代" compact />
           )}
         </div>
       )}
 
       {showForm && (
-        <div className="border border-border rounded-lg p-4 space-y-3 bg-white">
+        <div className="border border-border rounded-lg p-4 space-y-3 bg-card">
           <h4 className="text-xs font-semibold">{editingId ? '编辑迭代' : '新建迭代'}</h4>
           <div>
             <label className="text-xs text-muted-foreground">名称</label>
@@ -241,7 +243,7 @@ export function SprintTab() {
                   <span className="truncate">{g.title}</span>
                 </label>
               ))}
-              {state.goals.length === 0 && <p className="text-xs text-muted-foreground">暂无目标</p>}
+              {state.goals.length === 0 && <EmptyState title="暂无目标" compact />}
             </div>
           </div>
           <div className="flex gap-2">

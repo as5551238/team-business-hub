@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { useStore, useViewingMember, useScheduleEvents } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useViewingMember, useScheduleEvents } from '@/store/hooks';
 import type { RepeatCycle } from '@/types';
 import {
   Calendar, ChevronLeft, ChevronRight, Plus, Edit2, Trash2,
@@ -70,7 +71,7 @@ export function ScheduleTab() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+      <div className="bg-card rounded-xl border border-border shadow-sm p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <button className="p-1.5 rounded-lg hover:bg-muted" onClick={prevMonth}><ChevronLeft size={18} /></button>
@@ -99,7 +100,7 @@ export function ScheduleTab() {
         </div>
       </div>
       {selectedEvt && (
-        <div className="bg-white rounded-xl border border-border shadow-sm p-5 space-y-3">
+        <div className="bg-card rounded-xl border border-border shadow-sm p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedEvt.color }} /><h3 className="font-semibold text-sm">{selectedEvt.title}</h3></div>
             <div className="flex items-center gap-2">
@@ -121,7 +122,7 @@ export function ScheduleTab() {
       {showDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => setShowDialog(false)} />
-          <div className="relative bg-white rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-border"><h3 className="font-semibold">{editingId ? '编辑日程' : '新建日程'}</h3></div>
             <div className="px-6 py-4 space-y-4">
               <div><label className="block text-sm font-medium mb-1">标题 *</label><input className={inputCls} placeholder="日程标题" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>

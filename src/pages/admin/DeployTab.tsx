@@ -23,7 +23,7 @@ export function DeployTab() {
   };
 
   const codeBlock = (title: string, filename: string, content: string, blockKey: string) => (
-    <div className="bg-white rounded-xl border border-border">
+    <div className="bg-card rounded-xl border border-border">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="font-semibold text-sm flex items-center gap-2"><FileText size={16} />{title}</h3>
         <button onClick={() => copyToClipboard(content, blockKey)} className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs hover:bg-muted transition-colors">
@@ -37,7 +37,7 @@ export function DeployTab() {
   return (
     <div className="space-y-6">
       {/* 概览 */}
-      <div className="bg-white rounded-xl border border-border p-4">
+      <div className="bg-card rounded-xl border border-border p-4">
         <h3 className="font-semibold text-sm flex items-center gap-2 mb-3"><Server size={16} />私有化部署配置</h3>
         <p className="text-xs text-muted-foreground mb-4">生成 Docker Compose 一键部署配置，15 分钟完成私有化。</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -77,7 +77,7 @@ export function DeployTab() {
       {codeBlock('部署说明', 'README.md', readme, 'readme')}
 
       {/* 数据导出 */}
-      <div className="bg-white rounded-xl border border-border p-4">
+      <div className="bg-card rounded-xl border border-border p-4">
         <h3 className="font-semibold text-sm flex items-center gap-2 mb-3"><Database size={16} />数据迁移</h3>
         <p className="text-xs text-muted-foreground mb-3">导出当前所有数据为 JSON 文件，可用于迁移到私有化环境。</p>
         <div className="flex gap-3">

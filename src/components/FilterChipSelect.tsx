@@ -81,7 +81,7 @@ export function FilterChipSelect({ label, options, selected, onSelect, onClear, 
         )}
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-30 py-1 min-w-[140px] max-h-[300px] overflow-y-auto">
+        <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-30 py-1 min-w-[140px] max-h-[300px] overflow-y-auto">
           {hasSelection && (
             <button className="w-full text-left px-3 py-1.5 text-xs text-primary hover:bg-primary/5 flex items-center gap-1" onClick={() => { onClear(); if (!multiple) setOpen(false); }}>
               <X className="w-3 h-3" /> 清除筛选
@@ -99,7 +99,7 @@ export function FilterChipSelect({ label, options, selected, onSelect, onClear, 
                   </span>
                 ) : (
                   <span className={cn('w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors', isSelected ? 'bg-primary border-primary' : 'border-border')}>
-                    {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-card" />}
                   </span>
                 )}
                 <span>{opt.label}</span>

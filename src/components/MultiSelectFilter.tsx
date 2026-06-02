@@ -62,7 +62,7 @@ export function MultiSelectFilter({ label, options, selected, onToggle, onClear,
         )}
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-30 py-1 min-w-[140px] max-h-[300px] overflow-y-auto">
+        <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-30 py-1 min-w-[140px] max-h-[300px] overflow-y-auto">
           {hasSelection && (
             <button className="w-full text-left px-3 py-1.5 text-xs text-primary hover:bg-primary/5 flex items-center gap-1" onClick={() => { onClear(); setOpen(false); }}>
               <X className="w-3 h-3" /> 清除筛选

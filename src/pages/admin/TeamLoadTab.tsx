@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { calcMemberLoads, type MemberLoad } from '@/lib/resourceBottleneck';
 import { Users, AlertTriangle, CheckCircle2, ArrowRight, TrendingUp } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
   balanced: { label: '工作饱和', color: 'text-green-700', bgColor: 'bg-green-100' },
@@ -37,22 +38,22 @@ export function TeamLoadTab() {
     <div className="space-y-5">
       {/* 概览 */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><AlertTriangle size={12} className="text-red-500" />超载</div>
           <div className="text-xl font-bold text-red-600">{overloadedMembers.length}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><CheckCircle2 size={12} className="text-green-500" />饱和</div>
           <div className="text-xl font-bold text-green-600">{balancedMembers.length}</div>
         </div>
-        <div className="bg-white rounded-xl p-3 border">
+        <div className="bg-card rounded-xl p-3 border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Users size={12} className="text-gray-400" />空闲</div>
           <div className="text-xl font-bold">{idleMembers.length}</div>
         </div>
       </div>
 
       {/* 负载柱状图 */}
-      <div className="bg-white rounded-xl border p-4 space-y-3">
+      <div className="bg-card rounded-xl border p-4 space-y-3">
         <h3 className="font-semibold text-sm flex items-center gap-2"><Users size={14} />成员负载分布</h3>
         <div className="space-y-2">
           {loads.sort((a: MemberLoad, b: MemberLoad) => b.loadIndex - a.loadIndex).map((l: MemberLoad) => {

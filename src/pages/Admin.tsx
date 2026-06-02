@@ -23,6 +23,7 @@ const AgentMarketplaceTab = lazy(() => import('./admin/AgentMarketplaceTab').the
 const ComplianceBaselineTab = lazy(() => import('./admin/ComplianceBaselineTab').then(m => ({ default: m.ComplianceBaselineTab })));
 const CollabTab = lazy(() => import('./admin/CollabTab').then(m => ({ default: m.CollabTab })));
 const TemplateMarketTab = lazy(() => import('./admin/TemplateMarketTab').then(m => ({ default: m.TemplateMarketTab })));
+const AutomatonTab = lazy(() => import('./admin/AutomatonTab').then(m => ({ default: m.AutomatonTab })));
 
 // --- Grouped tab structure: 5 sections instead of 19 flat tabs ---
 interface TabItem { key: AdminTab; label: string; icon: typeof Users }
@@ -52,6 +53,7 @@ const tabGroups: TabGroup[] = [
     tabs: [
       { key: 'marketplace', label: 'Agent市场', icon: Store },
       { key: 'agent', label: 'Agent审计', icon: Bot },
+      { key: 'automaton', label: '自主执行', icon: Zap },
       { key: 'integrations', label: '集成', icon: Globe },
       { key: 'collab', label: '实时协作', icon: Radio },
       { key: 'templates', label: '模板市场', icon: LayoutTemplate },
@@ -75,14 +77,14 @@ const tabGroups: TabGroup[] = [
   },
 ];
 
-const TAB_LABELS: Record<AdminTab, string> = { team: '团队管理', toolbox: '工具箱', schedule: '日程管理', settings: '系统设置', flow: '流程配置', automation: '自动化规则', integrations: '集成管理', kpi: 'KPI 看板', agent: 'Agent 审计', deploy: '私有化部署', riskradar: '风险雷达', teamload: '团队负载', mcptools: 'MCP 工具', billing: '订阅计费', retro: '复盘跟踪', marketplace: 'Agent 市场', compliance: '等保合规', collab: '实时协作', templates: '模板市场' };
+const TAB_LABELS: Record<AdminTab, string> = { team: '团队管理', toolbox: '工具箱', schedule: '日程管理', settings: '系统设置', flow: '流程配置', automation: '自动化规则', automaton: 'AI自主执行', integrations: '集成管理', kpi: 'KPI 看板', agent: 'Agent 审计', deploy: '私有化部署', riskradar: '风险雷达', teamload: '团队负载', mcptools: 'MCP 工具', billing: '订阅计费', retro: '复盘跟踪', marketplace: 'Agent 市场', compliance: '等保合规', collab: '实时协作', templates: '模板市场' };
 
 // Permission check per tab
-const tabVisibility: Record<AdminTab, 'admin' | 'manager' | 'all'> = {
-  team: 'manager', flow: 'manager', automation: 'manager', integrations: 'manager', kpi: 'manager',
+const tabVisibility: Record<AdminTab, 'admin' | 'manager' | 'member' | 'all'> = {
+  team: 'manager', flow: 'manager', automation: 'manager', automaton: 'manager', integrations: 'manager', kpi: 'manager',
   agent: 'admin', deploy: 'admin', settings: 'admin', billing: 'admin',
   marketplace: 'manager', compliance: 'manager', collab: 'manager', templates: 'all',
-  retro: 'manager', riskradar: 'all', teamload: 'all', mcptools: 'manager', toolbox: 'all', schedule: 'all',
+  retro: 'manager', riskradar: 'all', teamload: 'all', mcptools: 'manager', toolbox: 'member', schedule: 'member',
 };
 
 export default function Admin({ activeTab }: { activeTab?: string }) {
@@ -94,6 +96,7 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
   const hasAccess = (tab: AdminTab) => {
     const v = tabVisibility[tab];
     if (v === 'all') return true;
+    if (v === 'member') return true; // member and above
     if (v === 'manager') return isManager;
     return isAdmin;
   };
@@ -149,7 +152,7 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
   return (
     <div className="h-full flex animate-fade-in">
       {/* Sidebar navigation with grouped sections */}
-      <nav className="w-56 md-lg:w-48 lg:w-56 flex-shrink-0 border-r border-border bg-white overflow-y-auto p-3 space-y-1 hidden md:block">
+      <nav className="w-56 md:w-48 lg:w-56 flex-shrink-0 border-r border-border bg-card overflow-y-auto p-3 space-y-1 hidden md:block">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-2">管理中心</h2>
         {visibleGroups.map(group => (
           <div key={group.id}>
@@ -176,7 +179,7 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
       </nav>
 
       {/* Mobile tab selector (replaces sidebar on small screens) */}
-      <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-white border-b border-border px-2 py-1 flex gap-1 overflow-x-auto">
+      <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-background border-b border-border px-2 py-1 flex gap-1 overflow-x-auto">
         {visibleGroups.flatMap(g => g.tabs).map(t => (
           <button key={t.key} onClick={() => handleTabChange(t.key)}
             className={`flex items-center gap-1 px-2 py-1 text-xs whitespace-nowrap rounded transition-colors ${tab === t.key ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted'}`}>
@@ -187,7 +190,7 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 min-w-0 overflow-y-auto p-4 md:p-6 md:pt-4 pt-10">
+      <div className="flex-1 min-w-0 overflow-y-auto p-4 md:p-6 md:pt-4 pt-10 pb-28 md:pb-6">
         <div className="mb-4">
           <h1 className="text-xl font-bold">{TAB_LABELS[tab]}</h1>
         </div>
@@ -210,6 +213,7 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
           {tab === 'marketplace' && <TabErrorBoundary key="marketplace" name={TAB_LABELS.marketplace}><Suspense fallback={<TabLoader />}><AgentMarketplaceTab /></Suspense></TabErrorBoundary>}
           {tab === 'compliance' && <TabErrorBoundary key="compliance" name={TAB_LABELS.compliance}><Suspense fallback={<TabLoader />}><ComplianceBaselineTab /></Suspense></TabErrorBoundary>}
           {tab === 'collab' && <TabErrorBoundary key="collab" name={TAB_LABELS.collab}><Suspense fallback={<TabLoader />}><CollabTab /></Suspense></TabErrorBoundary>}
+          {tab === 'automaton' && <TabErrorBoundary key="automaton" name={TAB_LABELS.automaton}><Suspense fallback={<TabLoader />}><AutomatonTab /></Suspense></TabErrorBoundary>}
           {tab === 'templates' && <TabErrorBoundary key="templates" name={TAB_LABELS.templates}><Suspense fallback={<TabLoader />}><TemplateMarketTab /></Suspense></TabErrorBoundary>}
         </div>
       </div>

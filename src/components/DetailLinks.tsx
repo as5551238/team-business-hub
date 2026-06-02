@@ -3,6 +3,7 @@ import { useStore } from '@/store/useStore';
 import type { ItemType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Link2, Plus, Trash2, Target, FolderKanban, CheckSquare, AlertTriangle, Clock } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Section } from './detail-shared';
 
 interface DetailLinksProps {
@@ -148,7 +149,7 @@ export function DetailLinks({ itemId, itemType, canEdit }: DetailLinksProps) {
   return (
     <Section title="脉络图" icon={<Link2 className="w-3.5 h-3.5" />}>
       <div className="space-y-2">
-        {links.length === 0 && <p className="text-xs text-muted-foreground">暂无关联</p>}
+        {links.length === 0 && <EmptyState title="暂无关联" compact />}
         {links.map(link => {
           const isSource = link.sourceId === itemId;
           const otherId = isSource ? link.targetId : link.sourceId;
@@ -182,12 +183,12 @@ export function DetailLinks({ itemId, itemType, canEdit }: DetailLinksProps) {
         })}
         {showAddLink ? (
           <div className="space-y-2 p-2 border rounded bg-accent/30">
-            <select className="w-full text-sm border border-input rounded px-2 py-1 bg-white" value={addLinkType} onChange={e => { setAddLinkType(e.target.value as ItemType); setAddLinkTargetId(''); }}>
+            <select className="w-full text-sm border border-input rounded px-2 py-1 bg-card" value={addLinkType} onChange={e => { setAddLinkType(e.target.value as ItemType); setAddLinkTargetId(''); }}>
               <option value="goal">目标</option>
               <option value="project">项目</option>
               <option value="task">任务</option>
             </select>
-            <select className="w-full text-sm border border-input rounded px-2 py-1 bg-white" value={addLinkTargetId} onChange={e => setAddLinkTargetId(e.target.value)}>
+            <select className="w-full text-sm border border-input rounded px-2 py-1 bg-card" value={addLinkTargetId} onChange={e => setAddLinkTargetId(e.target.value)}>
               <option value="">选择...</option>
               {linkTargets.filter(t => t.type === addLinkType).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
             </select>

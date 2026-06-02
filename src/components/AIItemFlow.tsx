@@ -198,7 +198,7 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-xl border border-border w-full max-w-2xl animate-slide-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-2xl animate-slide-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="px-5 md:px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -281,7 +281,7 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 mb-2"><Target size={14} /> 关键结果（{result.keyResults.length}）</div>
                 <div className="space-y-1.5">
                   {result.keyResults.map((kr, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs bg-white rounded px-2.5 py-1.5 border border-blue-50">
+                    <div key={i} className="flex items-center justify-between text-xs bg-card rounded px-2.5 py-1.5 border border-blue-50">
                       <span>{kr.title}</span>
                       <span className="text-muted-foreground">{kr.targetValue}{kr.unit}</span>
                     </div>
@@ -303,7 +303,7 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
                       <div className="px-3 pb-2 space-y-1 bg-muted/10">
                         <p className="text-xs text-muted-foreground mb-1.5">{proj.description}</p>
                         {proj.tasks.map((task, tIdx) => (
-                          <div key={tIdx} className="flex items-center gap-2 text-xs bg-white rounded px-2.5 py-1.5 border">
+                          <div key={tIdx} className="flex items-center gap-2 text-xs bg-card rounded px-2.5 py-1.5 border">
                             <ListTodo size={12} className="text-muted-foreground" />
                             <span className="flex-1">{task.title}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded ${task.priority === 'urgent' ? 'bg-red-50 text-red-600' : task.priority === 'high' ? 'bg-orange-50 text-orange-600' : task.priority === 'low' ? 'bg-gray-50 text-gray-500' : 'bg-blue-50 text-blue-600'}`}>{task.priority === 'urgent' ? '紧急' : task.priority === 'high' ? '高' : task.priority === 'low' ? '低' : '中'}</span>
@@ -321,7 +321,7 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-700"><ListTodo size={14} /> 独立任务（{result.standaloneTasks.length}）</div>
                   {result.standaloneTasks.map((task, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs bg-white rounded border px-2.5 py-1.5">
+                    <div key={i} className="flex items-center gap-2 text-xs bg-card rounded border px-2.5 py-1.5">
                       <span className="flex-1">{task.title}</span>
                       <span className="text-[10px] text-muted-foreground">{task.estimatedDays}天</span>
                     </div>

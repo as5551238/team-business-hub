@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useStore, useMemberLookup, usePermissions } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
+import { useMemberLookup, usePermissions } from '@/store/hooks';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag, X } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   DAY_MS, parseDate, formatDate, addDays, computeTimeRange,
   STATUS_COLORS, STATUS_BAR_COLORS, STATUS_LABELS, CRITICAL_BAR_CLASS,
@@ -132,7 +134,7 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
   return (
     <div className="border border-border rounded-lg overflow-hidden" style={{ background: '#fafafa' }}>
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-white relative">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card relative">
         <button onClick={handleAddTask} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"><Plus size={14} />添加任务</button>
         {cpmResult.criticalTaskIds.size > 0 && <span className="text-[10px] text-red-500 font-medium">关键路径 {cpmResult.criticalPath.length} 项 | 工期 {cpmResult.projectDuration} 天</span>}
         <div className="flex-1" />
@@ -151,7 +153,7 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
       {/* Gantt body */}
       <div ref={containerRef} className="flex overflow-hidden" style={{ maxHeight: 400 }}>
         {/* Left: task labels */}
-        <div className="flex-shrink-0 border-r border-border bg-white" style={{ width: labelWidth }}>
+        <div className="flex-shrink-0 border-r border-border bg-card" style={{ width: labelWidth }}>
           <div className="flex items-center px-2 border-b border-border text-[10px] text-muted-foreground font-medium" style={{ height: headerHeight }}>
             <span className="flex-1">任务名称</span>
             <span className="w-14 text-center">负责人</span>
@@ -259,15 +261,15 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
       {/* Editing modal (centered overlay) */}
       {editingTaskId && (() => { const et = projectTasks.find(t => t.id === editingTaskId); if (!et) return null; return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setEditingTaskId(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-[420px] max-h-[80vh] overflow-y-auto space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl shadow-2xl p-6 w-[420px] max-h-[80vh] overflow-y-auto space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between"><span className="text-base font-semibold">{et.title}</span><button onClick={() => setEditingTaskId(null)} className="p-1 hover:bg-muted rounded-lg"><X size={16} /></button></div>
-            <div><label className="text-xs text-muted-foreground block mb-1">状态</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white" value={et.status} onChange={e => handleUpdateTask(et.id, { status: e.target.value as TaskStatus })}>{(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-            <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white" value={et.leaderId || ''} onChange={e => handleUpdateTask(et.id, { leaderId: e.target.value })}><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
+            <div><label className="text-xs text-muted-foreground block mb-1">状态</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.status} onChange={e => handleUpdateTask(et.id, { status: e.target.value as TaskStatus })}>{(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+            <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.leaderId || ''} onChange={e => handleUpdateTask(et.id, { leaderId: e.target.value })}><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs text-muted-foreground block mb-1">开始日期</label><input type="date" className="w-full text-sm border border-input rounded-lg px-3 py-2" value={et.startDate || ''} onChange={e => handleUpdateTask(et.id, { startDate: e.target.value || null })} /></div>
               <div><label className="text-xs text-muted-foreground block mb-1">截止日期</label><input type="date" className="w-full text-sm border border-input rounded-lg px-3 py-2" value={et.dueDate || ''} onChange={e => handleUpdateTask(et.id, { dueDate: e.target.value || null })} /></div>
             </div>
-            <div><label className="text-xs text-muted-foreground block mb-1">紧急程度</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-white" value={et.priority} onChange={e => handleUpdateTask(et.id, { priority: e.target.value as TaskPriority })}><option value="urgent">紧急 (S)</option><option value="high">高 (A)</option><option value="medium">中 (B)</option><option value="low">低 (C)</option></select></div>
+            <div><label className="text-xs text-muted-foreground block mb-1">紧急程度</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.priority} onChange={e => handleUpdateTask(et.id, { priority: e.target.value as TaskPriority })}><option value="urgent">紧急 (S)</option><option value="high">高 (A)</option><option value="medium">中 (B)</option><option value="low">低 (C)</option></select></div>
           </div>
         </div>
       ); })()}

@@ -1,5 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { Zap, Target, FolderKanban, ListTodo } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useStore } from '@/store/useStore';
 import { buildAIContext, extractFocusItems } from '@/lib/ai/aiContextEngine';
 import type { ItemContext } from '@/lib/ai/aiContextEngine';
@@ -58,15 +59,15 @@ function AIFocusWidgetInner({ onPageChange, onOpenDetail }: AIFocusWidgetProps) 
   }, [onPageChange, onOpenDetail]);
 
   return (
-    <div className="bg-white rounded-lg border p-4">
+    <div className="bg-card rounded-lg border p-4">
       <div className="flex items-center gap-2 mb-1">
         <Zap size={16} className="text-yellow-500" />
         <h3 className="font-semibold text-sm">关注焦点</h3>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">AI自动识别逾期、高优先级和停滞事项，帮你聚焦最需关注的工作</p>
+      <EmptyState title="AI自动识别逾期、高优先级和停滞事项，帮你聚焦最需关注的工作" compact />
 
       {focusItems.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-6">暂无需要关注的事项</p>
+        <EmptyState title="暂无需要关注的事项" compact />
       ) : (
         <div className="space-y-2">
           {focusItems.map((item) => {

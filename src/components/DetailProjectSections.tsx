@@ -3,6 +3,7 @@ import { useStore } from '@/store/useStore';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Plus, FolderKanban, CheckSquare } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 import { ProjectGanttChart } from '@/components/ProjectGanttChart';
 import { Section, STATUS_MAP } from './detail-shared';
@@ -62,7 +63,7 @@ export function DetailProjectSections({ project, startDate, endDate }: DetailPro
               <span className={cn('px-1.5 py-0.5 rounded text-[10px]', STATUS_MAP[t.status]?.color)}>{STATUS_MAP[t.status]?.label}</span>
             </div>
           ))}
-          {pTasks.length === 0 && <p className="text-xs text-muted-foreground">暂无关联任务</p>}
+          {pTasks.length === 0 && <EmptyState title="暂无关联任务" compact />}
           {showAddTask && (
             <div className="flex gap-2 mt-2">
               <input className="flex-1 px-2 py-1 text-sm border rounded" placeholder="任务名称" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddTask(); }} />

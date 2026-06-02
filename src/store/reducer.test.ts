@@ -192,19 +192,21 @@ describe('reducer — Goal actions', () => {
     expect(parent.progress).toBeGreaterThan(0);
   });
 
-  it('DELETE_GOAL 删除目标并清理关联', () => {
+  it('DELETE_GOAL 软删除目标（设置 deletedAt）', () => {
     state.goals = [makeGoal({ id: 'g1' })];
-    state.tasks = [makeTask({ id: 't1', goalId: 'g1' })];
     const next = reducer(state, { type: 'DELETE_GOAL', payload: 'g1' });
-    expect(next.goals).toHaveLength(0);
-    expect(next.tasks[0].goalId).toBeNull();
+    expect(next.goals).toHaveLength(1);
+    expect(next.goals[0].deletedAt).toBeTruthy();
   });
 
-  it('DELETE_GOAL 子目标 parentId 置空', () => {
+  it('DELETE_GOAL 子目标不自动解绑 parentId（软删除保留关系）', () => {
     state.goals = [makeGoal({ id: 'gp' }), makeGoal({ id: 'gc', parentId: 'gp' })];
     const next = reducer(state, { type: 'DELETE_GOAL', payload: 'gp' });
     const child = next.goals.find(g => g.id === 'gc')!;
-    expect(child.parentId).toBeNull();
+    // Soft delete: parent still exists with deletedAt, child parentId unchanged
+    expect(child.parentId).toBe('gp');
+    const parent = next.goals.find(g => g.id === 'gp')!;
+    expect(parent.deletedAt).toBeTruthy();
   });
 });
 
@@ -243,23 +245,23 @@ describe('reducer — Task actions', () => {
     expect(newP.taskCount).toBe(1);
   });
 
-  it('DELETE_TASK 删除后更新项目 taskCount 和 progress', () => {
+  it('DELETE_TASK 软删除任务（设置 deletedAt）', () => {
     state.tasks = [makeTask({ id: 't1', projectId: 'p1', status: 'todo' })];
     state.projects = [makeProject({ id: 'p1', taskCount: 1, progress: 0 })];
     const next = reducer(state, { type: 'DELETE_TASK', payload: 't1' });
-    expect(next.tasks).toHaveLength(0);
-    expect(next.projects[0].taskCount).toBe(0);
+    expect(next.tasks).toHaveLength(1);
+    expect(next.tasks[0].deletedAt).toBeTruthy();
   });
 
-  it('DELETE_TASK 依赖此任务的阻塞任务自动解除阻塞', () => {
+  it('DELETE_TASK 软删除不自动解除阻塞关系', () => {
     state.tasks = [
       makeTask({ id: 't1', status: 'done' }),
       makeTask({ id: 't2', status: 'blocked', blockedBy: ['t1'] }),
     ];
     const next = reducer(state, { type: 'DELETE_TASK', payload: 't1' });
-    const unblocked = next.tasks.find(t => t.id === 't2')!;
-    expect(unblocked.blockedBy).toEqual([]);
-    expect(unblocked.status).toBe('todo');
+    const blocked = next.tasks.find(t => t.id === 't2')!;
+    // Soft delete: blockedBy not auto-cleared (item can be restored)
+    expect(blocked.blockedBy).toEqual(['t1']);
   });
 
   it('TOGGLE_SUBTASK 切换子任务完成状态并更新项目进度', () => {
@@ -293,12 +295,11 @@ describe('reducer — Project actions', () => {
     expect(next.projects[0].status).toBe('done');
   });
 
-  it('DELETE_PROJECT 关联任务 projectId 置空', () => {
+  it('DELETE_PROJECT 软删除项目（设置 deletedAt）', () => {
     state.projects = [makeProject({ id: 'p1' })];
-    state.tasks = [makeTask({ id: 't1', projectId: 'p1' })];
     const next = reducer(state, { type: 'DELETE_PROJECT', payload: 'p1' });
-    expect(next.projects).toHaveLength(0);
-    expect(next.tasks[0].projectId).toBeNull();
+    expect(next.projects).toHaveLength(1);
+    expect(next.projects[0].deletedAt).toBeTruthy();
   });
 });
 
