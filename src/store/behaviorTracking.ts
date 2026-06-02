@@ -170,6 +170,14 @@ const ACTION_BEHAVIOR_MAP: Record<string, (action: any) => {
     entityId: a.payload?.id,
     metadata: { role: a.payload?.role },
   }),
+
+  // P2: 行业选择
+  INDUSTRY_SELECTED: (a) => ({
+    eventType: 'industry.selected',
+    entityType: 'industry',
+    entityId: a.payload?.industryKey,
+    metadata: {},
+  }),
 };
 
 // 核心入口：在 trackedDispatch 的 dispatch(action) 之后调用
