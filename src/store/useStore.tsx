@@ -39,6 +39,7 @@ const ActionsContext = createContext<ActionsContextType | null>(null);
 
 import { setAsyncDispatch } from '@/store/shared';
 import { setCollabDispatch } from '@/lib/collab';
+import { trackBehavior, setBehaviorUserId } from '@/store/behaviorTracking';
 
 // Module-level dispatch bridge for collab operations (set by StoreProvider)
 let _collabDispatch: ((action: any) => void) | null = null;
@@ -88,6 +89,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return;
     }
     dispatch(action);
+    // P0: 行为事件采集（fire-and-forget，不阻塞主流程）
+    trackBehavior(action);
     // Notify selector subscribers of state change
     notifySelectorListeners();
     // Track for undo — P3#29 fix: only increment counter when action was actually undoable
@@ -225,6 +228,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         // Single MERGE_STATE with members already included — no second SET_STATE that would overwrite
         dispatch({ type: 'MERGE_STATE', payload: { ...data, members: dbMembers, currentUser: resolvedUser, viewingMemberId: curView, bookmarks: mergedBookmarks, savedViews: mergedSavedViews } });
+        // P0: 接入行为追踪的当前用户ID
+        setBehaviorUserId(resolvedUser?.id || null);
         try { localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey })); } catch {}
         setConnectionMode('supabase');
         setupRealtime();

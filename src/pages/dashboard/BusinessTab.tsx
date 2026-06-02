@@ -9,6 +9,7 @@ import { getFunnelMetrics } from '@/lib/analytics';
 import { CHART_COLORS, StatCard, useFilteredData } from './shared';
 import type { DashboardTabProps } from './shared';
 import { AIFocusWidget } from '@/components/AIFocusWidget';
+import MemberProfileCard from '@/components/MemberProfileCard';
 
 export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTabProps) {
   const { state, memberGoals, memberTasks, memberProjects, todayStr, getMemberName, commentCountMap } = useFilteredData();
@@ -107,6 +108,11 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
         <StatCard icon={<Clock size={20} className="text-orange-600" />} label="我的待办" value={stats.myTasks} sub={`今日 ${stats.todayTodos.length} 项`} color="bg-orange-50" onClick={() => { onPageChange('tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'tasks', statuses: ['todo', 'in_progress'] } })), 100); }} />
         <StatCard icon={<AlertTriangle size={20} className="text-red-600" />} label="已逾期" value={stats.overdueTasks} color="bg-red-50" onClick={() => { onPageChange('tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'tasks', timeFilter: 'overdue' } })), 100); }} />
       </div>
+
+      {/* P0: 行为画像 — 管理员可见当前用户画像 */}
+      {state.currentUser?.role && ['admin', 'manager', 'leader'].includes(state.currentUser.role) && state.currentUser?.id && (
+        <MemberProfileCard memberId={state.currentUser.id} />
+      )}
 
       {/* 饼图行：状态分布 + 优先级分布 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { generateReviewLocal, generateReviewDeep } from '@/lib/ai/aiReviewGenerator';
 import type { ReviewResult, ReviewSection, OKRFeedback } from '@/lib/ai/aiReviewGenerator';
 import { useStore } from '@/store/useStore';
+import { trackAISuggestion } from '@/store/behaviorTracking';
 
 interface AIReviewPanelProps {
   goalId?: string;
@@ -190,9 +191,11 @@ export default function AIReviewPanel({ goalId, onClose }: AIReviewPanelProps) {
         blockedBy: [],
         sprintId: null,
         summary: '',
-      },
-    });
-  }, [dispatch, activeGoalId]);
+       },
+     });
+     // P0: 追踪AI建议被接受
+     trackAISuggestion(`ai-review-${Date.now()}`, true);
+   }, [dispatch, activeGoalId]);
 
   const isEmbedded = !!goalId;
 

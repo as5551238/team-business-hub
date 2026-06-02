@@ -225,6 +225,7 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   members: new Set(['id','name','role','department','avatar','email','status','join_date','created_at','updated_at','nickname','phone','wechat_id','permissions','team_id']),
   notifications: new Set(['id','type','title','message','related_id','related_type','member_id','read','created_at','team_id']),
   activities: new Set(['id','member_id','action','target_type','target_id','target_title','details','created_at','team_id']),
+  behavior_events: new Set(['id','user_id','event_type','entity_type','entity_id','metadata','created_at']),
   item_links: new Set(['id','source_id','source_type','target_id','target_type','label','created_at','team_id']),
   reviews: new Set(['id','period','period_start','period_end','member_id','content','improvements','metrics','created_at','updated_at','team_id']),
   categories: new Set(['id','name','color','icon','applies_to','created_at','team_id']),
