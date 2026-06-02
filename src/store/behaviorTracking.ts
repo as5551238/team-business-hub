@@ -154,6 +154,22 @@ const ACTION_BEHAVIOR_MAP: Record<string, (action: any) => {
     entityId: a.payload?.taskId,
     metadata: { subtaskDone: a.payload?.done },
   }),
+
+  // P1: 通知/提醒交互
+  MARK_NOTIFICATION_READ: (a) => ({
+    eventType: 'notification.read',
+    entityType: 'notification',
+    entityId: a.payload,
+    metadata: {},
+  }),
+
+  // P1: 成员加入/退出
+  ADD_MEMBER: (a) => ({
+    eventType: 'member.joined',
+    entityType: 'member',
+    entityId: a.payload?.id,
+    metadata: { role: a.payload?.role },
+  }),
 };
 
 // 核心入口：在 trackedDispatch 的 dispatch(action) 之后调用

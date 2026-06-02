@@ -10,6 +10,8 @@ import { CHART_COLORS, StatCard, useFilteredData } from './shared';
 import type { DashboardTabProps } from './shared';
 import { AIFocusWidget } from '@/components/AIFocusWidget';
 import MemberProfileCard from '@/components/MemberProfileCard';
+import TeamDiagnosticsPanel from '@/components/TeamDiagnosticsPanel';
+import ContributionLens from '@/components/ContributionLens';
 
 export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTabProps) {
   const { state, memberGoals, memberTasks, memberProjects, todayStr, getMemberName, commentCountMap } = useFilteredData();
@@ -112,6 +114,14 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
       {/* P0: 行为画像 — 管理员可见当前用户画像 */}
       {state.currentUser?.role && ['admin', 'manager', 'leader'].includes(state.currentUser.role) && state.currentUser?.id && (
         <MemberProfileCard memberId={state.currentUser.id} />
+      )}
+
+      {/* P1: AI团队诊断 + 贡献度透镜 — 管理员可见 */}
+      {state.currentUser?.role && ['admin', 'manager'].includes(state.currentUser.role) && (
+        <>
+          <TeamDiagnosticsPanel />
+          <ContributionLens />
+        </>
       )}
 
       {/* 饼图行：状态分布 + 优先级分布 */}
