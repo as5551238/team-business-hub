@@ -8,8 +8,8 @@ self.addEventListener('message', (event) => {
     if (!title) return;
     self.registration.showNotification(title, {
       body: body || '',
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
+      icon: './icon-192.png',
+      badge: './icon-192.png',
       data: { url: url || '/' },
     });
   }
