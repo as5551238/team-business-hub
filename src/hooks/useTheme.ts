@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { invalidateTokenCache } from '@/lib/resolveToken';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -27,6 +28,7 @@ export function useTheme() {
 
   useEffect(() => {
     applyTheme(resolved);
+    invalidateTokenCache(); // 主题切换时清除颜色缓存，确保 SVG/Canvas 刷新
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme, resolved]);
 

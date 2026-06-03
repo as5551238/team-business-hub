@@ -57,6 +57,12 @@ export default {
           light: '#F9FAFB',
           dark: '#374151',
         },
+        chart: {
+          purple: 'hsl(var(--chart-purple))',
+          pink: 'hsl(var(--chart-pink))',
+          cyan: 'hsl(var(--chart-cyan))',
+          indigo: 'hsl(var(--chart-indigo))',
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",

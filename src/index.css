@@ -33,13 +33,11 @@
     --warning-foreground: 48 96% 89%;
     --info: 199 89% 48%;
     --info-foreground: 210 40% 98%;
-    --color-bg: #ffffff;
-    --color-fg: #111827;
-    --color-muted: #6B7280;
-    --color-accent: #1E40AF;
-    --color-border: #E5E7EB;
-    --color-card: #ffffff;
-    --color-sidebar: #F9FAFB;
+    /* Chart dimension tokens */
+    --chart-purple: 262.1 83.3% 57.8%;
+    --chart-pink: 330.4 81.2% 60.4%;
+    --chart-cyan: 187.9 85.7% 53.3%;
+    --chart-indigo: 238.7 83.5% 66.7%;
   }
   .dark {
     --background: 222.2 84% 4.9%;
@@ -70,13 +68,11 @@
     --warning-foreground: 48 96% 89%;
     --info: 199 89% 48%;
     --info-foreground: 210 40% 98%;
-    --color-bg: #0F172A;
-    --color-fg: #F1F5F9;
-    --color-muted: #94A3B8;
-    --color-accent: #60A5FA;
-    --color-border: #334155;
-    --color-card: #1E293B;
-    --color-sidebar: #0F172A;
+    /* Chart dimension tokens — slightly brighter for dark bg */
+    --chart-purple: 263.4 70% 70%;
+    --chart-pink: 330.4 81.2% 70.4%;
+    --chart-cyan: 187.9 85.7% 63.3%;
+    --chart-indigo: 238.7 83.5% 76.7%;
   }
 }
 
