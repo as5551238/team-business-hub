@@ -4,6 +4,7 @@
  * 最大历史栈 50 步
  *
  * 设计原则: 只入栈有完整逆操作的 action,避免栈卡死
+ * 批量UPDATE: 通过 pushBatchUndo 捕获旧值快照,一次入栈多步逆操作
  */
 
 import type { Action } from './types';
@@ -17,8 +18,15 @@ interface UndoEntry {
   timestamp: number;
 }
 
-let undoStack: UndoEntry[] = [];
-let redoStack: UndoEntry[] = [];
+/** 批量逆操作组 — 一次批量操作的多个撤销步骤 */
+interface BatchUndoGroup {
+  actions: Action[];
+  label: string;
+  timestamp: number;
+}
+
+let undoStack: (UndoEntry | BatchUndoGroup)[] = [];
+let redoStack: (UndoEntry | BatchUndoGroup)[] = [];
 
 // 可撤销的 action 类型 — 仅包含有完整逆操作的类型
 const UNDOABLE_ACTIONS = new Set([
@@ -74,6 +82,10 @@ function computeInverse(action: Action): Action | null {
   }
 }
 
+function isBatchGroup(entry: UndoEntry | BatchUndoGroup): entry is BatchUndoGroup {
+  return 'actions' in entry && Array.isArray((entry as BatchUndoGroup).actions);
+}
+
 export function pushUndo(action: Action): boolean {
   if (!UNDOABLE_ACTIONS.has(action.type)) return false;
   const inverse = computeInverse(action);
@@ -81,6 +93,27 @@ export function pushUndo(action: Action): boolean {
   undoStack.push({ action, inverseAction: inverse, label: getActionLabel(action), timestamp: Date.now() });
   if (undoStack.length > MAX_UNDO_STACK) undoStack.shift();
   // 新操作清空redo栈
+  redoStack = [];
+  return true;
+}
+
+/**
+ * 批量操作入栈 — 用于批量 UPDATE操作
+ * @param inverseActions 逆操作列表(还原所有修改的旧值)
+ * @param label 操作描述
+ * @example
+ *   // 在批量操作前收集旧值
+ *   const inverses = selectedIds.map(id => {
+ *     const item = state.tasks.find(t => t.id === id);
+ *     return { type: 'UPDATE_TASK', payload: { id, updates: { tags: item.tags } } };
+ *   });
+ *   pushBatchUndo(inverses, '批量添加标签');
+ *   // 然后执行批量更新
+ */
+export function pushBatchUndo(inverseActions: Action[], label: string): boolean {
+  if (inverseActions.length === 0) return false;
+  undoStack.push({ actions: inverseActions, label, timestamp: Date.now() });
+  if (undoStack.length > MAX_UNDO_STACK) undoStack.shift();
   redoStack = [];
   return true;
 }
@@ -93,19 +126,27 @@ export function canRedo(): boolean {
   return redoStack.length > 0;
 }
 
-export function popUndo(): Action | null {
+export function popUndo(): Action | Action[] | null {
   if (undoStack.length === 0) return null;
   const entry = undoStack.pop()!;
   redoStack.push(entry);
   if (redoStack.length > MAX_UNDO_STACK) redoStack.shift();
-  return entry.inverseAction;
+  if (isBatchGroup(entry)) {
+    return entry.actions;
+  }
+  return (entry as UndoEntry).inverseAction;
 }
 
-export function popRedo(): Action | null {
+export function popRedo(): Action | Action[] | null {
   if (redoStack.length === 0) return null;
   const entry = redoStack.pop()!;
   undoStack.push(entry);
-  return entry.action;
+  if (isBatchGroup(entry)) {
+    // 批量重做: 需要保存原始操作 — 但BatchUndoGroup只有逆操作
+    // 重做时返回空(简化: 批量操作暂不支持重做)
+    return null;
+  }
+  return (entry as UndoEntry).action;
 }
 
 export function getUndoLabel(): string | null {

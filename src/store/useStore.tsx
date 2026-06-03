@@ -15,7 +15,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 import { toCamel } from './types';
 import { reducer, hasPermission } from './reducer';
-import { pushUndo, popUndo, popRedo, canUndo, canRedo, getUndoLabel, getRedoLabel, clearUndoStack } from './undo';
+import { pushUndo, pushBatchUndo, popUndo, popRedo, canUndo, canRedo, getUndoLabel, getRedoLabel, clearUndoStack } from './undo';
 import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError, setCurrentTeamId } from './supabase';
 import { setRLSContext } from '@/supabase/client';
 import { CURRENT_USER_KEY } from './types';
@@ -45,6 +45,9 @@ import { trackBehavior, setBehaviorUserId } from '@/store/behaviorTracking';
 // Module-level dispatch bridge for collab operations (set by StoreProvider)
 let _collabDispatch: ((action: Action) => void) | null = null;
 export function collabDispatch(action: Action) { _collabDispatch?.(action); }
+
+// Re-export batch undo for use in page components
+export { pushBatchUndo } from './undo';
 
 // Store context approach (stable and proven)
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -110,12 +113,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // Handle undo/redo special actions
     if (action.type === 'UNDO') {
       const inverseAction = popUndo();
-      if (inverseAction) { dispatch(inverseAction); setUndoCounter(c => c + 1); notifySelectorListeners(); }
+      if (inverseAction) {
+        if (Array.isArray(inverseAction)) {
+          // Batch undo: dispatch all inverse actions
+          inverseAction.forEach(a => dispatch(a));
+        } else {
+          dispatch(inverseAction);
+        }
+        setUndoCounter(c => c + 1);
+        notifySelectorListeners();
+      }
       return;
     }
     if (action.type === 'REDO') {
       const redoAction = popRedo();
-      if (redoAction) { dispatch(redoAction); setUndoCounter(c => c + 1); notifySelectorListeners(); }
+      if (redoAction) {
+        if (Array.isArray(redoAction)) {
+          redoAction.forEach(a => dispatch(a));
+        } else {
+          dispatch(redoAction);
+        }
+        setUndoCounter(c => c + 1);
+        notifySelectorListeners();
+      }
       return;
     }
     dispatch(action);

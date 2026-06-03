@@ -21,6 +21,7 @@ import {
 } from './tasks/constants';
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 import { useBatchSelection } from '@/hooks/useBatchSelection';
+import { pushBatchUndo } from '@/store/useStore';
 
 export default function Tasks() {
   const { state, dispatch } = useStore();
@@ -532,17 +533,102 @@ export default function Tasks() {
   const batchUpdateStatus = useCallback((status: string) => {
     if (!can('edit_tasks')) return;
     if (!status) return;
-    const c = selectedIds.size;
+    const inverses = Array.from(selectedIds).map(id => {
+      const t = state.tasks.find(x => x.id === id);
+      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { status: t?.status || 'todo' } } };
+    });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } }));
+    pushBatchUndo(inverses, '批量修改任务状态');
     clearSelection();
-    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${c} 个任务状态`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_UPDATE', severity: 'debug' }); }
-  }, [selectedIds, dispatch, can, clearSelection]);
+    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${selectedIds.size} 个任务状态`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_UPDATE', severity: 'debug' }); }
+  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
   const batchAssign = useCallback((leaderId: string) => {
     if (!can('edit_tasks')) return;
     if (!leaderId) return;
+    // Capture old values for undo
+    const inverses = Array.from(selectedIds).map(id => {
+      const t = state.tasks.find(x => x.id === id);
+      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { leaderId: t?.leaderId || '' } } };
+    });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } }));
+    pushBatchUndo(inverses, '批量分配任务');
     clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection]);
+    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已分配 ${selectedIds.size} 个任务`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_ASSIGN', severity: 'debug' }); }
+  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
+
+  const batchUpdatePriority = useCallback((priority: string) => {
+    if (!can('edit_tasks')) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const t = state.tasks.find(x => x.id === id);
+      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { priority: t?.priority || 'medium' } } };
+    });
+    selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { priority: priority as TaskPriority } } }));
+    pushBatchUndo(inverses, '批量修改优先级');
+    clearSelection();
+    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${selectedIds.size} 个任务优先级`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_PRIORITY', severity: 'debug' }); }
+  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
+
+  const batchAddTags = useCallback((newTags: string[]) => {
+    if (!can('edit_tasks')) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const t = state.tasks.find(x => x.id === id);
+      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { tags: t?.tags || [] } } };
+    });
+    selectedIds.forEach(id => {
+      const t = state.tasks.find(x => x.id === id);
+      if (t) {
+        const merged = [...new Set([...(t.tags || []), ...newTags])];
+        dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { tags: merged } } });
+      }
+    });
+    pushBatchUndo(inverses, '批量添加标签');
+    clearSelection();
+    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已为 ${selectedIds.size} 个任务添加标签`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_ADD_TAGS', severity: 'debug' }); }
+  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
+
+  const batchRemoveTags = useCallback((removeTags: string[]) => {
+    if (!can('edit_tasks')) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const t = state.tasks.find(x => x.id === id);
+      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { tags: t?.tags || [] } } };
+    });
+    selectedIds.forEach(id => {
+      const t = state.tasks.find(x => x.id === id);
+      if (t) {
+        const filtered = (t.tags || []).filter(tag => !removeTags.includes(tag));
+        dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { tags: filtered } } });
+      }
+    });
+    pushBatchUndo(inverses, '批量移除标签');
+    clearSelection();
+    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已移除 ${selectedIds.size} 个任务的标签`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_REMOVE_TAGS', severity: 'debug' }); }
+  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
+
+  const batchSetDate = useCallback((field: string, value: string) => {
+    if (!can('edit_tasks')) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const t = state.tasks.find(x => x.id === id);
+      const oldVal = field === 'dueDate' ? t?.dueDate : field === 'startDate' ? t?.startDate : null;
+      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { [field]: oldVal || null } } };
+    });
+    selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { [field]: value || null } } }));
+    pushBatchUndo(inverses, '批量设置日期');
+    clearSelection();
+    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已设置 ${selectedIds.size} 个任务日期`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_DATE', severity: 'debug' }); }
+  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
+
+  const batchMoveToProject = useCallback((projectId: string) => {
+    if (!can('edit_tasks')) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const t = state.tasks.find(x => x.id === id);
+      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { projectId: t?.projectId || null } } };
+    });
+    selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { projectId } } }));
+    pushBatchUndo(inverses, '批量移动到项目');
+    clearSelection();
+    const proj = state.projects.find(p => p.id === projectId);
+    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已移动 ${selectedIds.size} 个任务到 ${proj?.title || '项目'}`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_MOVE', severity: 'debug' }); }
+  }, [selectedIds, dispatch, can, clearSelection, state.tasks, state.projects]);
 
   function closeCreateDialog() { setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate(''); setNewTags(new Set()); setNewSupporters(new Set()); }
 
@@ -572,9 +658,20 @@ export default function Tasks() {
                   itemLabel="任务"
                   statuses={[{ value: 'todo', label: '待处理' }, { value: 'in_progress', label: '进行中' }, { value: 'done', label: '已完成' }, { value: 'blocked', label: '已阻塞' }, { value: 'cancelled', label: '已取消' }]}
                   members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
+                  priorities={[{ value: 'urgent', label: '紧急' }, { value: 'high', label: '高' }, { value: 'medium', label: '中' }, { value: 'low', label: '低' }]}
+                  tags={allTags}
+                  showDateFields
+                  dateFields={[{ key: 'dueDate', label: '截止日' }]}
+                  moveTargets={[{ value: '', label: '无项目' }, ...state.projects.filter(p => p.status === 'in_progress').map(p => ({ value: p.id, label: p.title }))]}
+                  moveLabel="移到项目"
                   onBatchDelete={(ids) => batchDelete()}
                   onBatchStatus={(_ids, status) => batchUpdateStatus(status)}
                   onBatchAssign={(_ids, leaderId) => batchAssign(leaderId)}
+                  onBatchPriority={(_ids, priority) => batchUpdatePriority(priority)}
+                  onBatchAddTags={(_ids, tags) => batchAddTags(tags)}
+                  onBatchRemoveTags={(_ids, tags) => batchRemoveTags(tags)}
+                  onBatchSetDate={(_ids, field, value) => batchSetDate(field, value)}
+                  onBatchMove={(_ids, targetId) => batchMoveToProject(targetId)}
                   canDelete={can('delete_tasks')}
                   canEdit={can('edit_tasks')}
                 />

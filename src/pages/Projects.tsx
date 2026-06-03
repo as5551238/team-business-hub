@@ -16,6 +16,7 @@ import { ProjectTreeNode, ProjectListView, ProjectTableView, ProjectKanbanView, 
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 import { useBatchSelection } from '@/hooks/useBatchSelection';
 import { BatchActionBar } from '@/components/BatchActionBar';
+import { pushBatchUndo } from '@/store/useStore';
 
 export default function Projects() {
   const { state, dispatch } = useStore();
@@ -153,8 +154,76 @@ export default function Projects() {
   }), [batchMode, selectedIds, toggleSelect, selectRange, batchSel, filteredProjects]);
 
   const batchDelete = useCallback(() => { if (!can('delete_projects')) return; if (!confirm(`确认删除选中的 ${selectedIds.size} 个项目？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_PROJECT', payload: id })); exitBatchMode(); }, [selectedIds, dispatch, can, exitBatchMode]);
-  const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_projects')) return; if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { status: status as ProjectStatus } } })); clearSelection(); }, [selectedIds, dispatch, can, clearSelection]);
-  const batchAssign = useCallback((leaderId: string) => { if (!can('edit_projects')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { leaderId } } })); clearSelection(); }, [selectedIds, dispatch, can, clearSelection]);
+  const batchUpdateStatus = useCallback((status: string) => {
+    if (!can('edit_projects')) return; if (!status) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const p = state.projects.find(x => x.id === id);
+      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { status: p?.status || 'todo' } } };
+    });
+    selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { status: status as ProjectStatus } } }));
+    pushBatchUndo(inverses, '批量修改项目状态'); clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
+  const batchAssign = useCallback((leaderId: string) => {
+    if (!can('edit_projects')) return; if (!leaderId) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const p = state.projects.find(x => x.id === id);
+      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { leaderId: p?.leaderId || '' } } };
+    });
+    selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { leaderId } } }));
+    pushBatchUndo(inverses, '批量分配项目'); clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
+  const batchUpdatePriority = useCallback((priority: string) => {
+    if (!can('edit_projects')) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const p = state.projects.find(x => x.id === id);
+      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { priority: p?.priority || 'medium' } } };
+    });
+    selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { priority: priority as TaskPriority } } }));
+    pushBatchUndo(inverses, '批量修改项目优先级'); clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
+  const batchAddTags = useCallback((newTags: string[]) => {
+    if (!can('edit_projects')) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const p = state.projects.find(x => x.id === id);
+      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { tags: p?.tags || [] } } };
+    });
+    selectedIds.forEach(id => {
+      const p = state.projects.find(x => x.id === id);
+      if (p) { const merged = [...new Set([...(p.tags || []), ...newTags])]; dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { tags: merged } } }); }
+    });
+    pushBatchUndo(inverses, '批量添加项目标签'); clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
+  const batchRemoveTags = useCallback((removeTags: string[]) => {
+    if (!can('edit_projects')) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const p = state.projects.find(x => x.id === id);
+      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { tags: p?.tags || [] } } };
+    });
+    selectedIds.forEach(id => {
+      const p = state.projects.find(x => x.id === id);
+      if (p) { const filtered = (p.tags || []).filter(t => !removeTags.includes(t)); dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { tags: filtered } } }); }
+    });
+    pushBatchUndo(inverses, '批量移除项目标签'); clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
+  const batchSetDate = useCallback((field: string, value: string) => {
+    if (!can('edit_projects')) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const p = state.projects.find(x => x.id === id);
+      const oldVal = field === 'endDate' ? p?.endDate : field === 'startDate' ? p?.startDate : null;
+      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { [field]: oldVal || '' } } };
+    });
+    selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { [field]: value || '' } } }));
+    pushBatchUndo(inverses, '批量设置项目日期'); clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
+  const batchMoveToGoal = useCallback((goalId: string) => {
+    if (!can('edit_projects')) return;
+    const inverses = Array.from(selectedIds).map(id => {
+      const p = state.projects.find(x => x.id === id);
+      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { goalId: p?.goalId || null } } };
+    });
+    selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { goalId } } }));
+    pushBatchUndo(inverses, '批量移动到目标'); clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
 
   function handleCreate() {
     if (!formData.title.trim()) return;
@@ -194,9 +263,20 @@ export default function Projects() {
               itemLabel="项目"
               statuses={[{ value: 'todo', label: '待办' }, { value: 'in_progress', label: '进行中' }, { value: 'done', label: '已完成' }, { value: 'blocked', label: '已阻塞' }, { value: 'cancelled', label: '已取消' }]}
               members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
+              priorities={[{ value: 'urgent', label: '紧急' }, { value: 'high', label: '高' }, { value: 'medium', label: '中' }, { value: 'low', label: '低' }]}
+              tags={projectTags}
+              showDateFields
+              dateFields={[{ key: 'endDate', label: '截止日' }]}
+              moveTargets={[{ value: '', label: '无目标' }, ...state.goals.filter(g => g.status === 'in_progress').map(g => ({ value: g.id, label: g.title }))]}
+              moveLabel="移到目标"
               onBatchDelete={(ids) => batchDelete()}
               onBatchStatus={(_ids, status) => batchUpdateStatus(status)}
               onBatchAssign={(_ids, leaderId) => batchAssign(leaderId)}
+              onBatchPriority={(_ids, priority) => batchUpdatePriority(priority)}
+              onBatchAddTags={(_ids, tags) => batchAddTags(tags)}
+              onBatchRemoveTags={(_ids, tags) => batchRemoveTags(tags)}
+              onBatchSetDate={(_ids, field, value) => batchSetDate(field, value)}
+              onBatchMove={(_ids, targetId) => batchMoveToGoal(targetId)}
               canDelete={can('delete_projects')}
               canEdit={can('edit_projects')}
             />

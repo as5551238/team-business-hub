@@ -22,6 +22,7 @@ import { AIItemFlow } from '@/components/AIItemFlow';
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 import { useBatchSelection } from '@/hooks/useBatchSelection';
 import { BatchActionBar } from '@/components/BatchActionBar';
+import { pushBatchUndo } from '@/store/useStore';
 
 export default function Goals() {
   const { state, dispatch } = useStore();
@@ -194,20 +195,87 @@ export default function Goals() {
 
   const handleBatchStatus = useCallback((ids: string[], status: string) => {
     if (!can('goals_edit')) return;
+    const inverses = ids.map(id => {
+      const g = state.goals.find(x => x.id === id);
+      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { status: g?.status || 'todo' } } };
+    });
     ids.forEach(id => {
       dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: status as GoalStatus } } });
       broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: '', newValue: status });
     });
+    pushBatchUndo(inverses, '批量修改目标状态');
     clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection]);
+  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
 
   const handleBatchAssign = useCallback((ids: string[], assigneeId: string) => {
     if (!can('goals_edit')) return;
+    const inverses = ids.map(id => {
+      const g = state.goals.find(x => x.id === id);
+      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { leaderId: g?.leaderId || '' } } };
+    });
     ids.forEach(id => {
       dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { leaderId: assigneeId } } });
     });
+    pushBatchUndo(inverses, '批量分配目标');
     clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection]);
+  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
+
+  const handleBatchPriority = useCallback((ids: string[], priority: string) => {
+    if (!can('goals_edit')) return;
+    const inverses = ids.map(id => {
+      const g = state.goals.find(x => x.id === id);
+      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { priority: g?.priority || 'medium' } } };
+    });
+    ids.forEach(id => dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { priority: priority as TaskPriority } } }));
+    pushBatchUndo(inverses, '批量修改目标优先级');
+    clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
+
+  const handleBatchAddTags = useCallback((ids: string[], newTags: string[]) => {
+    if (!can('goals_edit')) return;
+    const inverses = ids.map(id => {
+      const g = state.goals.find(x => x.id === id);
+      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { tags: g?.tags || [] } } };
+    });
+    ids.forEach(id => {
+      const g = state.goals.find(x => x.id === id);
+      if (g) {
+        const merged = [...new Set([...(g.tags || []), ...newTags])];
+        dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { tags: merged } } });
+      }
+    });
+    pushBatchUndo(inverses, '批量添加目标标签');
+    clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
+
+  const handleBatchRemoveTags = useCallback((ids: string[], removeTags: string[]) => {
+    if (!can('goals_edit')) return;
+    const inverses = ids.map(id => {
+      const g = state.goals.find(x => x.id === id);
+      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { tags: g?.tags || [] } } };
+    });
+    ids.forEach(id => {
+      const g = state.goals.find(x => x.id === id);
+      if (g) {
+        const filtered = (g.tags || []).filter(t => !removeTags.includes(t));
+        dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { tags: filtered } } });
+      }
+    });
+    pushBatchUndo(inverses, '批量移除目标标签');
+    clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
+
+  const handleBatchSetDate = useCallback((ids: string[], field: string, value: string) => {
+    if (!can('goals_edit')) return;
+    const inverses = ids.map(id => {
+      const g = state.goals.find(x => x.id === id);
+      const oldVal = field === 'endDate' ? g?.endDate : field === 'startDate' ? g?.startDate : null;
+      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { [field]: oldVal || '' } } };
+    });
+    ids.forEach(id => dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { [field]: value || '' } } }));
+    pushBatchUndo(inverses, '批量设置目标日期');
+    clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
 
   const [formData, setFormData] = useState({
     title: '', description: '', type: 'okr' as GoalType, priority: 'medium' as TaskPriority,
@@ -282,9 +350,17 @@ export default function Goals() {
               itemLabel="目标"
               statuses={[{ value: 'todo', label: '待办' }, { value: 'in_progress', label: '进行中' }, { value: 'done', label: '已完成' }, { value: 'blocked', label: '已阻塞' }, { value: 'cancelled', label: '已取消' }]}
               members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
+              priorities={[{ value: 'urgent', label: '紧急' }, { value: 'high', label: '高' }, { value: 'medium', label: '中' }, { value: 'low', label: '低' }]}
+              tags={Array.from(new Set(state.goals.flatMap(g => g.tags || [])))}
+              showDateFields
+              dateFields={[{ key: 'endDate', label: '截止日' }]}
               onBatchDelete={(ids) => handleBatchDelete()}
               onBatchStatus={(_ids, status) => handleBatchStatus(Array.from(selectedIds), status)}
               onBatchAssign={(_ids, assigneeId) => handleBatchAssign(Array.from(selectedIds), assigneeId)}
+              onBatchPriority={(_ids, priority) => handleBatchPriority(Array.from(selectedIds), priority)}
+              onBatchAddTags={(_ids, tags) => handleBatchAddTags(Array.from(selectedIds), tags)}
+              onBatchRemoveTags={(_ids, tags) => handleBatchRemoveTags(Array.from(selectedIds), tags)}
+              onBatchSetDate={(_ids, field, value) => handleBatchSetDate(Array.from(selectedIds), field, value)}
               canDelete={can('goals_delete')}
               canEdit={can('goals_edit')}
             />
