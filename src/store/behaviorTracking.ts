@@ -178,6 +178,14 @@ const ACTION_BEHAVIOR_MAP: Record<string, (action: any) => {
     entityId: a.payload?.industryKey,
     metadata: {},
   }),
+
+  // P3: 预测查看
+  VIEW_PREDICTION: (a) => ({
+    eventType: 'prediction.viewed',
+    entityType: 'prediction',
+    entityId: a.payload?.predictionType,
+    metadata: {},
+  }),
 };
 
 // 核心入口：在 trackedDispatch 的 dispatch(action) 之后调用

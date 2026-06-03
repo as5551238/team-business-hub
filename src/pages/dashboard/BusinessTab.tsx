@@ -13,6 +13,7 @@ import MemberProfileCard from '@/components/MemberProfileCard';
 import TeamDiagnosticsPanel from '@/components/TeamDiagnosticsPanel';
 import ContributionLens from '@/components/ContributionLens';
 import IndustryAdapter from '@/components/IndustryAdapter';
+import PredictiveInsights from '@/components/PredictiveInsights';
 
 export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTabProps) {
   const { state, memberGoals, memberTasks, memberProjects, todayStr, getMemberName, commentCountMap } = useFilteredData();
@@ -128,6 +129,11 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
       {/* P2: 行业适配 — 管理员可见 */}
       {state.currentUser?.role && ['admin', 'manager'].includes(state.currentUser.role) && (
         <IndustryAdapter />
+      )}
+
+      {/* P3: 预测洞察 — 管理员可见 */}
+      {state.currentUser?.role && ['admin', 'manager'].includes(state.currentUser.role) && (
+        <PredictiveInsights />
       )}
 
       {/* 饼图行：状态分布 + 优先级分布 */}
