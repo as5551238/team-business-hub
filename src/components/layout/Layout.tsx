@@ -4,8 +4,6 @@ import { useStore } from '@/store/useStore';
 import { useViewingMember, useMemberLookup, useActiveMembers } from '@/store/hooks';
 import { hasPermission } from '@/store/reducer';
 import type { Permission, ItemType } from '@/types';
-import type { Notification } from '@/types';
-import { cn } from '@/lib/utils';
 import { QuickCreateModal } from '@/components/QuickCreateModal';
 import { CommandPalette } from '@/components/CommandPalette';
 import { OnboardingWizard, shouldShowOnboarding } from '@/components/OnboardingWizard';
@@ -39,7 +37,7 @@ import {
   LayoutDashboard, Target, FolderKanban, CheckSquare, StickyNote,
   BarChart3, Users, Bell, Search, Menu, X, ChevronDown,
   Settings, Cloud, CloudOff, Loader2, FileText, Eye, Users2,
-  LogOut, BookOpen, Building2, Shield, PanelLeftClose, PanelLeft,
+  BookOpen, Building2, Shield, PanelLeftClose, PanelLeft,
   ChevronsLeft, ChevronsRight, Plus, Minus, Maximize2, Edit2, Trash2, Check,
   Moon, Sun, Monitor
 } from 'lucide-react';
@@ -68,130 +66,9 @@ const navItems: { page: Page; label: string; icon: React.ReactNode; requirePermi
   { page: 'privacy', label: '隐私政策', icon: <Shield size={20} /> },
 ];
 
-// --- Extracted React.memo sub-components ---
-
-interface MemberFilterDropdownProps {
-  isTeamView: boolean;
-  viewingMemberId: string | null;
-  viewingMember: { id: string; name: string; avatar: string; department: string } | null;
-  visibleMembers: { id: string; name: string; avatar: string; department: string; role: string }[];
-  setViewingMember: (id: string | null) => void;
-  onClose: () => void;
-}
-
-const MemberFilterDropdown = React.memo(function MemberFilterDropdown({ isTeamView, viewingMemberId, viewingMember, visibleMembers, setViewingMember, onClose }: MemberFilterDropdownProps) {
-  return (
-    <div className="absolute left-0 top-full mt-1 w-56 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up max-h-64 overflow-y-auto">
-      <div className="px-3 py-2 border-b border-border">
-        <button onClick={() => { setViewingMember(null); onClose(); }}
-          className={`w-full text-left px-2 py-1.5 rounded text-xs font-medium ${isTeamView ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}>
-          团队整体视图
-        </button>
-      </div>
-      {visibleMembers.map(m => (
-        <button key={m.id} onClick={() => { setViewingMember(m.id); onClose(); }}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left ${viewingMemberId === m.id ? 'bg-primary/10 text-primary' : ''}`}>
-          <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary">{m.avatar}</div>
-          {m.name}
-          <span className="text-muted-foreground ml-auto">{m.department}</span>
-        </button>
-      ))}
-    </div>
-  );
-});
-
-interface NotificationDropdownProps {
-  notifications: Notification[];
-  unreadCount: number;
-  onMarkAllRead: () => void;
-  onMarkRead: (id: string) => void;
-  onNavigate: (page: Page, itemId: string, itemType: string) => void;
-}
-
-const NotificationDropdown = React.memo(function NotificationDropdown({ notifications, unreadCount, onMarkAllRead, onMarkRead, onNavigate }: NotificationDropdownProps) {
-  return (
-    <div className="absolute right-0 top-full mt-1 w-80 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <span className="font-semibold text-sm">通知</span>
-        {unreadCount > 0 && <button className="text-xs text-primary hover:underline" onClick={onMarkAllRead}>全部已读</button>}
-      </div>
-      <div className="max-h-80 overflow-y-auto">
-        {notifications.slice(0, 8).map(n => {
-          const targetPage = n.relatedType === 'goal' ? 'goals' : n.relatedType === 'project' ? 'projects' : n.relatedType === 'task' ? 'tasks' : null;
-          return (
-            <div key={n.id} className={`px-4 py-3 border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors ${!n.read ? 'bg-primary/5' : ''}`}
-              onClick={() => { onMarkRead(n.id); if (targetPage) onNavigate(targetPage, n.relatedId, n.relatedType); }}>
-              <div className="flex items-start gap-2">
-                {!n.read && <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0', (n.level === 'urgent') ? 'bg-red-500' : (n.level === 'important') ? 'bg-amber-500' : 'bg-primary')} />}
-                <div className={!n.read ? '' : 'pl-3.5'}>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium">{n.title}</span>
-                    {n.level === 'urgent' && <span className="px-1 py-0.5 rounded text-[9px] bg-red-100 text-red-700 font-medium">紧急</span>}
-                    {n.level === 'important' && <span className="px-1 py-0.5 rounded text-[9px] bg-amber-100 text-amber-700 font-medium">重要</span>}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{n.message}</div>
-                  <div className="text-xs text-muted-foreground/60 mt-1">{new Date(n.createdAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        {notifications.length === 0 && <div className="px-4 py-8 text-center text-sm text-muted-foreground">暂无通知</div>}
-      </div>
-    </div>
-  );
-});
-
-interface UserMenuDropdownProps {
-  user: { id: string; name: string; avatar: string; email?: string; role: string; department: string } | null;
-  visibleMembers: { id: string; name: string; avatar: string; role: string; department: string }[];
-  onSwitchUser: (id: string) => void;
-  onLogout: () => void;
-}
-
-const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMembers, onSwitchUser, onLogout }: UserMenuDropdownProps) {
-  return (
-    <div className="absolute right-0 top-full mt-1 w-56 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up">
-      <div className="px-4 py-3 border-b border-border">
-        <div className="font-medium text-sm">{user?.name}</div>
-        <div className="text-xs text-muted-foreground">{user?.role === 'admin' ? user?.email : user?.email?.replace(/(.{2}).*(.@.*)/, '$1***$2')}</div>
-      </div>
-      <div className="py-1 max-h-64 overflow-y-auto">
-        {visibleMembers.map(m => (
-          <button key={m.id}
-            onClick={(e) => { e.stopPropagation(); onSwitchUser(m.id); }}
-            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted transition-colors text-left ${m.id === user?.id ? 'bg-primary/5 text-primary' : ''}`}>
-            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">{m.avatar}</div>
-            <div className="flex flex-col"><span>{m.name}</span><span className="text-xs text-muted-foreground">{m.role === 'admin' ? '管理员' : m.role === 'manager' ? '经理' : m.role === 'leader' ? '负责人' : '成员'}</span></div>
-            <span className="text-xs text-muted-foreground ml-auto">{m.department}</span>
-          </button>
-        ))}
-      </div>
-      <div className="border-t border-border px-4 py-2">
-        <button onClick={(e) => { e.stopPropagation(); onLogout(); }}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-destructive transition-colors">
-          <LogOut size={14} />
-          <span>退出登录</span>
-        </button>
-      </div>
-    </div>
-  );
-});
-
-// --- Mobile Long-Press Context Menu ---
-interface ContextMenuItem { label: string; action: string; icon?: React.ReactNode }
-const MobileContextMenu: React.FC<{ x: number; y: number; items: ContextMenuItem[]; onClose: () => void; onAction: (action: string) => void }> = React.memo(({ x, y, items, onClose, onAction }) => (
-  <>
-    <div className="fixed inset-0 z-[60]" onClick={onClose} onContextMenu={e => { e.preventDefault(); onClose(); }} />
-    <div className="fixed z-[61] bg-card border border-border rounded-lg shadow-xl py-1 min-w-[140px] animate-slide-up" style={{ left: Math.min(x, window.innerWidth - 160), top: Math.min(y, window.innerHeight - items.length * 40 - 20) }}>
-      {items.map(item => (
-        <button key={item.action} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-muted transition-colors" onClick={() => { onAction(item.action); onClose(); }}>
-          {item.icon}<span>{item.label}</span>
-        </button>
-      ))}
-    </div>
-  </>
-));
+import { MemberFilterDropdown, NotificationDropdown, UserMenuDropdown, MobileContextMenu } from './LayoutDropdowns';
+import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import type { ContextMenuItem } from './LayoutDropdowns';
 
 // --- Main Layout ---
 
@@ -468,106 +345,17 @@ export default function Layout({ children, currentUser }: LayoutProps) {
     setContextMenu(null);
   }, [contextMenu]);
 
-  // Global keyboard shortcuts (30+ bindings)
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const keyBufferRef = useRef('');
-  const keyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable;
-
-      // --- Always-active shortcuts (even in inputs) ---
-      if (isInput) {
-        if (e.key === 'Escape') { (e.target as HTMLElement).blur(); closeAllDropdowns(); }
-        return;
-      }
-
-      // --- Modifier shortcuts (Cmd/Ctrl) ---
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && !e.shiftKey && e.key === 'z') { e.preventDefault(); dispatch({ type: 'UNDO' }); return; }
-      if (mod && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); dispatch({ type: 'REDO' }); return; }
-      if (mod && e.key === 'k') { e.preventDefault(); setCommandPaletteOpen(true); return; }
-      if (mod && e.key === 'a') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-select-all')); return; }
-      if (mod && !e.shiftKey && e.key === 'n') { e.preventDefault(); setQuickCreateType('task'); setQuickCreateOpen(true); return; }
-      if (mod && e.shiftKey && e.key === 'N') { e.preventDefault(); setQuickCreateType('goal'); setQuickCreateOpen(true); return; }
-      if (mod && e.shiftKey && e.key === 'P') { e.preventDefault(); setQuickCreateType('project'); setQuickCreateOpen(true); return; }
-      if (mod && e.key === 'g') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-open-gantt')); return; }
-      if (mod && e.key === 'f') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-focus-filter')); return; }
-      if (mod && e.key === 's') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-save-current')); return; }
-      if (mod && e.key === ',') { e.preventDefault(); goToPage('admin'); return; } // Settings
-
-      // --- g-prefix (Vim-style navigation) — P3#13 fix: check BEFORE single-key shortcuts to avoid conflicts ---
-      if (keyBufferRef.current === 'g') {
-        keyBufferRef.current = '';
-        if (keyTimerRef.current) { clearTimeout(keyTimerRef.current); keyTimerRef.current = null; }
-        const gNav: Record<string, Page> = { d: 'dashboard', o: 'goals', p: 'projects', t: 'tasks', i: 'insight', a: 'admin', k: 'knowledge' };
-        if (gNav[e.key]) { goToPage(gNav[e.key]); return; }
-        // gg: scroll to top
-        if (e.key === 'g') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-        // Not a recognized g-prefix combo — fall through to single-key handling
-      }
-
-      // --- Single key shortcuts ---
-      // Escape: close dropdowns / command palette
-      if (e.key === 'Escape') { closeAllDropdowns(); setCommandPaletteOpen(false); return; }
-
-      // / : focus search
-      if (e.key === '/') { e.preventDefault(); searchInputRef.current?.focus(); return; }
-
-      // ? : show keyboard help (via command palette with shortcut filter)
-      if (e.key === '?') { e.preventDefault(); setCommandPaletteOpen(true); return; }
-
-      // [ / ] : sidebar toggle
-      if (e.key === '[') { e.preventDefault(); cycleSidebarMode(); return; }
-      if (e.key === ']') { e.preventDefault(); cycleSidebarMode(); return; }
-
-      // 1-7: quick navigation
-      const navMap: Record<string, Page> = { '1': 'dashboard', '2': 'goals', '3': 'projects', '4': 'tasks', '5': 'insight', '6': 'knowledge', '7': 'admin' };
-      if (navMap[e.key]) { goToPage(navMap[e.key]); return; }
-
-      // c: quick create (task by default)
-      if (e.key === 'c') { e.preventDefault(); setQuickCreateType('task'); setQuickCreateOpen(true); return; }
-
-      // e: edit selected item
-      if (e.key === 'e') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-edit-selected')); return; }
-
-      // d: delete selected item
-      if (e.key === 'd') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-delete-selected')); return; }
-
-      // x: toggle complete for selected task
-      if (e.key === 'x') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-complete-selected')); return; }
-
-      // j/k: navigate up/down in list
-      if (e.key === 'j') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-nav-down')); return; }
-      if (e.key === 'k') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-nav-up')); return; }
-
-      // Enter: open selected item
-      if (e.key === 'Enter') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-open-selected')); return; }
-
-      // f: focus filter
-      if (e.key === 'f') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-focus-filter')); return; }
-
-      // t/v/l: switch view modes (table/board/list)
-      if (e.key === 't') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-switch-view', { detail: 'table' })); return; }
-      if (e.key === 'v') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-switch-view', { detail: 'board' })); return; }
-      if (e.key === 'l') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-switch-view', { detail: 'list' })); return; }
-
-      // b: toggle batch mode
-      if (e.key === 'b') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-toggle-batch')); return; }
-
-      // --- g-prefix start (store 'g' and wait for next key) ---
-      if (e.key === 'g') {
-        keyBufferRef.current = 'g';
-        if (keyTimerRef.current) clearTimeout(keyTimerRef.current);
-        keyTimerRef.current = setTimeout(() => { keyBufferRef.current = ''; }, 500);
-        return;
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [goToPage, closeAllDropdowns, dispatch, cycleSidebarMode]);
+  useKeyboardShortcuts({
+    goToPage,
+    closeAllDropdowns,
+    dispatch,
+    cycleSidebarMode,
+    setCommandPaletteOpen,
+    setQuickCreateOpen,
+    setQuickCreateType,
+    searchInputRef,
+  });
 
   const handlePageClick = useCallback((page: Page) => {
     goToPage(page);
