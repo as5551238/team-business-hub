@@ -20,6 +20,7 @@ import {
   type ViewMode, type BusinessPriority, type BatchProps, type KanbanGroupBy
 } from './tasks/constants';
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
+import { useBatchSelection } from '@/hooks/useBatchSelection';
 
 export default function Tasks() {
   const { state, dispatch } = useStore();
@@ -76,10 +77,8 @@ export default function Tasks() {
   const [sortField, setSortField] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const personPickerRef = useRef<HTMLDivElement>(null);
-  const [batchMode, setBatchMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [batchStatus, setBatchStatus] = useState('');
-  const [batchLeader, setBatchLeader] = useState('');
+  const batchSel = useBatchSelection();
+  const { batchMode, selectedIds, toggleSelect, selectAll, selectRange, clearSelection, exitBatchMode, lastSelectedId } = batchSel;
   const KANBAN_LS_KEY = 'tbh-tasks-kanban';
   const [kanbanCustomMode, setKanbanCustomMode] = useState(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).customMode || false; } catch (e) { handleError(e, { module: 'Tasks', operation: 'READ_KANBAN', severity: 'debug' }); return false; } });
   const [customColumns, setCustomColumns] = useState<string[]>(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).columns || ['待处理', '进行中', '已完成']; } catch (e) { handleError(e, { module: 'Tasks', operation: 'READ_KANBAN', severity: 'debug' }); return ['待处理', '进行中', '已完成']; } });
@@ -139,7 +138,8 @@ export default function Tasks() {
     const onComplete = () => { if (focusedId) { const task = state.tasks.find(t => t.id === focusedId); if (task) { const oldStatus = task.status; const newStatus = task.status === 'done' ? 'todo' : 'done'; dispatch({ type: 'UPDATE_TASK', payload: { id: focusedId, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'task', entityId: focusedId, field: 'status', oldValue: oldStatus, newValue: newStatus }); } } };
     const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
     const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (mode === 'table' || mode === 'board' || mode === 'list' || mode === 'timeline' || mode === 'matrix') setViewMode(mode as ViewMode); };
-    const onToggleBatch = () => { setBatchMode(prev => !prev); setSelectedIds(new Set()); };
+    const onToggleBatch = () => { batchSel.toggleBatchMode(); };
+    const onSelectAll = () => { selectAll(filteredTasks.map(t => t.id)); };
     window.addEventListener('tbh-nav-down', onNavDown);
     window.addEventListener('tbh-nav-up', onNavUp);
     window.addEventListener('tbh-edit-selected', onEdit);
@@ -149,6 +149,7 @@ export default function Tasks() {
     window.addEventListener('tbh-focus-filter', onFilter);
     window.addEventListener('tbh-switch-view', onViewSwitch);
     window.addEventListener('tbh-toggle-batch', onToggleBatch);
+    window.addEventListener('tbh-select-all', onSelectAll);
     return () => {
       window.removeEventListener('tbh-nav-down', onNavDown);
       window.removeEventListener('tbh-nav-up', onNavUp);
@@ -159,8 +160,9 @@ export default function Tasks() {
       window.removeEventListener('tbh-focus-filter', onFilter);
       window.removeEventListener('tbh-switch-view', onViewSwitch);
       window.removeEventListener('tbh-toggle-batch', onToggleBatch);
+      window.removeEventListener('tbh-select-all', onSelectAll);
     };
-  }, [focusedId, filteredTasks, can, dispatch, batchMode]);
+  }, [focusedId, filteredTasks, can, dispatch, batchSel]);
 
   const sortedTasks = useMemo(() => {
     const arr = [...filteredTasks];
@@ -198,7 +200,25 @@ export default function Tasks() {
     return entries.map(([k, v]) => ({ key: k, label: k === '无截止日期' ? '无截止日期' : k, tasks: v }));
   }, [sortedTasks, groupByDate]);
 
-  const batchProps = useMemo((): BatchProps => ({ batchMode, selectedIds, onToggleSelect: (id: string) => { setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); } }), [batchMode, selectedIds]);
+  const batchProps = useMemo((): BatchProps => ({
+    batchMode,
+    selectedIds,
+    onToggleSelect: (id: string) => {
+      // Shift+Click range selection
+      if (batchMode && lastSelectedId && lastSelectedId !== id) {
+        // Check if shift key is not held — just toggle
+      }
+      toggleSelect(id);
+    },
+    // Expose range selection for Shift+Click support
+    shiftSelect: (id: string) => {
+      if (batchMode && lastSelectedId && lastSelectedId !== id) {
+        selectRange(lastSelectedId, id, filteredTasks.map(t => t.id));
+      } else {
+        toggleSelect(id);
+      }
+    },
+  }), [batchMode, selectedIds, lastSelectedId, toggleSelect, selectRange, filteredTasks]);
 
   function togglePerson(id: string) { setSelectedPersons(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }
   function toggleSetItem(setter: React.Dispatch<React.SetStateAction<Set<string>>>) { return (value: string) => { setter(prev => { const next = new Set(prev); if (next.has(value)) next.delete(value); else next.add(value); return next; }); }; }
@@ -426,7 +446,7 @@ export default function Tasks() {
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
         {filteredTasks.length > 0 && (
           <div className="px-4 py-2 border-b border-border flex items-center gap-2 bg-muted/30">
-            <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={allSelected} ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }} onChange={e => { e.stopPropagation(); if (allSelected) setSelectedIds(prev => { const next = new Set(prev); allShownTaskIds.forEach(id => next.delete(id)); return next; }); else setSelectedIds(prev => { const next = new Set(prev); allShownTaskIds.forEach(id => next.add(id)); return next; }); }} className="cursor-pointer" /></span>
+            <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={allSelected} ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }} onChange={e => { e.stopPropagation(); if (allSelected) clearSelection(); else selectAll(allShownTaskIds); }} className="cursor-pointer" /></span>
             <span className="text-xs text-muted-foreground">{allSelected ? '取消全选' : '全选'} ({filteredTasks.length})</span>
           </div>
         )}
@@ -456,7 +476,7 @@ export default function Tasks() {
           <table className="w-full text-sm">
             <thead className={`bg-muted/50 border-b border-border${needsVirtual ? ' sticky top-0 z-10' : ''}`}>
               <tr>
-                {batchProps.batchMode && <th className="w-10 px-2"><input type="checkbox" checked={sortedTasks.length > 0 && batchProps.selectedIds.size === sortedTasks.length} className="rounded" onChange={e => { e.stopPropagation(); if (sortedTasks.length > 0 && batchProps.selectedIds.size === sortedTasks.length) { setSelectedIds(new Set()); } else { setSelectedIds(new Set(sortedTasks.map(t => t.id))); } }} /></th>}
+                {batchProps.batchMode && <th className="w-10 px-2"><input type="checkbox" checked={sortedTasks.length > 0 && batchProps.selectedIds.size === sortedTasks.length} className="rounded" onChange={e => { e.stopPropagation(); if (sortedTasks.length > 0 && batchProps.selectedIds.size === sortedTasks.length) { clearSelection(); } else { selectAll(sortedTasks.map(t => t.id)); } }} /></th>}
                 {[
                   { field: 'title', label: '任务名称' }, { field: 'status', label: '状态' }, { field: 'priority', label: '紧急程度' },
                   { field: 'category', label: '分类' }, { field: 'leaderId', label: '主导人' }, { field: 'dueDate', label: '截止日期' },
@@ -501,14 +521,28 @@ export default function Tasks() {
 
   const activeFilterCount = (selectedStatuses.size > 0 ? 1 : 0) + (selectedPriorities.size > 0 ? 1 : 0) + (selectedLevels.size > 0 ? 1 : 0) + (selectedCategories.size > 0 ? 1 : 0) + (selectedTags.size > 0 ? 1 : 0) + (selectedPersons.size > 0 ? 1 : 0) + (timeFilter !== 'all' ? 1 : 0);
 
-  const toggleSelectAll = useCallback(() => {
-    if (selectedIds.size === filteredTasks.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(filteredTasks.map(t => t.id)));
-  }, [selectedIds.size, filteredTasks]);
-
-  const batchDelete = useCallback(() => { if (!can('delete_tasks')) return; if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return; const c = selectedIds.size; selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id })); setSelectedIds(new Set()); setBatchMode(false); try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已删除 ${c} 个任务`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_DELETE', severity: 'debug' }); } }, [selectedIds, dispatch]);
-  const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_tasks')) return; if (!status) return; const c = selectedIds.size; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${c} 个任务状态`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_UPDATE', severity: 'debug' }); } }, [selectedIds, dispatch]);
-  const batchAssign = useCallback((leaderId: string) => { if (!can('edit_tasks')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
+  const batchDelete = useCallback(() => {
+    if (!can('delete_tasks')) return;
+    if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return;
+    const c = selectedIds.size;
+    selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id }));
+    exitBatchMode();
+    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已删除 ${c} 个任务`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_DELETE', severity: 'debug' }); }
+  }, [selectedIds, dispatch, can, exitBatchMode]);
+  const batchUpdateStatus = useCallback((status: string) => {
+    if (!can('edit_tasks')) return;
+    if (!status) return;
+    const c = selectedIds.size;
+    selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } }));
+    clearSelection();
+    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${c} 个任务状态`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_UPDATE', severity: 'debug' }); }
+  }, [selectedIds, dispatch, can, clearSelection]);
+  const batchAssign = useCallback((leaderId: string) => {
+    if (!can('edit_tasks')) return;
+    if (!leaderId) return;
+    selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } }));
+    clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection]);
 
   function closeCreateDialog() { setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate(''); setNewTags(new Set()); setNewSupporters(new Set()); }
 
@@ -531,17 +565,21 @@ export default function Tasks() {
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
               {batchMode && selectedIds.size > 0 && (
-                <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 mr-1">
-                  <span className="text-xs font-medium">已选 {selectedIds.size} 项</span>
-                    <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (!can('delete_tasks')) return; batchDelete(); }}><Trash2 size={12} /> 删除</button>
-                  <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-card focus:outline-none"><option value="">改状态</option><option value="todo">待处理</option><option value="in_progress">进行中</option><option value="done">已完成</option><option value="blocked">已阻塞</option><option value="cancelled">已取消</option></select>
-                  {batchStatus && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={() => { batchUpdateStatus(batchStatus); }}>确认</button>}
-                  <select value={batchLeader} onChange={e => setBatchLeader(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-card focus:outline-none"><option value="">分配给</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
-                  {batchLeader && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={() => { batchAssign(batchLeader); }}>确认</button>}
-                  <button className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground" onClick={() => setSelectedIds(new Set())}>清空</button>
-                </div>
+                <BatchActionBar
+                  selection={batchSel}
+                  filteredCount={filteredTasks.length}
+                  filteredIds={filteredTasks.map(t => t.id)}
+                  itemLabel="任务"
+                  statuses={[{ value: 'todo', label: '待处理' }, { value: 'in_progress', label: '进行中' }, { value: 'done', label: '已完成' }, { value: 'blocked', label: '已阻塞' }, { value: 'cancelled', label: '已取消' }]}
+                  members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
+                  onBatchDelete={(ids) => batchDelete()}
+                  onBatchStatus={(_ids, status) => batchUpdateStatus(status)}
+                  onBatchAssign={(_ids, leaderId) => batchAssign(leaderId)}
+                  canDelete={can('delete_tasks')}
+                  canEdit={can('edit_tasks')}
+                />
               )}
-              <button onClick={() => setBatchMode(!batchMode)} className={cn('inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border transition-colors', batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted')}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
+              <button onClick={() => batchSel.toggleBatchMode()} className={cn('inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border transition-colors', batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted')}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
               <button onClick={() => setShowMatchPanel(true)} className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors"><Sparkles size={14} /><span className="hidden sm:inline">智能匹配</span></button>
               <button className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-primary/90 transition-colors" onClick={() => setShowCreateDialog(true)}><Plus className="w-4 h-4" /> <span className="hidden xs:inline">新建任务</span></button>
             </div>

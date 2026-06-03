@@ -37,4 +37,4 @@ export function getTouchPos(e: TouchEvent | MouseEvent) {
   return { x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY };
 }
 
-export interface BatchProps { batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }
+export interface BatchProps { batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void; shiftSelect?: (id: string) => void }

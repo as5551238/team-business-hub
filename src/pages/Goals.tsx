@@ -20,6 +20,8 @@ import { useDraftSave } from '@/hooks/useDraftSave';
 import { OKRAlignmentView } from './admin/OKRAlignmentTab';
 import { AIItemFlow } from '@/components/AIItemFlow';
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
+import { useBatchSelection } from '@/hooks/useBatchSelection';
+import { BatchActionBar } from '@/components/BatchActionBar';
 
 export default function Goals() {
   const { state, dispatch } = useStore();
@@ -63,10 +65,8 @@ export default function Goals() {
   const [customRepeatDays, setCustomRepeatDays] = useState(0);
   const [customRepeatWeeks, setCustomRepeatWeeks] = useState(0);
 
-  const [batchMode, setBatchMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [batchStatus, setBatchStatus] = useState('');
-  const [batchAssignee, setBatchAssignee] = useState('');
+  const batchSel = useBatchSelection();
+  const { batchMode, selectedIds, toggleSelect, selectAll, selectRange, clearSelection, exitBatchMode } = batchSel;
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
   const activeMembers = useMemo(() => state.members.filter(m => m.status === 'active'), [state.members]);
@@ -127,7 +127,8 @@ export default function Goals() {
     const onComplete = () => { const id = focusedId; if (id) { const goal = state.goals.find(g => g.id === id); if (goal) { const oldStatus = goal.status; const newStatus = goal.status === 'done' ? 'in_progress' : 'done'; dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: oldStatus, newValue: newStatus }); } } };
     const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
     const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (VALID_VIEW_MODES.includes(mode as ViewMode)) setViewMode(mode as ViewMode); };
-    const onToggleBatch = () => { setBatchMode(prev => !prev); setSelectedIds(new Set()); setBatchStatus(''); setBatchAssignee(''); };
+    const onToggleBatch = () => { batchSel.toggleBatchMode(); };
+    const onSelectAll = () => { selectAll(filteredGoals.map(g => g.id)); };
     window.addEventListener('tbh-nav-down', onNavDown);
     window.addEventListener('tbh-nav-up', onNavUp);
     window.addEventListener('tbh-edit-selected', onEdit);
@@ -137,6 +138,7 @@ export default function Goals() {
     window.addEventListener('tbh-focus-filter', onFilter);
     window.addEventListener('tbh-switch-view', onViewSwitch);
     window.addEventListener('tbh-toggle-batch', onToggleBatch);
+    window.addEventListener('tbh-select-all', onSelectAll);
     return () => {
       window.removeEventListener('tbh-nav-down', onNavDown);
       window.removeEventListener('tbh-nav-up', onNavUp);
@@ -147,19 +149,12 @@ export default function Goals() {
       window.removeEventListener('tbh-focus-filter', onFilter);
       window.removeEventListener('tbh-switch-view', onViewSwitch);
       window.removeEventListener('tbh-toggle-batch', onToggleBatch);
+      window.removeEventListener('tbh-select-all', onSelectAll);
     };
-  }, [focusedId, filteredGoals, can, dispatch, batchMode]);
+  }, [focusedId, filteredGoals, can, dispatch, batchSel, selectAll]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedGoals(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
@@ -194,30 +189,25 @@ export default function Goals() {
     if (!can('goals_delete')) return;
     if (!confirm(`确认删除选中的 ${selectedIds.size} 个目标？`)) return;
     selectedIds.forEach(id => { dispatch({ type: 'DELETE_GOAL', payload: id }); });
-    setSelectedIds(new Set());
-    setBatchMode(false);
-  }, [selectedIds, dispatch]);
+    exitBatchMode();
+  }, [selectedIds, dispatch, can, exitBatchMode]);
 
-  const handleBatchStatus = useCallback(() => {
+  const handleBatchStatus = useCallback((ids: string[], status: string) => {
     if (!can('goals_edit')) return;
-    if (!batchStatus) return;
-    selectedIds.forEach(id => {
-      dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: batchStatus as GoalStatus } } });
-      broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: '', newValue: batchStatus });
+    ids.forEach(id => {
+      dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: status as GoalStatus } } });
+      broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: '', newValue: status });
     });
-    setSelectedIds(new Set());
-    setBatchStatus('');
-  }, [selectedIds, dispatch, batchStatus]);
+    clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection]);
 
-  const handleBatchAssign = useCallback(() => {
+  const handleBatchAssign = useCallback((ids: string[], assigneeId: string) => {
     if (!can('goals_edit')) return;
-    if (!batchAssignee) return;
-    selectedIds.forEach(id => {
-      dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { leaderId: batchAssignee } } });
+    ids.forEach(id => {
+      dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { leaderId: assigneeId } } });
     });
-    setSelectedIds(new Set());
-    setBatchAssignee('');
-  }, [selectedIds, dispatch, batchAssignee]);
+    clearSelection();
+  }, [selectedIds, dispatch, can, clearSelection]);
 
   const [formData, setFormData] = useState({
     title: '', description: '', type: 'okr' as GoalType, priority: 'medium' as TaskPriority,
@@ -285,29 +275,21 @@ export default function Goals() {
         </div>
         <div className="flex items-center gap-2">
           {batchMode && selectedIds.size > 0 && (
-            <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 mr-2">
-              <span className="text-xs font-medium">已选 {selectedIds.size} 项</span>
-               <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (!can('goals_delete')) return; handleBatchDelete(); }}>
-                 <Trash2 size={12} /> 删除
-               </button>
-              <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-card focus:outline-none">
-                <option value="">改状态</option>
-                <option value="todo">待办</option>
-                <option value="in_progress">进行中</option>
-                <option value="done">已完成</option>
-                <option value="blocked">已阻塞</option>
-                <option value="cancelled">已取消</option>
-              </select>
-              {batchStatus && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={handleBatchStatus}>确认</button>}
-              <select value={batchAssignee} onChange={e => setBatchAssignee(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-card focus:outline-none">
-                <option value="">分配给</option>
-                {activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-              {batchAssignee && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={handleBatchAssign}>确认</button>}
-              <button className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground" onClick={() => setSelectedIds(new Set())}>清空</button>
-            </div>
+            <BatchActionBar
+              selection={batchSel}
+              filteredCount={filteredGoals.length}
+              filteredIds={filteredGoals.map(g => g.id)}
+              itemLabel="目标"
+              statuses={[{ value: 'todo', label: '待办' }, { value: 'in_progress', label: '进行中' }, { value: 'done', label: '已完成' }, { value: 'blocked', label: '已阻塞' }, { value: 'cancelled', label: '已取消' }]}
+              members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
+              onBatchDelete={(ids) => handleBatchDelete()}
+              onBatchStatus={(_ids, status) => handleBatchStatus(Array.from(selectedIds), status)}
+              onBatchAssign={(_ids, assigneeId) => handleBatchAssign(Array.from(selectedIds), assigneeId)}
+              canDelete={can('goals_delete')}
+              canEdit={can('goals_edit')}
+            />
           )}
-          <button onClick={() => { setBatchMode(!batchMode); setSelectedIds(new Set()); setBatchStatus(''); setBatchAssignee(''); }} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted'}`}>
+          <button onClick={() => batchSel.toggleBatchMode()} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted'}`}>
             <Check size={14} />
             <span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span>
           </button>

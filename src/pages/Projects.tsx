@@ -14,6 +14,8 @@ import { viewTabs, statusOptions, priorityOptions, bpOptions, timeOptions, prior
 import type { ViewMode, BatchProps } from './projects/constants';
 import { ProjectTreeNode, ProjectListView, ProjectTableView, ProjectKanbanView, ProjectMatrixView, ProjectTimelineView } from './projects/views';
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
+import { useBatchSelection } from '@/hooks/useBatchSelection';
+import { BatchActionBar } from '@/components/BatchActionBar';
 
 export default function Projects() {
   const { state, dispatch } = useStore();
@@ -42,6 +44,18 @@ export default function Projects() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keyboard event handlers for batch toggle + select-all
+  useEffect(() => {
+    const onToggleBatch = () => { batchSel.toggleBatchMode(); };
+    const onSelectAll = () => { selectAll(filteredProjects.map(p => p.id)); };
+    window.addEventListener('tbh-toggle-batch', onToggleBatch);
+    window.addEventListener('tbh-select-all', onSelectAll);
+    return () => {
+      window.removeEventListener('tbh-toggle-batch', onToggleBatch);
+      window.removeEventListener('tbh-select-all', onSelectAll);
+    };
+  }, [batchSel, selectAll, filteredProjects]);
+
   const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
@@ -49,15 +63,13 @@ export default function Projects() {
   const [timeFilter, setTimeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showPersonPicker, setShowPersonPicker] = useState(false);
-  const [batchMode, setBatchMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [batchStatus, setBatchStatus] = useState('');
+  const batchSel = useBatchSelection();
+  const { batchMode, selectedIds, toggleSelect, selectAll, selectRange, clearSelection, exitBatchMode } = batchSel;
   // Adapter: sub-views pass { type, id } objects; we route to URL
   const setDetailItem = useCallback((item: { type: 'project'; id: string } | null) => {
     if (item) openProjectDetail(item.id);
     else closeProjectDetail();
   }, [openProjectDetail, closeProjectDetail]);
-  const [batchLeader, setBatchLeader] = useState('');
 
   // All users default to team view — no auto-switch to personal view
 
@@ -127,16 +139,22 @@ export default function Projects() {
   useEffect(() => { if (showCreateDialog) { const draft = projectDraft.loadDraft(); if (draft) setFormData(f => ({ ...f, ...draft })); } }, [showCreateDialog]);
   useEffect(() => { if (showCreateDialog && formData.title) projectDraft.saveDraft(formData); }, [showCreateDialog, formData]);
 
-  const batchProps = useMemo((): BatchProps => ({ batchMode, selectedIds, onToggleSelect: (id: string) => { setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); } }), [batchMode, selectedIds]);
+  const batchProps = useMemo((): BatchProps => ({
+    batchMode,
+    selectedIds,
+    onToggleSelect: toggleSelect,
+    shiftSelect: (id: string) => {
+      if (batchMode && batchSel.lastSelectedId && batchSel.lastSelectedId !== id) {
+        selectRange(batchSel.lastSelectedId, id, filteredProjects.map(p => p.id));
+      } else {
+        toggleSelect(id);
+      }
+    },
+  }), [batchMode, selectedIds, toggleSelect, selectRange, batchSel, filteredProjects]);
 
-  const toggleSelectAll = useCallback(() => {
-    if (selectedIds.size === filteredProjects.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(filteredProjects.map(p => p.id)));
-  }, [selectedIds.size, filteredProjects]);
-
-  const batchDelete = useCallback(() => { if (!can('delete_projects')) return; if (!confirm(`确认删除选中的 ${selectedIds.size} 个项目？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_PROJECT', payload: id })); setSelectedIds(new Set()); setBatchMode(false); }, [selectedIds, dispatch]);
-  const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_projects')) return; if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { status: status as ProjectStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); }, [selectedIds, dispatch]);
-  const batchAssign = useCallback((leaderId: string) => { if (!can('edit_projects')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
+  const batchDelete = useCallback(() => { if (!can('delete_projects')) return; if (!confirm(`确认删除选中的 ${selectedIds.size} 个项目？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_PROJECT', payload: id })); exitBatchMode(); }, [selectedIds, dispatch, can, exitBatchMode]);
+  const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_projects')) return; if (!status) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { status: status as ProjectStatus } } })); clearSelection(); }, [selectedIds, dispatch, can, clearSelection]);
+  const batchAssign = useCallback((leaderId: string) => { if (!can('edit_projects')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { leaderId } } })); clearSelection(); }, [selectedIds, dispatch, can, clearSelection]);
 
   function handleCreate() {
     if (!formData.title.trim()) return;
@@ -169,23 +187,21 @@ export default function Projects() {
         </div>
         <div className="flex items-center gap-2">
           {batchMode && selectedIds.size > 0 && (
-            <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 mr-2">
-              <span className="text-xs font-medium">已选 {selectedIds.size} 项</span>
-               <button className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (!can('delete_projects')) return; batchDelete(); }}>
-                 <Trash2 size={12} /> 删除
-               </button>
-              <select value={batchStatus} onChange={e => setBatchStatus(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-card focus:outline-none">
-                <option value="">改状态</option><option value="todo">待办</option><option value="in_progress">进行中</option><option value="done">已完成</option><option value="blocked">已阻塞</option><option value="cancelled">已取消</option>
-              </select>
-              {batchStatus && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={() => { batchUpdateStatus(batchStatus); }}>确认</button>}
-              <select value={batchLeader} onChange={e => setBatchLeader(e.target.value)} className="border border-border rounded px-1.5 py-1 text-xs bg-card focus:outline-none">
-                <option value="">分配给</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-              {batchLeader && <button className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground" onClick={() => { batchAssign(batchLeader); }}>确认</button>}
-              <button className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground" onClick={() => setSelectedIds(new Set())}>清空</button>
-            </div>
+            <BatchActionBar
+              selection={batchSel}
+              filteredCount={filteredProjects.length}
+              filteredIds={filteredProjects.map(p => p.id)}
+              itemLabel="项目"
+              statuses={[{ value: 'todo', label: '待办' }, { value: 'in_progress', label: '进行中' }, { value: 'done', label: '已完成' }, { value: 'blocked', label: '已阻塞' }, { value: 'cancelled', label: '已取消' }]}
+              members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
+              onBatchDelete={(ids) => batchDelete()}
+              onBatchStatus={(_ids, status) => batchUpdateStatus(status)}
+              onBatchAssign={(_ids, leaderId) => batchAssign(leaderId)}
+              canDelete={can('delete_projects')}
+              canEdit={can('edit_projects')}
+            />
           )}
-          <button onClick={() => { setBatchMode(!batchMode); setSelectedIds(new Set()); setBatchStatus(''); setBatchLeader(''); }} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
+          <button onClick={() => batchSel.toggleBatchMode()} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted'}`}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
           <button onClick={() => setShowCreateDialog(true)} className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"><Plus size={16} /> 新建项目</button>
         </div>
       </div>

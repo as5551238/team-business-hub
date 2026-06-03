@@ -29,7 +29,7 @@ export const TaskCard = React.memo(function TaskCard({ task, compact, tags, comm
   const uniqueTags = (task.tags || []).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
   return (
     <div data-item-id={task.id} data-item-type="task" className={cn('bg-card rounded-lg border border-border shadow-sm p-3 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer group', overdue && 'border-l-4 border-l-red-400', compact && 'p-2')} draggable={!!enableDrag} onDragStart={(e: React.DragEvent) => { e.dataTransfer.setData('text/plain', task.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => onOpenDetail(task)}>
-      {batchProps.batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded" onChange={e => { e.stopPropagation(); batchProps.onToggleSelect(task.id); }} /></div>}
+      {batchProps.batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded" onChange={e => { e.stopPropagation(); const fn = (e.nativeEvent?.shiftKey && batchProps.shiftSelect) ? batchProps.shiftSelect : batchProps.onToggleSelect; fn(task.id); }} /></div>}
       <div className="flex items-center gap-2 mb-1.5">
         <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-bold', bpC.color)}>{bpC.label}</span>
         <PriorityBadge priority={task.priority} />
@@ -68,7 +68,7 @@ export const TaskRow = React.memo(function TaskRow({ task, depth, childMap, expa
   return (
     <div>
       <div data-item-id={task.id} data-item-type="task" className={cn('flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50', overdue && 'bg-red-50/30')} style={{ paddingLeft: `${12 + depth * 24}px` }} onClick={() => onOpenDetail(task)}>
-        {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded flex-shrink-0" onChange={() => batchProps.onToggleSelect(task.id)} /></span>}
+        {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded flex-shrink-0" onChange={e => { const fn = (e.nativeEvent?.shiftKey && batchProps.shiftSelect) ? batchProps.shiftSelect : batchProps.onToggleSelect; fn(task.id); }} /></span>}
         {children.length > 0 ? <button className="p-0.5 hover:bg-accent rounded flex-shrink-0" onClick={e => { e.stopPropagation(); onToggleExpand(task.id); }}>{isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}</button> : <span className="w-4 flex-shrink-0" />}
         <StatusBadge status={task.status} />
         <h4 className={cn('flex-1 text-sm truncate min-w-0', task.status === 'done' && 'line-through text-muted-foreground')}>{task.title}</h4>

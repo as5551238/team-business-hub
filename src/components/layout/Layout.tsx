@@ -483,6 +483,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
       if (mod && !e.shiftKey && e.key === 'z') { e.preventDefault(); dispatch({ type: 'UNDO' }); return; }
       if (mod && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); dispatch({ type: 'REDO' }); return; }
       if (mod && e.key === 'k') { e.preventDefault(); setCommandPaletteOpen(true); return; }
+      if (mod && e.key === 'a') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-select-all')); return; }
       if (mod && !e.shiftKey && e.key === 'n') { e.preventDefault(); setQuickCreateType('task'); setQuickCreateOpen(true); return; }
       if (mod && e.shiftKey && e.key === 'N') { e.preventDefault(); setQuickCreateType('goal'); setQuickCreateOpen(true); return; }
       if (mod && e.shiftKey && e.key === 'P') { e.preventDefault(); setQuickCreateType('project'); setQuickCreateOpen(true); return; }

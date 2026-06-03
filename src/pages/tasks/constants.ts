@@ -6,7 +6,7 @@ export type ViewMode = 'board' | 'list' | 'table' | 'matrix' | 'timeline';
 export type BusinessPriority = 'S' | 'A' | 'B' | 'C';
 export type KanbanGroupBy = 'status' | 'tag' | 'priority' | 'category' | 'level' | 'person' | 'time';
 
-export interface BatchProps { batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }
+export interface BatchProps { batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void; shiftSelect?: (id: string) => void }
 
 export const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; icon: LucideIcon }> = {
   todo: { label: '待处理', color: 'bg-gray-100 text-gray-600', icon: Circle },
