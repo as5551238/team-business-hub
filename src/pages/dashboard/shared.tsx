@@ -4,8 +4,16 @@
 import React, { useMemo, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { useViewingMember, useMemberLookup, useItemLookupMaps } from '@/store/hooks';
-// ── 图表颜色 ──
-export const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+import { resolveToken } from '@/lib/resolveToken';
+// ── 图表颜色 — 基于 Design Token，自动响应深色模式 ──
+export const CHART_COLORS = [
+  resolveToken('primary'),       // 蓝
+  resolveToken('success'),       // 绿
+  resolveToken('warning'),       // 琥珀
+  resolveToken('destructive'),   // 红
+  resolveToken('chart-purple'),  // 紫
+  resolveToken('chart-pink'),    // 粉
+];
 
 // ── 优先级样式 & 标签 ──
 export const priorityColors: Record<string, string> = {

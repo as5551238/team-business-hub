@@ -3,6 +3,7 @@
  */
 import { useMemo } from 'react';
 import { Target, FolderKanban, CheckCircle2, AlertTriangle, TrendingUp, Clock, BarChart3 } from 'lucide-react';
+import { resolveToken } from '@/lib/resolveToken';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { getFunnelMetrics } from '@/lib/analytics';
@@ -167,8 +168,8 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
                 <XAxis dataKey="day" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip formatter={(v: number) => [`${v} 项`]} />
-                <Line type="monotone" dataKey="created" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="新建" />
-                <Line type="monotone" dataKey="completed" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="完成" />
+                <Line type="monotone" dataKey="created" stroke={resolveToken('primary')} strokeWidth={2} dot={{ r: 3 }} name="新建" />
+                <Line type="monotone" dataKey="completed" stroke={resolveToken('success')} strokeWidth={2} dot={{ r: 3 }} name="完成" />
               </LineChart>
             </ResponsiveContainer>
           ) : (
