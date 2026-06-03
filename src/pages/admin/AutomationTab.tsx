@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useStore } from '@/store/useStore';
 import type { AutomationRule, AutomationTrigger, AutomationAction, ItemType } from '@/types';
-import { Plus, Trash2, Bell, Edit2, UserPlus, Zap, ToggleLeft, ToggleRight, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Bell, Edit2, UserPlus, Zap, ToggleLeft, ToggleRight, Sparkles, Activity, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { createRuleFromIntent, getWorkflowPatternSummary } from '@/lib/ai/aiWorkflowEngine';
+import { getAutomationLog, clearAutomationLog } from '@/store/shared';
+import type { AutomationLogEntry } from '@/store/shared';
 
 const TRIGGERS: { value: AutomationTrigger; label: string }[] = [
   { value: 'status_change', label: '状态变更' },
@@ -31,6 +33,7 @@ export function AutomationTab() {
   const { state, dispatch } = useStore();
   const rules = state.automationRules || [];
   const [showForm, setShowForm] = useState(false);
+  const [showLog, setShowLog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<{ name: string; enabled: boolean; itemType: ItemType; trigger: AutomationTrigger; conditionField: string; conditionOperator: string; conditionValue: string; actions: { type: AutomationAction; config: Record<string, string> }[] }>({
     name: '', enabled: true, itemType: 'task', trigger: 'status_change', conditionField: 'status', conditionOperator: 'eq', conditionValue: 'done', actions: [],
@@ -223,6 +226,37 @@ export function AutomationTab() {
           </div>
         </div>
       )}
+
+      {/* 执行日志面板 */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5"><Activity size={14} />执行日志</h3>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowLog(v => !v)} className="text-xs text-muted-foreground hover:text-foreground">{showLog ? '收起' : '展开'}</button>
+            {showLog && getAutomationLog().length > 0 && (
+              <button onClick={clearAutomationLog} className="text-xs text-muted-foreground hover:text-destructive">清除</button>
+            )}
+          </div>
+        </div>
+        {showLog && (() => {
+          const logs = getAutomationLog();
+          if (logs.length === 0) return <p className="text-xs text-muted-foreground">暂无执行记录</p>;
+          return (
+            <div className="space-y-1 max-h-60 overflow-y-auto">
+              {logs.slice(0, 50).map(log => (
+                <div key={log.id} className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 rounded text-xs">
+                  {log.success ? <CheckCircle2 size={12} className="text-success flex-shrink-0" /> : <XCircle size={12} className="text-destructive flex-shrink-0" />}
+                  <span className="font-medium truncate max-w-[120px]" title={log.ruleName}>{log.ruleName}</span>
+                  <span className="text-muted-foreground">{TRIGGERS.find(t => t.value === log.trigger)?.label ?? log.trigger}</span>
+                  <span className="truncate max-w-[100px]" title={log.itemTitle}>{log.itemTitle}</span>
+                  <span className="text-muted-foreground ml-auto flex items-center gap-1"><Clock size={10} />{new Date(log.timestamp).toLocaleTimeString()}</span>
+                  {!log.success && <span className="text-destructive truncate max-w-[120px]" title={log.error}>{log.error}</span>}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
     </div>
   );
 }

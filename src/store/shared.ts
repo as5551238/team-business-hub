@@ -139,6 +139,31 @@ export function matchCondition(operator: string, fieldValue: unknown, condValue:
 }
 
 /** 触发自动化规则（status_change / field_change / item_created 统一入口） */
+export interface AutomationLogEntry {
+  id: string;
+  ruleId: string;
+  ruleName: string;
+  trigger: string;
+  itemId: string;
+  itemType: 'goal' | 'project' | 'task';
+  itemTitle: string;
+  actionsCount: number;
+  success: boolean;
+  error?: string;
+  timestamp: string;
+}
+
+const MAX_LOG_ENTRIES = 200;
+const _automationLog: AutomationLogEntry[] = [];
+
+export function getAutomationLog(): AutomationLogEntry[] {
+  return _automationLog.slice();
+}
+
+export function clearAutomationLog(): void {
+  _automationLog.length = 0;
+}
+
 export function fireAutomationRules(
   s: AppState, itemId: string, itemType: 'goal' | 'project' | 'task', itemTitle: string,
   trigger: 'status_change' | 'field_change' | 'item_created' | 'due_arrive' | 'kr_lag' | 'overdue',
@@ -166,7 +191,28 @@ export function fireAutomationRules(
     const fieldValue = condField === 'status' ? (updates.status ?? oldItem.status) : (updates[condField] ?? oldItem[condField]);
     try {
       if (matchCondition(condOp, fieldValue, condVal)) {
-        executeAutomationActions(s, rule, itemId, itemType, itemTitle);
+        const ruleName = (rule as AutomationRule).name ?? '未命名规则';
+        const ruleId = (rule as AutomationRule).id ?? 'unknown';
+        const logEntry: AutomationLogEntry = {
+          id: genId('al'),
+          ruleId,
+          ruleName,
+          trigger,
+          itemId,
+          itemType,
+          itemTitle,
+          actionsCount: rule.actions.length,
+          success: true,
+          timestamp: new Date().toISOString(),
+        };
+        try {
+          executeAutomationActions(s, rule, itemId, itemType, itemTitle);
+        } catch (execErr) {
+          logEntry.success = false;
+          logEntry.error = execErr instanceof Error ? execErr.message : String(execErr);
+        }
+        _automationLog.unshift(logEntry);
+        if (_automationLog.length > MAX_LOG_ENTRIES) _automationLog.length = MAX_LOG_ENTRIES;
       }
     } catch (e) { handleError(e, { module: 'store', operation: 'AUTOMATION_MATCH', severity: 'warn' }); }
   }
