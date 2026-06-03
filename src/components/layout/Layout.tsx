@@ -22,7 +22,8 @@ import { OperationToast } from '@/components/OperationToast';
 import { requestNotificationPermission, sendBrowserNotification, isNotificationSupported } from '@/lib/browserNotify';
 import { isWeChatEnabled, sendWeChatMessage } from '@/supabase/wechat';
 import { setWeChatNotify, fireAutomationRules } from '@/store/shared';
-import { getPageFromPathname, PAGE_TO_PATH, useAppNavigate } from '@/lib/routes';
+import { getPageFromPathname, PAGE_TO_PATH, useAppNavigate, usePageInfo } from '@/lib/routes';
+import { Breadcrumb } from '@/components/Breadcrumb';
 
 // Detect H5 embedded mode (WeChat/Feishu in-app browser or ?h5=1 param)
 function isH5Mode(): boolean {
@@ -206,6 +207,11 @@ export default function Layout({ children, currentUser }: LayoutProps) {
 
   // Derive currentPage from URL pathname (not from prop)
   const currentPage = useMemo(() => getPageFromPathname(location.pathname), [location.pathname]);
+  // Extract itemId from URL for breadcrumb (e.g. /tasks/glb_xxx)
+  const itemId = useMemo(() => {
+    const parts = location.pathname.split('/');
+    return parts[2] || null;
+  }, [location.pathname]);
   const onPageChange = useCallback((page: Page) => { goToPage(page); }, [goToPage]);
 
   const { state, dispatch, connectionMode } = useStore();
@@ -725,9 +731,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
               <PanelLeft size={20} />
             </button>
           )}
-          <h1 className="text-base font-semibold">
-            {(currentPage === 'settings' ? '系统设置' : navItems.find(n => n.page === currentPage)?.label)}
-          </h1>
+          <Breadcrumb currentPage={currentPage} itemId={itemId} />
 
           {userTeams.length > 1 && (
             <div className="relative">
