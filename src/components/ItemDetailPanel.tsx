@@ -4,6 +4,7 @@ import { usePermissions } from '@/store/hooks';
 import { uploadFile, deleteFile, BUCKET_NAMES } from '@/supabase/storage';
 import type { TrackingRecord, RepeatCycle } from '@/types';
 import { useCollabPresence } from '@/lib/collab';
+import { useAutoSave } from '@/hooks/useAutoSave';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -136,9 +137,34 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
   useEffect(() => { setLocalDescription(description); }, [description]);
   useEffect(() => { setLocalSummary(summary); }, [summary]);
 
-  const hasUnsavedEdits = !!(editingTitle || newComment || newTrackingContent || customTagInput.trim() !== '');
+  // Auto-save description: 800ms debounce after each keystroke
+  const { flush: flushDescription } = useAutoSave(localDescription, {
+    delay: 800,
+    enabled: canEdit && localDescription !== description,
+    onSave: (val) => { if (val !== description) updateItem({ description: val }); },
+  });
 
-  function handleClose() { if (hasUnsavedEdits && !confirm('有未保存的内容，确认关闭？')) return; onClose(); }
+  // Auto-save summary: 800ms debounce after each keystroke
+  const { flush: flushSummary } = useAutoSave(localSummary, {
+    delay: 800,
+    enabled: canEdit && localSummary !== summary,
+    onSave: (val) => { if (val !== summary) updateItem({ summary: val }); },
+  });
+
+  // Track pending auto-save changes for unsaved edits detection
+  const descDirty = localDescription !== description;
+  const summaryDirty = localSummary !== summary;
+  const hasUnsavedEdits = !!(editingTitle || newComment || newTrackingContent || customTagInput.trim() !== '' || descDirty || summaryDirty);
+
+  function handleClose() {
+    // Flush any pending auto-saves before closing
+    flushDescription();
+    flushSummary();
+    // Only confirm for truly unsaved non-auto-save edits (title, comment, tracking)
+    const hasNonAutoEdits = !!(editingTitle || newComment || newTrackingContent || customTagInput.trim() !== '');
+    if (hasNonAutoEdits && !confirm('有未保存的内容，确认关闭？')) return;
+    onClose();
+  }
   function handleOverlayClick() { handleClose(); }
 
   useEffect(() => {
@@ -204,13 +230,8 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
     setPriorityOpen(false);
   }
 
-  function handleDescriptionBlur(val: string) {
-    if (val !== description) updateItem({ description: val });
-  }
-
-  function handleSummaryBlur(val: string) {
-    if (val !== summary) updateItem({ summary: val });
-  }
+  // Description and summary are now auto-saved via useAutoSave (800ms debounce)
+  // No explicit onBlur save needed — flush on panel close handles edge cases
 
   function handleDateChange(field: string, value: string) {
     updateItem({ [field]: value || null });
@@ -418,7 +439,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
             {activeTab === 'overview' && (
               <>
                 <Section title="背景信息">
-                  <Textarea className="w-full min-h-[80px] text-sm" maxLength={5000} placeholder="输入描述信息，支持直接粘贴图片..." value={localDescription} onChange={e => setLocalDescription(e.target.value)} onBlur={e => handleDescriptionBlur(e.target.value)} onPaste={handlePasteImage} />
+                  <Textarea className="w-full min-h-[80px] text-sm" maxLength={5000} placeholder="输入描述信息，支持直接粘贴图片..." value={localDescription} onChange={e => setLocalDescription(e.target.value)} onPaste={handlePasteImage} />
                 </Section>
                 <DetailRelationships itemType={itemType} itemId={itemId} goal={goal} project={project} task={task} canEdit={canEdit} updateItem={updateItem} />
                 <Section title="四象限归属">
@@ -505,7 +526,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                 <DetailChildItems itemId={itemId} itemType={itemType} task={task} />
                 {item && <AiChatPanel itemId={itemId} itemType={itemType} itemTitle={item.title} itemDescription={item.description || ''} />}
                 <Section title="项目总结">
-                  <Textarea className="w-full min-h-[60px] text-sm" maxLength={3000} placeholder="输入总结..." value={localSummary} onChange={e => setLocalSummary(e.target.value)} onBlur={e => handleSummaryBlur(e.target.value)} />
+                  <Textarea className="w-full min-h-[60px] text-sm" maxLength={3000} placeholder="输入总结..." value={localSummary} onChange={e => setLocalSummary(e.target.value)} />
                 </Section>
                 <Section title="附件" icon={<Paperclip className="w-3.5 h-3.5" />}>
                   <div className="space-y-2">
