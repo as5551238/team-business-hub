@@ -643,7 +643,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
           }).map((item, idx) => (
             <button key={item.page} onClick={() => handlePageClick(item.page)}
               title={sidebarNarrow ? item.label : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 text-left relative ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'} ${sidebarNarrow ? 'justify-center px-0' : ''}`}>
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left relative active:scale-[0.97] ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'} ${sidebarNarrow ? 'justify-center px-0' : ''}`}>
               {item.icon}
               {!sidebarNarrow && !sidebarCollapsed && item.label}
               {!sidebarNarrow && !sidebarCollapsed && item.page === 'tasks' && overdueCount > 0 && (

@@ -202,3 +202,49 @@
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 6px;
 }
+
+/* ── Micro-interaction Presets ── */
+
+/* 按钮按压反馈 — 全局应用 */
+button:active:not(:disabled),
+[role="button"]:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* 卡片 hover 微浮 */
+.card-hover-lift {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.card-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -4px hsl(var(--foreground) / 0.08);
+}
+
+/* 状态切换脉冲动画 */
+@keyframes status-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+.status-pulse {
+  animation: status-pulse 0.3s ease;
+}
+
+/* 数字变化弹跳 */
+@keyframes count-bounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.count-bounce {
+  animation: count-bounce 0.25s ease;
+}
+
+/* 操作成功打勾 */
+@keyframes check-pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.check-pop {
+  animation: check-pop 0.3s ease forwards;
+}
