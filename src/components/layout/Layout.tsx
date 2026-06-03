@@ -612,7 +612,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
       {sidebarOpen && <div className="sidebar-overlay md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <aside className={[
-        'fixed inset-y-0 left-0 z-50 bg-sidebar text-sidebar-foreground transform transition-all duration-200 ease-in-out flex flex-col',
+        'fixed inset-y-0 left-0 z-50 bg-sidebar text-sidebar-foreground glass-sidebar transform transition-all duration-200 ease-in-out flex flex-col',
         // 移动端: sidebarOpen 控制 overlay 显示/隐藏
         sidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full',
         // 桌面端: sidebarMode 控制宽度，始终可见（hidden 除外）

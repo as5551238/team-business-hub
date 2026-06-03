@@ -42,9 +42,9 @@
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 222.2 84% 7%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 222.2 84% 7%;
     --popover-foreground: 210 40% 98%;
     --primary: 217.2 91.2% 59.8%;
     --primary-foreground: 222.2 47.4% 11.2%;
@@ -155,6 +155,45 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid hsl(var(--border) / 0.5);
+}
+
+/* Glass elevated — for detail panels, modals, dropdowns */
+.glass-elevated {
+  background: hsl(var(--card) / 0.92);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid hsl(var(--border) / 0.4);
+  box-shadow: 0 8px 32px -8px hsl(var(--foreground) / 0.1);
+}
+
+/* Glass sidebar — translucent sidebar in dark mode */
+.glass-sidebar {
+  border-right: 1px solid hsl(var(--border) / 0.4);
+}
+
+.dark .glass-sidebar {
+  background: hsl(var(--sidebar) / 0.85);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+}
+
+/* Dark mode subtle background noise texture */
+.dark #root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 50%, hsl(var(--primary) / 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, hsl(var(--info) / 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, hsl(var(--chart-purple) / 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ensure content above dark bg texture */
+.dark #root > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* Status badge base — pill-shaped with semantic colors */
