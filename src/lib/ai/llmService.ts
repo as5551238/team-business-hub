@@ -7,6 +7,7 @@ import type { TeamAnalysis } from './types';
 import type { PeriodSnapshot } from './dataCollector';
 import { PROVIDER_PRESETS, loadAIConfig, COST_ROUTING_MAP, detectTaskComplexity } from './types';
 import { getSupabaseClient } from '@/supabase/client'; // TDZ fix: static import instead of dynamic import
+import { handleError } from '@/lib/errorHandler';
 
 /** 简易响应缓存（相同prompt→直接返回，3分钟TTL） */
 const responseCache = new Map<string, { result: string; expire: number }>();
@@ -212,16 +213,15 @@ function parseLLMJSON(text: string): LLMResponse | null {
   try {
     // 尝试直接解析
     return JSON.parse(text);
-  } catch {}
+  } catch (e) { handleError(e, { module: 'llmService', operation: 'PARSE_LLM_JSON', severity: 'warn' }); }
   try {
-    // 去除 markdown 代码块标记
     const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     return JSON.parse(cleaned);
-  } catch {}
+  } catch (e) { handleError(e, { module: 'llmService', operation: 'PARSE_LLM_JSON_CLEANED', severity: 'warn' }); }
   // 尝试提取 JSON 部分
   const match = text.match(/\{[\s\S]*"insights"[\s\S]*\}/);
   if (match) {
-    try { return JSON.parse(match[0]); } catch {}
+    try { return JSON.parse(match[0]); } catch (e) { handleError(e, { module: 'llmService', operation: 'PARSE_LLM_JSON_EXTRACT', severity: 'warn' }); }
   }
   return null;
 }

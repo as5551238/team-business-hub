@@ -1,6 +1,7 @@
 // P1: AI团队诊断面板 — 5维健康仪表盘 + 风险预警 + AI建议
 import React, { useEffect, useState, useCallback } from 'react';
 import { Activity, AlertTriangle, Lightbulb, Users, TrendingUp, Shield, RefreshCw } from 'lucide-react';
+import { handleError } from '@/lib/errorHandler';
 
 interface DiagnosticsData {
   healthScore: number;
@@ -75,7 +76,7 @@ export default function TeamDiagnosticsPanel() {
     try {
       const { data: result, error } = await sb.rpc('team_diagnostics', { p_days: 30 });
       if (!error && result) setData(result as DiagnosticsData);
-    } catch {}
+    } catch (e) { handleError(e, { module: 'TeamDiagnosticsPanel', operation: 'FETCH_DATA', severity: 'warn' }); }
     setLoading(false);
   }, []);
 

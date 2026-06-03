@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { handleError } from '@/lib/errorHandler';
 
 let supabaseInstance: SupabaseClient | null = null;
 
@@ -18,7 +19,7 @@ export function isSupabaseConfigured(): boolean {
 export function resetSupabase(): void {
   // P3#26 fix: remove all Realtime channels before nulling instance to prevent leaks
   if (supabaseInstance) {
-    try { supabaseInstance.removeAllChannels(); } catch {}
+    try { supabaseInstance.removeAllChannels(); } catch (e) { handleError(e, { module: 'supabase', operation: 'REMOVE_CHANNELS', severity: 'debug' }); }
   }
   supabaseInstance = null;
 }

@@ -4,10 +4,10 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useStore } from '@/store/useStore';
 import { buildAIContext, extractFocusItems } from '@/lib/ai/aiContextEngine';
 import type { ItemContext } from '@/lib/ai/aiContextEngine';
+import { useAppNavigate } from '@/lib/routes';
+import type { Page } from '@/components/layout/Layout';
 
 interface AIFocusWidgetProps {
-  onPageChange: (page: string) => void;
-  onOpenDetail: (id: string, type: 'goal' | 'project' | 'task') => void;
 }
 
 const typeIcon: Record<ItemContext['type'], React.ReactNode> = {
@@ -48,15 +48,15 @@ const statusLabel: Record<string, string> = {
   cancelled: '已取消',
 };
 
-function AIFocusWidgetInner({ onPageChange, onOpenDetail }: AIFocusWidgetProps) {
+function AIFocusWidgetInner(_props: AIFocusWidgetProps) {
   const { state } = useStore();
+  const { goToItem } = useAppNavigate();
 
   const focusItems = useMemo(() => extractFocusItems(buildAIContext(state), 5), [state]);
 
   const handleClick = useCallback((item: ItemContext) => {
-    onPageChange(typePageMap[item.type]);
-    onOpenDetail(item.id, item.type);
-  }, [onPageChange, onOpenDetail]);
+    goToItem(item.type, item.id);
+  }, [goToItem]);
 
   return (
     <div className="bg-card rounded-lg border p-4">

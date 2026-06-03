@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense, Component, useMemo, type ReactNode, type ErrorInfo } from 'react';
+import { HashRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Layout from '@/components/layout/Layout';
 import { initSentry, setSentryUser, clearSentryUser } from '@/lib/sentry';
 import { DegradedBanner } from '@/components/DegradedMode';
 import { FeatureFlagProvider } from '@/lib/featureFlags';
+import { handleError } from '@/lib/errorHandler';
 import { startAiPushScan, stopAiPushScan } from '@/lib/pushEventEngine';
 import { startAutomaton, stopAutomaton } from '@/lib/ai/aiAutomaton';
+import { getPageFromPathname } from '@/lib/routes';
+import type { Page } from '@/components/layout/Layout';
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Goals = lazy(() => import('@/pages/Goals'));
 const Projects = lazy(() => import('@/pages/Projects'));
@@ -35,7 +39,14 @@ class PageErrorBoundary extends Component<{ children: ReactNode; name: string },
   }
 }
 
-type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'knowledge' | 'admin' | 'privacy';
+// Page type is exported from Layout.tsx for shared use
+
+/** Helper: redirect root/unknown routes to dashboard */
+function NavigateToDashboard() {
+  const navigate = useNavigate();
+  useEffect(() => { navigate('/dashboard', { replace: true }); }, [navigate]);
+  return null;
+}
 
 const LOGIN_KEY = 'tbh-current-user';
 const TEAM_KEY = 'tbh-current-team';
@@ -84,9 +95,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
         else { dispatch({ type: 'SET_VIEWING_MEMBER', payload: null }); }
         onLogin(saved);
       }
-    } catch (e) {
-      console.error('[App] failed to restore login state:', e);
-    }
+    } catch (e) { handleError(e, { module: 'App', operation: 'RESTORE_LOGIN', severity: 'debug' }); }
   }, []);
 
   useEffect(() => {
@@ -100,7 +109,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
           localStorage.removeItem('tbh-login-attempts');
           window.location.reload();
         }
-      } catch {}
+      } catch (e) { handleError(e, { module: 'App', operation: 'SESSION_EXPIRY_CHECK', severity: 'debug' }); }
     }, 60000);
     return () => clearInterval(interval);
   }, []);
@@ -127,7 +136,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
         setLockUntil(Date.now() + 5 * 60 * 1000);
         setError('登录失败次数过多，已锁定 5 分钟');
       }
-    } catch (e) { console.error('[App] rate limit recording failed:', e); }
+    } catch (e) { handleError(e, { module: 'App', operation: 'RATE_LIMIT_RECORD', severity: 'debug' }); }
   }
 
   function handleLogin() {
@@ -246,7 +255,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
     }
     const newId = genId('m');
     dispatch({ type: 'ADD_MEMBER', payload: { id: newId, name: name.trim(), nickname: name.trim(), phone: phone.trim(), wechatId: wechatId.trim(), email: email.trim(), role: 'member' as const, department: '', avatar: name.trim().charAt(0).toUpperCase(), status: 'active' as const, permissions: [] } });
-    try { localStorage.setItem(LOGIN_KEY, newId); localStorage.setItem('tbh-login-time', String(Date.now())); } catch {}
+    try { localStorage.setItem(LOGIN_KEY, newId); localStorage.setItem('tbh-login-time', String(Date.now())); } catch (e) { handleError(e, { module: 'App', operation: 'SAVE_REGISTER_STATE', severity: 'debug' }); }
     setVerifiedUserId(newId);
     dispatch({ type: 'SET_CURRENT_USER', payload: newId });
     dispatch({ type: 'SET_VIEWING_MEMBER', payload: newId });
@@ -255,7 +264,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
 
   function finalizeLogin(userId: string, teamId: string) {
     dispatch({ type: 'SET_CURRENT_USER', payload: userId });
-    try { localStorage.setItem(LOGIN_KEY, userId); localStorage.setItem('tbh-login-time', String(Date.now())); localStorage.setItem(TEAM_KEY, teamId); } catch {}
+    try { localStorage.setItem(LOGIN_KEY, userId); localStorage.setItem('tbh-login-time', String(Date.now())); localStorage.setItem(TEAM_KEY, teamId); } catch (e) { handleError(e, { module: 'App', operation: 'SAVE_LOGIN_STATE', severity: 'debug' }); }
     const member = state.members.find(m => m.id === userId);
     dispatch({ type: 'SET_CURRENT_TEAM', payload: teamId });
     setCurrentTeamId(teamId);
@@ -274,7 +283,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
           team_id: teamId,
         }).then(() => {}, () => {});
       }
-    } catch {}
+    } catch (e) { handleError(e, { module: 'App', operation: 'AUDIT_LOG_LOGIN', severity: 'error' }); }
     if (member && member.role === 'member') { dispatch({ type: 'SET_VIEWING_MEMBER', payload: userId }); }
     else { dispatch({ type: 'SET_VIEWING_MEMBER', payload: null }); }
     onLogin(userId);
@@ -296,7 +305,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
         }
       }
       setTeamError('加入失败，请检查邀请码');
-    } catch (e: unknown) { setTeamError('加入失败：' + (e instanceof Error ? e.message : String(e))); }
+    } catch (e: unknown) { handleError(e, { module: 'App', operation: 'JOIN_TEAM', severity: 'error' }); setTeamError('加入失败：' + (e instanceof Error ? e.message : String(e))); }
   }
 
   async function handleCreateTeam() {
@@ -314,7 +323,7 @@ function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
         }
       }
       setTeamError('创建失败，请重试');
-    } catch (e: unknown) { setTeamError('创建失败：' + (e instanceof Error ? e.message : String(e))); }
+    } catch (e: unknown) { handleError(e, { module: 'App', operation: 'CREATE_TEAM', severity: 'error' }); setTeamError('创建失败：' + (e instanceof Error ? e.message : String(e))); }
   }
 
   function handleSelectTeam(teamId: string) {
@@ -506,31 +515,11 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // --- Lightweight hash-based URL routing ---
-  // Hash format: #/dashboard, #/goals, #/tasks, etc.
-  const PAGE_FROM_HASH = (hash: string): Page => {
-    const p = hash.replace(/^#\/?/, '') as Page;
-    const valid: Page[] = ['dashboard', 'goals', 'projects', 'tasks', 'insight', 'knowledge', 'admin', 'privacy'];
-    return valid.includes(p) ? p : 'dashboard';
-  };
-  const [currentPage, setCurrentPage] = useState<Page>(() => PAGE_FROM_HASH(window.location.hash));
-  const navigateTo = useCallback((page: Page) => {
-    window.location.hash = `#/${page}`;
-  }, []);
-
-  // Listen for hash changes (back/forward, URL sharing)
-  useEffect(() => {
-    const onHashChange = () => setCurrentPage(PAGE_FROM_HASH(window.location.hash));
-    window.addEventListener('hashchange', onHashChange);
-    // Sync initial hash
-    if (!window.location.hash || window.location.hash === '#' || window.location.hash === '#/') {
-      window.location.hash = '#/dashboard';
-    }
-    return () => window.removeEventListener('hashchange', onHashChange);
-  }, []);
+  const location = useLocation();
+  const currentPage = useMemo(() => getPageFromPathname(location.pathname), [location.pathname]);
 
   const [showConsent, setShowConsent] = useState(() => {
-    try { return !localStorage.getItem('tbh-privacy-consented'); } catch { return true; }
+    try { return !localStorage.getItem('tbh-privacy-consented'); } catch (e) { handleError(e, { module: 'App', operation: 'CHECK_PRIVACY_CONSENT', severity: 'debug' }); return true; }
   });
 
   // Start AI proactive push scan + Automaton once on login
@@ -543,7 +532,7 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
     // Automaton uses the dispatch bridge injected by StoreProvider via setAsyncDispatch
     startAutomaton(
       () => stateRef.current,
-      (action: any) => { try { dispatch(action); } catch {} },
+      (action: Action) => { try { dispatch(action); } catch (e) { handleError(e, { module: 'App', operation: 'AUTOMATON_DISPATCH', severity: 'warn' }); } },
     );
     return () => { stopAiPushScan(); stopAutomaton(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -551,20 +540,6 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
 
   // Admin/manager default to team view (viewingMemberId = null), set during login
   // Member users default to personal view (viewingMemberId = own ID), set during login
-
-  function renderPage() {
-    switch (currentPage) {
-      case 'dashboard': return <Dashboard onPageChange={(p: string) => navigateTo(p as Page)} />;
-      case 'goals': return <Goals />;
-      case 'projects': return <Projects />;
-      case 'tasks': return <Tasks />;
-      case 'insight': return <Insight />;
-      case 'knowledge': return <Knowledge />;
-      case 'admin': return <Admin />;
-      case 'privacy': return <PrivacyPage onBack={() => navigateTo('dashboard')} />;
-      default: return <Dashboard />;
-    }
-  }
 
   const currentUser = useMemo(() => state.members.find(m => m.id === loggedIn), [state.members, loggedIn]);
 
@@ -583,10 +558,24 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
           />
         </Suspense>
       )}
-      <Layout currentPage={currentPage} onPageChange={navigateTo} currentUser={currentUser}>
+      <Layout currentUser={currentUser}>
         <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground text-sm">加载中...</div>}>
           <PageErrorBoundary key={currentPage} name={navLabel(currentPage)}>
-            {renderPage()}
+            <Routes>
+              <Route path="/" element={<NavigateToDashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/goals" element={<Goals />} />
+              <Route path="/goals/:itemId" element={<Goals />} />
+              <Route path="/projects" element={<Projects />} />
+              <Route path="/projects/:itemId" element={<Projects />} />
+              <Route path="/tasks" element={<Tasks />} />
+              <Route path="/tasks/:itemId" element={<Tasks />} />
+              <Route path="/insight" element={<Insight />} />
+              <Route path="/knowledge" element={<Knowledge />} />
+              <Route path="/admin" element={<Admin />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="*" element={<NavigateToDashboard />} />
+            </Routes>
           </PageErrorBoundary>
         </Suspense>
       </Layout>
@@ -613,20 +602,20 @@ function App() {
   }, []);
 
   // D7: Deep link — handle NAVIGATE messages from SW (notificationclick)
+  // Now uses react-router: navigate to /tasks/:itemId style URLs
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'NAVIGATE' && event.data.url) {
         const url = event.data.url;
-        // Convert SW URL to hash-based route: /task/xxx -> #tasks, /goal/xxx -> #goals
+        // Convert SW URL to react-router hash URL: /task/xxx -> #/tasks/xxx
         const page = url.includes('/goal') ? 'goals' : url.includes('/project') ? 'projects' : url.includes('/task') ? 'tasks' : null;
         if (page) {
-          window.location.hash = page;
-          // Dispatch item navigation after a short delay for page to load
           const itemId = url.split('/').pop();
           if (itemId) {
-            const itemType = url.includes('/goal') ? 'goal' : url.includes('/project') ? 'project' : 'task';
-            setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-item', { detail: { id: itemId, type: itemType } })), 300);
+            window.location.hash = `#/${page}/${itemId}`;
+          } else {
+            window.location.hash = `#/${page}`;
           }
         }
       }
@@ -637,7 +626,9 @@ function App() {
 
   return (
     <StoreProvider>
-      <AppShell />
+      <HashRouter>
+        <AppShell />
+      </HashRouter>
     </StoreProvider>
   );
 }
@@ -652,19 +643,19 @@ function AppShell() {
         localStorage.setItem(LOGIN_KEY, oldId);
       }
       localStorage.removeItem('tbh-current-user-id');
-    } catch {}
+    } catch (e) { handleError(e, { module: 'App', operation: 'LOCALSTORAGE_MIGRATION', severity: 'debug' }); }
   }, []);
 
   const { state: appState } = useStore();
   const currentUserId = appState.currentUser?.id || null;
-  const [loggedIn, setLoggedIn] = useState<string | null>(() => { try { return localStorage.getItem(LOGIN_KEY); } catch { return null; } });
+  const [loggedIn, setLoggedIn] = useState<string | null>(() => { try { return localStorage.getItem(LOGIN_KEY); } catch (e) { handleError(e, { module: 'App', operation: 'RESTORE_LOGGED_IN', severity: 'debug' }); return null; } });
 
   // Sync loggedIn with store: when currentUser changes (e.g. logout, or switching users), update localStorage + loggedIn
   useEffect(() => {
     if (currentUserId) {
-      try { localStorage.setItem(LOGIN_KEY, currentUserId); } catch {}
+      try { localStorage.setItem(LOGIN_KEY, currentUserId); } catch (e) { handleError(e, { module: 'App', operation: 'SAVE_LOGIN_KEY', severity: 'debug' }); }
     } else {
-      try { localStorage.removeItem(LOGIN_KEY); } catch {}
+      try { localStorage.removeItem(LOGIN_KEY); } catch (e) { handleError(e, { module: 'App', operation: 'REMOVE_LOGIN_KEY', severity: 'debug' }); }
     }
     setLoggedIn(currentUserId);
   }, [currentUserId]);

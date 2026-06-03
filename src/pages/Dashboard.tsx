@@ -5,12 +5,15 @@
  */
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { useStore } from '@/store/useStore';
+import { handleError } from '@/lib/errorHandler';
 import { useViewingMember } from '@/store/hooks';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import { GanttModal } from '@/components/GanttModal';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
 import { TrendingUp, AlertTriangle, Calendar, BarChart3, Settings, CheckCircle2, X, Rocket, UserPlus, Sparkles, Target, Zap, ListTodo, Sun } from 'lucide-react';
+import { useAppNavigate } from '@/lib/routes';
+import type { Page } from '@/components/layout/Layout';
 
 // ── 懒加载 Tab 组件 ──
 const MyTodayTab = lazy(() => import('./dashboard/MyTodayTab'));
@@ -44,13 +47,15 @@ const ONBOARDING_TEMPLATES = [
 ];
 
 // ── 主组件 ──
-interface DashboardProps {
-  onPageChange: (page: string) => void;
-}
-
-export default function Dashboard({ onPageChange }: DashboardProps) {
+export default function Dashboard() {
   const { state, dispatch } = useStore();
   const { isTeamView, viewingMember } = useViewingMember();
+  const { goToPage, goToItem, goWithFilter } = useAppNavigate();
+
+  // 创造一个兼容旧子组件的 onPageChange callback
+  const onPageChange = useCallback((page: string) => {
+    goToPage(page as Page);
+  }, [goToPage]);
 
   // 非管理员默认"我的今日"，管理员/经理默认"业务现况"
   const userRole = state.currentUser?.role;
@@ -60,14 +65,14 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
   const [selectedItemType, setSelectedItemType] = useState<'goal' | 'project' | 'task' | null>(null);
   const [ganttModalOpen, setGanttModalOpen] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
-    try { return localStorage.getItem('tbh-onboarding-done') === '1'; } catch { return false; }
+    try { return localStorage.getItem('tbh-onboarding-done') === '1'; } catch (e) { handleError(e, { module: 'Dashboard', operation: 'READ_ONBOARDING', severity: 'debug' }); return false; }
   });
 
   const isNewUser = !onboardingDismissed && state.goals.length === 0 && state.projects.length === 0 && state.tasks.length === 0;
 
   function dismissOnboarding() {
     setOnboardingDismissed(true);
-    try { localStorage.setItem('tbh-onboarding-done', '1'); } catch {}
+    try { localStorage.setItem('tbh-onboarding-done', '1'); } catch (e) { handleError(e, { module: 'Dashboard', operation: 'SAVE_ONBOARDING', severity: 'debug' }); }
   }
 
   const openDetail = useCallback((id: string, type: 'goal' | 'project' | 'task') => {

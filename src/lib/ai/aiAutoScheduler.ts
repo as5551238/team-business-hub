@@ -10,6 +10,13 @@
 import { loadAIConfig } from './types';
 import { callLLM } from './llmService';
 import { calculateCriticalPath, type CPMResult } from '@/lib/gantt/cpm';
+import type { AppState } from '@/types';
+import { handleError } from '@/lib/errorHandler';
+
+interface LLMScheduleResponse {
+  suggestions?: Array<{ taskId?: string; taskTitle?: string; title?: string; currentStartDate?: string | null; currentDueDate?: string | null; suggestedStartDate?: string; startDate?: string; suggestedDueDate?: string; dueDate?: string; reason?: string; priority?: number }>;
+  risks?: Array<string | { description?: string }>;
+}
 
 export interface ScheduleSuggestion {
   taskId: string;
@@ -31,9 +38,9 @@ export interface AutoScheduleResult {
 }
 
 /** 确定性自动排程：拓扑排序 + CPM约束 + 负载均衡 */
-export function autoScheduleLocal(state: any): AutoScheduleResult {
-  const tasks = state.tasks.filter((t: any) => t.status !== 'done' && t.status !== 'cancelled');
-  const members = state.members.filter((m: any) => m.status === 'active');
+export function autoScheduleLocal(state: AppState): AutoScheduleResult {
+  const tasks = state.tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled');
+  const members = state.members.filter(m => m.status === 'active');
   const suggestions: ScheduleSuggestion[] = [];
 
   // G4: 计算 CPM 关键路径
@@ -41,7 +48,7 @@ export function autoScheduleLocal(state: any): AutoScheduleResult {
   const criticalTaskIds = cpmResult.criticalTaskIds;
 
   // Build dependency graph
-  const taskMap = new Map(tasks.map((t: any) => [t.id, t]));
+  const taskMap = new Map(tasks.map(t => [t.id, t]));
   const inDegree = new Map<string, number>();
   const dependents = new Map<string, string[]>();
 
@@ -174,7 +181,7 @@ export function autoScheduleLocal(state: any): AutoScheduleResult {
 }
 
 /** LLM 深度排程建议 */
-export async function autoScheduleDeep(state: any): Promise<AutoScheduleResult> {
+export async function autoScheduleDeep(state: AppState): Promise<AutoScheduleResult> {
   const config = loadAIConfig();
   if (!config.provider || config.provider === 'none') return autoScheduleLocal(state);
 
@@ -186,7 +193,7 @@ export async function autoScheduleDeep(state: any): Promise<AutoScheduleResult> 
   const prompt = `你是项目管理排程专家。以下是团队任务排程分析结果，请优化建议并补充漏项：
 
 任务总数: ${state.tasks.length}
-活跃成员: ${state.members.filter((m: any) => m.status === 'active').length}
+活跃成员: ${state.members.filter(m => m.status === 'active').length}
 
 初步建议:
 ${taskSummary}
@@ -204,17 +211,17 @@ ${taskSummary}
       try {
         const parsed = JSON.parse(resp);
         if (Array.isArray(parsed.suggestions)) {
-          const deepSuggestions = parsed.suggestions.slice(0, 10).map((s: any) => ({
+          const deepSuggestions = (parsed as LLMScheduleResponse).suggestions!.slice(0, 10).map(s => ({
             taskId: s.taskId || '', taskTitle: s.taskTitle || s.title || '', currentStartDate: s.currentStartDate || null, currentDueDate: s.currentDueDate || null,
             suggestedStartDate: s.suggestedStartDate || s.startDate || formatDate(Date.now()), suggestedDueDate: s.suggestedDueDate || s.dueDate || formatDate(Date.now() + 7 * 86400000),
             reason: s.reason || '', priority: s.priority || 3,
           }));
-          const risks = Array.isArray(parsed.risks) ? parsed.risks.slice(0, 3).map((r: any) => typeof r === 'string' ? r : r.description || '').filter(Boolean) : [];
+          const risks = Array.isArray(parsed.risks) ? parsed.risks.slice(0, 3).map(r => typeof r === 'string' ? r : (r as { description?: string }).description || '').filter(Boolean) : [];
           return { suggestions: deepSuggestions, fromLLM: true, summary: `AI 优化了排程建议，识别 ${risks.length} 个风险点${risks.length > 0 ? '：' + risks.join('；') : ''}` };
         }
-      } catch {}
+      } catch (e) { handleError(e, { module: 'aiAutoScheduler', operation: 'PARSE_LLM_JSON', severity: 'warn' }); }
     }
-  } catch {}
+  } catch (e) { handleError(e, { module: 'aiAutoScheduler', operation: 'LLM_CALL', severity: 'warn' }); }
 
   return local;
 }

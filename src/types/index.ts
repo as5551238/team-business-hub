@@ -185,6 +185,8 @@ export interface Comment {
   isRead: boolean;
   followUpRequired: boolean;
   followUpStatus: 'none' | 'pending' | 'completed';
+  parentId?: string;
+  attachments: Attachment[];
   createdAt: string;
 }
 
@@ -236,13 +238,23 @@ export interface ItemLink {
 
 export interface Notification {
   id: string;
-  type: 'reminder' | 'overdue' | 'assigned' | 'mentioned' | 'sync' | 'error';
+  type: 'reminder' | 'overdue' | 'assigned' | 'mentioned' | 'sync' | 'error' | 'risk_alert' | 'system';
   title: string;
   message: string;
   relatedId: string;
   relatedType: ItemType;
   memberId: string;
   read: boolean;
+  level: 'normal' | 'important' | 'urgent';
+  createdAt: string;
+}
+
+export interface NotificationPreference {
+  id: string;
+  memberId: string;
+  itemId: string;
+  itemType: string;
+  muted: boolean;
   createdAt: string;
 }
 
@@ -481,6 +493,7 @@ export interface BackupData {
   projects: Project[];
   tasks: Task[];
   notifications: Notification[];
+  notificationPreferences: NotificationPreference[];
   activities: Activity[];
   itemLinks: ItemLink[];
   tags: Tag[];
@@ -550,6 +563,7 @@ export interface AppState {
   projects: Project[];
   tasks: Task[];
   notifications: Notification[];
+  notificationPreferences: NotificationPreference[];
   activities: Activity[];
   itemLinks: ItemLink[];
   tags: Tag[];

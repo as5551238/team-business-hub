@@ -5,9 +5,10 @@
  * When the user asks an agent to do something, it parses the intent
  * and executes the matching AI action from aiActions.ts.
  */
-import { AI_ACTION_MAP, AI_ACTIONS } from './aiActions';
+import { AI_ACTION_MAP, AI_ACTIONS, type AiAnalysisAction } from './aiActions';
 import type { AppState } from '@/store/reducer';
 import type { Action } from '@/store/reducer';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== Agent Persona Definitions =====
 
@@ -85,12 +86,12 @@ function loadAiMemory(): AiMemory {
   try {
     const raw = localStorage.getItem(AI_MEMORY_KEY);
     if (raw) return JSON.parse(raw);
-  } catch {}
+  } catch (e) { handleError(e, { module: 'aiAgentSystem', operation: 'LOAD_MEMORY', severity: 'debug' }); }
   return { preferredAgent: 'pm-agent', frequentActions: {}, lastInteraction: '', customInstructions: '' };
 }
 
 function saveAiMemory(memory: AiMemory) {
-  try { localStorage.setItem(AI_MEMORY_KEY, JSON.stringify(memory)); } catch {}
+  try { localStorage.setItem(AI_MEMORY_KEY, JSON.stringify(memory)); } catch (e) { handleError(e, { module: 'aiAgentSystem', operation: 'SAVE_MEMORY', severity: 'debug' }); }
 }
 
 /** Record that an AI action was executed, updating user preference profile */
@@ -141,7 +142,7 @@ export function setAiCustomInstructions(instructions: string) {
  * Parse a user message to determine which AI action to execute.
  * Returns null if no actionable intent is detected.
  */
-export function parseActionIntent(text: string): { actionId: string; params: Record<string, any> } | null {
+export function parseActionIntent(text: string): { actionId: string; params: Record<string, string> } | null {
   const t = text.toLowerCase();
 
   // Create task
@@ -205,9 +206,9 @@ export function parseActionIntent(text: string): { actionId: string; params: Rec
  */
 export function executeAiAction(
   actionId: string,
-  params: Record<string, any>,
+  params: Record<string, string>,
   state: AppState,
-): { action: Action | { error: string } | null; description: string } {
+): { action: Action | AiAnalysisAction | { error: string } | null; description: string } {
   const aiAction = AI_ACTION_MAP.get(actionId);
   if (!aiAction) return { action: null, description: `未知操作: ${actionId}` };
 

@@ -20,7 +20,7 @@ export function RecycleBin() {
 
   const handleRestore = (type: 'goal' | 'project' | 'task', id: string) => {
     const actionType = type === 'goal' ? 'RESTORE_GOAL' : type === 'project' ? 'RESTORE_PROJECT' : 'RESTORE_TASK';
-    dispatch({ type: actionType, payload: id } as any);
+    dispatch({ type: actionType as 'RESTORE_GOAL' | 'RESTORE_PROJECT' | 'RESTORE_TASK', payload: id });
   };
 
   return (

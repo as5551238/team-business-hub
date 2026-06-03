@@ -5,6 +5,8 @@ import type { ItemType } from '@/types';
 import { smartSearch } from '@/lib/ai/aiSmartSearch';
 import type { SearchResult } from '@/lib/ai/aiSmartSearch';
 import { SmartSearchResult } from './SmartSearchResult';
+import { useAppNavigate } from '@/lib/routes';
+import type { Page } from '@/components/layout/Layout';
 import {
   Search, Target, FolderKanban, CheckSquare, Plus, LayoutDashboard,
   BarChart3, Settings, Brain, StickyNote, User, Layers, ArrowRight, Clock, BookOpen
@@ -91,6 +93,7 @@ interface CommandPaletteProps {
 
 export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, onCreateItem }: CommandPaletteProps) {
   const { state } = useStore();
+  const { goToPage, goToItem } = useAppNavigate();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -126,27 +129,27 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
       { key: 'admin', label: '管理', icon: <Settings className="w-4 h-4" />, shortcut: '7' },
     ];
     for (const p of pages) {
-      result.push({ id: `nav-${p.key}`, label: p.label, group: 'navigation', icon: p.icon, shortcut: p.shortcut, keywords: [p.label, p.key], action: () => { onPageChange(p.key); onClose(); } });
+      result.push({ id: `nav-${p.key}`, label: p.label, group: 'navigation', icon: p.icon, shortcut: p.shortcut, keywords: [p.label, p.key], action: () => { goToPage(p.key as Page); onClose(); } });
     }
 
     // Items (goals, projects, tasks)
     for (const g of state.goals.slice(0, 50)) {
-      result.push({ id: `goal-${g.id}`, label: g.title, group: 'items', icon: <Target className="w-4 h-4" />, keywords: [g.title, '目标', g.status ?? '', g.category ?? ''], action: () => { onNavigateItem?.(g.id, 'goal'); onPageChange('goals'); onClose(); } });
+      result.push({ id: `goal-${g.id}`, label: g.title, group: 'items', icon: <Target className="w-4 h-4" />, keywords: [g.title, '目标', g.status ?? '', g.category ?? ''], action: () => { goToItem('goal', g.id); onClose(); } });
     }
     for (const p of state.projects.slice(0, 50)) {
-      result.push({ id: `project-${p.id}`, label: p.title, group: 'items', icon: <FolderKanban className="w-4 h-4" />, keywords: [p.title, '项目', p.status ?? ''], action: () => { onNavigateItem?.(p.id, 'project'); onPageChange('projects'); onClose(); } });
+      result.push({ id: `project-${p.id}`, label: p.title, group: 'items', icon: <FolderKanban className="w-4 h-4" />, keywords: [p.title, '项目', p.status ?? ''], action: () => { goToItem('project', p.id); onClose(); } });
     }
     for (const t of state.tasks.slice(0, 80)) {
-      result.push({ id: `task-${t.id}`, label: t.title, group: 'items', icon: <CheckSquare className="w-4 h-4" />, keywords: [t.title, '任务', t.status ?? ''], action: () => { onNavigateItem?.(t.id, 'task'); onPageChange('tasks'); onClose(); } });
+      result.push({ id: `task-${t.id}`, label: t.title, group: 'items', icon: <CheckSquare className="w-4 h-4" />, keywords: [t.title, '任务', t.status ?? ''], action: () => { goToItem('task', t.id); onClose(); } });
     }
 
     // Members
     for (const m of state.members.filter(m => m.status === 'active').slice(0, 30)) {
-      result.push({ id: `member-${m.id}`, label: m.name, group: 'members', icon: <User className="w-4 h-4" />, keywords: [m.name, m.nickname ?? '', m.department ?? '', m.role], action: () => { onPageChange('tasks'); onClose(); } });
+      result.push({ id: `member-${m.id}`, label: m.name, group: 'members', icon: <User className="w-4 h-4" />, keywords: [m.name, m.nickname ?? '', m.department ?? '', m.role], action: () => { goToPage('tasks'); onClose(); } });
     }
 
     return result;
-  }, [state.goals, state.projects, state.tasks, state.members, onPageChange, onNavigateItem, onCreateItem, onClose, showAiResult]);
+  }, [state.goals, state.projects, state.tasks, state.members, onCreateItem, onClose, showAiResult, goToPage, goToItem]);
 
   const filtered = useMemo(() => fuzzyMatch(items, query), [items, query]);
 
@@ -157,9 +160,9 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
       id: `smart-${sr.item.type}-${sr.item.id}`,
       group: 'smartsearch' as const,
       searchResult: sr,
-      action: () => { onNavigateItem?.(sr.item.id, sr.item.type); onPageChange(sr.item.type === 'goal' ? 'goals' : sr.item.type === 'project' ? 'projects' : 'tasks'); onClose(); },
+      action: () => { goToItem(sr.item.type, sr.item.id); onClose(); },
     }));
-  }, [state, query, onNavigateItem, onPageChange, onClose]);
+  }, [state, query, goToItem, onClose]);
 
   const allItems = useMemo(() => mergePaletteItems(filtered, smartEntries), [filtered, smartEntries]);
 

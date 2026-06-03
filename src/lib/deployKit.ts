@@ -180,25 +180,26 @@ docker-compose up -d
 
 // ===== 数据导出/导入 =====
 
+import type { Goal, Project, Task, Member, Team, TeamMember } from '@/types';
+
 export interface ExportData {
   version: string;
   exportedAt: string;
-  goals: any[];
-  projects: any[];
-  tasks: any[];
-  members: any[];
-  teams: any[];
-  teamMembers: any[];
+  goals: Partial<Goal>[];
+  projects: Partial<Project>[];
+  tasks: Partial<Task>[];
+  members: Partial<Member>[];
+  teams: Partial<Team>[];
+  teamMembers: Partial<TeamMember>[];
 }
 
-/** 导出全部数据到 JSON */
 export function exportAllData(state: {
-  goals: any[];
-  projects: any[];
-  tasks: any[];
-  members: any[];
-  teams: any[];
-  teamMembers: any[];
+  goals: Partial<Goal>[];
+  projects: Partial<Project>[];
+  tasks: Partial<Task>[];
+  members: Partial<Member>[];
+  teams: Partial<Team>[];
+  teamMembers: Partial<TeamMember>[];
 }): ExportData {
   return {
     version: '1.0.0',

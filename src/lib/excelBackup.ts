@@ -1,4 +1,5 @@
 import * as XLSX from '@giszhc/xlsx/dist/xlsx.mini.min';
+import { handleError } from '@/lib/errorHandler';
 import type { BackupData, Member, Goal, Project, Task, Notification, Activity, ItemLink, Tag, Category, Template, ScheduleEvent, Note, ReviewEntry, Comment, Bookmark, SavedView } from '@/types';
 
 interface FlatMember extends Omit<Member, 'permissions'> { permissions: string; }
@@ -6,15 +7,15 @@ interface FlatGoal extends Omit<Goal, 'keyResults' | 'tags' | 'supporterIds' | '
 interface FlatProject extends Omit<Project, 'tags' | 'supporterIds' | 'attachments' | 'trackingRecords'> { tags: string; supporterIds: string; attachments: string; trackingRecords: string; }
 interface FlatTask extends Omit<Task, 'tags' | 'subtasks' | 'supporterIds' | 'attachments' | 'trackingRecords'> { tags: string; subtasks: string; supporterIds: string; attachments: string; trackingRecords: string; }
 
-function arrStr(val: any): string {
+function arrStr(val: unknown): string {
   if (!val) return '';
   return Array.isArray(val) ? JSON.stringify(val) : String(val);
 }
 
-function parseArr(val: any): any[] {
+function parseArr(val: unknown): unknown[] {
   if (!val || val === '') return [];
   if (Array.isArray(val)) return val;
-  try { const p = JSON.parse(val); return Array.isArray(p) ? p : []; } catch { return []; }
+  try { const p = JSON.parse(String(val)); return Array.isArray(p) ? p : []; } catch (e) { handleError(e, { module: 'excelBackup', operation: 'PARSE_ARRAY', severity: 'warn' }); return []; }
 }
 
 interface FlatComment extends Omit<Comment, 'mentionedMemberIds'> { mentionedMemberIds: string; }
@@ -94,56 +95,56 @@ export function importFromExcel(buffer: ArrayBuffer): BackupData | null {
       return sheet ? XLSX.utils.sheet_to_json(sheet) : [];
     };
 
-    const members = getSheet('成员').map((m: any) => ({
-      ...m, permissions: parseArr(m.permissions), role: m.role || 'member',
-      avatar: m.avatar || '', status: m.status || 'active',
+    const members = getSheet('成员').map((m: Record<string, unknown>) => ({
+      ...m, permissions: parseArr(m.permissions), role: (m.role as string) || 'member',
+      avatar: (m.avatar as string) || '', status: (m.status as string) || 'active',
     }));
 
-    const goals = getSheet('目标').map((g: any) => ({
+    const goals = getSheet('目标').map((g: Record<string, unknown>) => ({
       ...g, tags: parseArr(g.tags), keyResults: parseArr(g.keyResults),
       supporterIds: parseArr(g.supporterIds), attachments: parseArr(g.attachments),
       trackingRecords: parseArr(g.trackingRecords), selectedKRIds: parseArr(g.selectedKRIds),
       parentId: g.parentId ?? null, progress: g.progress ?? 0, level: g.level ?? 0,
-      repeatCycle: g.repeatCycle ?? 'none', discussionThreadId: g.discussionThreadId ?? null,
-      summary: g.summary || '', priority: g.priority || 'medium', status: g.status || 'todo',
+      repeatCycle: (g.repeatCycle as string) ?? 'none', discussionThreadId: g.discussionThreadId ?? null,
+      summary: (g.summary as string) || '', priority: (g.priority as string) || 'medium', status: (g.status as string) || 'todo',
     }));
 
-    const projects = getSheet('项目').map((p: any) => ({
+    const projects = getSheet('项目').map((p: Record<string, unknown>) => ({
       ...p, tags: parseArr(p.tags), supporterIds: parseArr(p.supporterIds),
       attachments: parseArr(p.attachments), trackingRecords: parseArr(p.trackingRecords),
-      repeatCycle: p.repeatCycle || 'none', discussionThreadId: p.discussionThreadId || null,
-      summary: p.summary || '', priority: p.priority || 'medium', status: p.status || 'todo',
+      repeatCycle: (p.repeatCycle as string) || 'none', discussionThreadId: (p.discussionThreadId as string) || null,
+      summary: (p.summary as string) || '', priority: (p.priority as string) || 'medium', status: (p.status as string) || 'todo',
     }));
 
-    const tasks = getSheet('任务').map((t: any) => ({
+    const tasks = getSheet('任务').map((t: Record<string, unknown>) => ({
       ...t, tags: parseArr(t.tags), subtasks: parseArr(t.subtasks),
       supporterIds: parseArr(t.supporterIds), attachments: parseArr(t.attachments),
       trackingRecords: parseArr(t.trackingRecords), parentId: t.parentId || null,
-      repeatCycle: t.repeatCycle || 'none', discussionThreadId: t.discussionThreadId || null,
-      summary: t.summary || '', priority: t.priority || 'medium', status: t.status || 'todo',
-      category: t.category || '',
+      repeatCycle: (t.repeatCycle as string) || 'none', discussionThreadId: (t.discussionThreadId as string) || null,
+      summary: (t.summary as string) || '', priority: (t.priority as string) || 'medium', status: (t.status as string) || 'todo',
+      category: (t.category as string) || '',
     }));
 
-    const categories = getSheet('分类').map((c: any) => ({
-      ...c, appliesTo: parseArr(c.appliesTo), color: c.color || '#6366f1', icon: c.icon || 'tag',
+    const categories = getSheet('分类').map((c: Record<string, unknown>) => ({
+      ...c, appliesTo: parseArr(c.appliesTo), color: (c.color as string) || '#6366f1', icon: (c.icon as string) || 'tag',
     }));
 
-    const tags = getSheet('标签').map((t: any) => ({ ...t, color: t.color || '#6366f1' }));
+    const tags = getSheet('标签').map((t: Record<string, unknown>) => ({ ...t, color: (t.color as string) || '#6366f1' }));
 
     if (members.length === 0) return null;
 
-    const comments = getSheet('评论').map((c: any) => ({
+    const comments = getSheet('评论').map((c: Record<string, unknown>) => ({
       ...c, mentionedMemberIds: parseArr(c.mentionedMemberIds),
       followUpRequired: c.followUpRequired || false,
-      followUpStatus: c.followUpStatus || 'none', isRead: c.isRead || false,
+      followUpStatus: (c.followUpStatus as string) || 'none', isRead: c.isRead || false,
     }));
 
-    const bookmarks = getSheet('书签').map((b: any) => ({
-      ...b, icon: b.icon || 'file', category: b.category || '默认',
+    const bookmarks = getSheet('书签').map((b: Record<string, unknown>) => ({
+      ...b, icon: (b.icon as string) || 'file', category: (b.category as string) || '默认',
     }));
 
-    const savedViews = getSheet('视图').map((v: any) => ({
-      ...v, filters: parseArr(v.filters), filterLogic: v.filterLogic || 'and',
+    const savedViews = getSheet('视图').map((v: Record<string, unknown>) => ({
+      ...v, filters: parseArr(v.filters), filterLogic: (v.filterLogic as string) || 'and',
     }));
 
     return {
@@ -168,5 +169,5 @@ export function importFromJSON(text: string): BackupData | null {
     const json = JSON.parse(text);
     if (!json.members || !json.goals || !json.projects || !json.tasks) return null;
     return json as BackupData;
-  } catch { return null; }
+  } catch (e) { handleError(e, { module: 'excelBackup', operation: 'IMPORT_JSON', severity: 'warn' }); return null; }
 }

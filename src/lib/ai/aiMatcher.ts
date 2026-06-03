@@ -17,6 +17,7 @@ import { callLLM } from './llmService';
 import { loadAIConfig } from './types';
 import { buildAIContext, type AIProjectContext } from './aiContextEngine';
 import { buildTeamCapabilityLocal, type CapabilityVector, type CapabilityDimension, DIMENSION_LABELS } from './aiTeamCapability';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型 =====
 
@@ -257,10 +258,10 @@ export async function matchTasksDeep(state: AppState): Promise<MatchResult> {
     const raw = await callLLM(prompt, config);
     if (!raw) return localResult;
 
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch {
+    let parsed: { overrides?: Array<{ taskId?: string; taskTitle?: string; suggestedMemberId?: string; suggestedMemberName?: string; reason?: string; synergy?: string }> } | null = null;
+    try { parsed = JSON.parse(raw); } catch (e) { handleError(e, { module: 'aiMatcher', operation: 'PARSE_LLM_JSON', severity: 'warn' });
       const match = raw.match(/\{[\s\S]*\}/);
-      if (match) try { parsed = JSON.parse(match[0]); } catch {}
+      if (match) try { parsed = JSON.parse(match[0]); } catch (e2) { handleError(e2, { module: 'aiMatcher', operation: 'PARSE_LLM_JSON_FALLBACK', severity: 'warn' }); }
     }
     if (!parsed?.overrides) return localResult;
 

@@ -1,4 +1,5 @@
 import type { Member } from '@/types';
+import { handleError } from '@/lib/errorHandler';
 
 export type AuthState = 'idle' | 'authenticating' | 'callback_processing' | 'authenticated' | 'error';
 
@@ -29,8 +30,9 @@ export async function wechatOAuthLogin(
     }
     setAuthState('error');
     return null;
-  } catch {
+  } catch (e) {
     setAuthState('error');
+    handleError(e, { module: 'authBridge', operation: 'WECHAT_LOGIN', severity: 'warn' });
     return null;
   }
 }
@@ -52,8 +54,9 @@ export async function phoneOtpLogin(
     }
     setAuthState('error');
     return null;
-  } catch {
+  } catch (e) {
     setAuthState('error');
+    handleError(e, { module: 'authBridge', operation: 'PHONE_OTP_LOGIN', severity: 'warn' });
     return null;
   }
 }
@@ -73,8 +76,9 @@ export async function emailMagicLink(
     }
     setAuthState('error');
     return null;
-  } catch {
+  } catch (e) {
     setAuthState('error');
+    handleError(e, { module: 'authBridge', operation: 'EMAIL_MAGIC_LINK', severity: 'warn' });
     return null;
   }
 }

@@ -12,6 +12,8 @@
  * - advanced: + 知识库、管理中心高级Tab、甘特图、AI主动推送
  */
 
+import { handleError } from '@/lib/errorHandler';
+
 export type UserLevel = 'beginner' | 'intermediate' | 'advanced';
 
 const LEVEL_KEY = 'tbh-user-level';
@@ -31,7 +33,7 @@ export function getFirstSeenDate(): string {
     const today = new Date().toISOString().split('T')[0];
     localStorage.setItem(FIRST_SEEN_KEY, today);
     return today;
-  } catch {
+  } catch (e) { handleError(e, { module: 'progressiveDisclosure', operation: 'GET_FIRST_SEEN', severity: 'debug' });
     return new Date().toISOString().split('T')[0];
   }
 }
@@ -41,7 +43,7 @@ export function recordAction(): void {
   try {
     const count = parseInt(localStorage.getItem(ACTION_COUNT_KEY) || '0', 10);
     localStorage.setItem(ACTION_COUNT_KEY, String(count + 1));
-  } catch {}
+  } catch (e) { handleError(e, { module: 'progressiveDisclosure', operation: 'RECORD_ACTION', severity: 'debug' }); }
 }
 
 /** 计算使用天数 */
@@ -56,8 +58,7 @@ function getDaysSinceFirstSeen(): number {
 function getActionCount(): number {
   try {
     return parseInt(localStorage.getItem(ACTION_COUNT_KEY) || '0', 10);
-  } catch {
-    return 0;
+  } catch (e) { handleError(e, { module: 'progressiveDisclosure', operation: 'GET_ACTION_COUNT', severity: 'debug' });
   }
 }
 
@@ -69,7 +70,7 @@ export function computeUserLevel(): UserLevel {
     if (manual === 'advanced' || manual === 'intermediate' || manual === 'beginner') {
       return manual;
     }
-  } catch {}
+  } catch (e) { handleError(e, { module: 'progressiveDisclosure', operation: 'COMPUTE_LEVEL', severity: 'debug' }); }
 
   const days = getDaysSinceFirstSeen();
   const actions = getActionCount();
@@ -87,7 +88,7 @@ export function computeUserLevel(): UserLevel {
 export function setUserLevel(level: UserLevel): void {
   try {
     localStorage.setItem(LEVEL_KEY, level);
-  } catch {}
+  } catch (e) { handleError(e, { module: 'progressiveDisclosure', operation: 'SET_USER_LEVEL', severity: 'debug' }); }
 }
 
 /** 检查功能是否对当前等级可见 */

@@ -15,6 +15,7 @@ import { callLLM } from './llmService';
 import { loadAIConfig } from './types';
 import { buildAIContext, type AIProjectContext } from './aiContextEngine';
 import { buildTeamCapabilityLocal, type CapabilityDimension, DIMENSION_LABELS } from './aiTeamCapability';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型 =====
 
@@ -128,8 +129,8 @@ export async function diagnoseCapabilityGapDeep(state: AppState): Promise<GapDia
     const prompt = `你是团队能力诊断专家。团队整体能力充足度${local.capabilitySufficiency}%，缺口:${gapSummary || '无'}。请识别隐性能力缺口（如跨领域协作、创新思维等不确定量化但重要的能力），输出JSON:{"hiddenGaps":[{"dimension":"","description":"","severity":"high|medium","suggestion":""}],"priorityActions":["行动1"]}`;
     const raw = await callLLM(prompt, config);
     if (!raw) return local;
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch { const m = raw.match(/\{[\s\S]*\}/); if (m) try { parsed = JSON.parse(m[0]); } catch {} }
+    let parsed: { hiddenGaps?: Array<{ description?: string; dimension?: string; severity?: string; suggestion?: string }>; priorityActions?: unknown[] } | null = null;
+    try { parsed = JSON.parse(raw); } catch (e) { handleError(e, { module: 'aiCapabilityGap', operation: 'PARSE_LLM_JSON', severity: 'warn' }); const m = raw.match(/\{[\s\S]*\}/); if (m) try { parsed = JSON.parse(m[0]); } catch (e2) { handleError(e2, { module: 'aiCapabilityGap', operation: 'PARSE_LLM_JSON_FALLBACK', severity: 'warn' }); } }
     if (!parsed) return local;
     if (Array.isArray(parsed.hiddenGaps)) {
       for (const hg of parsed.hiddenGaps) {

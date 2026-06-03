@@ -3,13 +3,14 @@
  * DSN 从环境变量或 localStorage 读取，未配置则静默跳过
  */
 import * as Sentry from '@sentry/react';
+import { handleError } from '@/lib/errorHandler';
 
 const SENTRY_DSN_KEY = 'tbh-sentry-dsn';
 const SENTRY_DEFAULT_DSN = ''; // 用户在Settings中配置
 
 export function initSentry() {
   const dsn = (() => {
-    try { return localStorage.getItem(SENTRY_DSN_KEY) || SENTRY_DEFAULT_DSN; } catch { return ''; }
+    try { return localStorage.getItem(SENTRY_DSN_KEY) || SENTRY_DEFAULT_DSN; } catch (e) { handleError(e, { module: 'sentry', operation: 'LOAD_DSN', severity: 'debug' }); return ''; }
   })();
   if (!dsn) {
     console.info('[Sentry] No DSN configured, skipping init');

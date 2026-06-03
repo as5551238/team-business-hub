@@ -3,6 +3,7 @@ import { useStore } from '@/store/useStore';
 import { usePermissions } from '@/store/hooks';
 import { uploadFile, deleteFile, BUCKET_NAMES } from '@/supabase/storage';
 import type { TrackingRecord, RepeatCycle } from '@/types';
+import { useCollabPresence } from '@/lib/collab';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,6 +74,20 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
 
   const canDelete = (itemType === 'goal' ? can('goals_delete') : itemType === 'project' ? can('projects_delete') : can('tasks_delete'));
   const canEdit = (itemType === 'goal' ? can('goals_edit') : itemType === 'project' ? can('projects_edit') : can('tasks_edit'));
+
+  // Edit lock via collab presence
+  const { onlineUsers, trackEditing } = useCollabPresence(state.currentUser?.id || '', state.currentUser?.name || '');
+  const editLockUser = useMemo(() => onlineUsers.find(u => u.id !== state.currentUser?.id && u.editingOn && u.editingOn.itemId === itemId && u.editingOn.itemType === itemType), [onlineUsers, state.currentUser?.id, itemId, itemType]);
+
+  // Auto-clear edit lock when panel closes
+  useEffect(() => {
+    if (isOpen && canEdit) {
+      trackEditing({ itemId, itemType });
+    } else {
+      trackEditing(null);
+    }
+    return () => { trackEditing(null); };
+  }, [isOpen, canEdit, itemId, itemType, trackEditing]);
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -163,7 +178,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
     return () => document.removeEventListener('mousedown', handleClick);
   }, [statusOpen, priorityOpen]);
 
-  function updateItem(updates: Record<string, any>) {
+  function updateItem(updates: Record<string, unknown>) {
     if (!canEdit) return;
     if (itemType === 'goal') dispatch({ type: 'UPDATE_GOAL', payload: { id: itemId, updates } });
     else if (itemType === 'project') dispatch({ type: 'UPDATE_PROJECT', payload: { id: itemId, updates } });
@@ -334,6 +349,12 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
         {!inline && <div className="hidden md:block absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/20 active:bg-primary/30 z-10" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }} />}
         <div className="overflow-y-auto flex-1">
           <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-border sticky top-0 bg-card z-10">
+            {editLockUser && (
+              <div className="mb-2 px-2 py-1 rounded text-xs bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full flex items-center justify-center text-[8px] font-bold" style={{ backgroundColor: editLockUser.color + '30', color: editLockUser.color }}>{editLockUser.name.charAt(0)}</div>
+                <span>{editLockUser.name} 正在编辑此{itemType === 'goal' ? '目标' : itemType === 'project' ? '项目' : '任务'}</span>
+              </div>
+            )}
             <div className="flex items-start gap-2">
               <div className="flex-1 min-w-0">
                 {editingTitle ? (

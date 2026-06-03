@@ -22,7 +22,7 @@ vi.mock('@/supabase/client', () => ({
 }));
 
 import { reducer } from './reducer';
-import type { AppState, Member, Goal, Task, Project } from '@/types';
+import type { AppState, Member, Goal, Task, Project, BackupData } from '@/types';
 
 // ==================== 测试辅助 ====================
 
@@ -447,14 +447,14 @@ describe('reducer — IMPORT_BACKUP', () => {
       notifications: [],
       activities: [],
     };
-    const next = reducer(state, { type: 'IMPORT_BACKUP', payload: backup as any });
+    const next = reducer(state, { type: 'IMPORT_BACKUP', payload: backup as BackupData });
     expect(next.goals).toHaveLength(1);
     expect(next.tasks).toHaveLength(1);
   });
 
   it('IMPORT_BACKUP 缺少必要字段返回原状态', () => {
     const backup = { version: '1.0', exportedAt: '2026-01-01', members: [], goals: [], projects: [] }; // missing tasks
-    const next = reducer(state, { type: 'IMPORT_BACKUP', payload: backup as any });
+    const next = reducer(state, { type: 'IMPORT_BACKUP', payload: backup as BackupData });
     expect(next).toBe(state); // 未改变
   });
 });

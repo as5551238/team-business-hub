@@ -12,6 +12,7 @@ import { getPushConfigs } from '@/lib/pushConnector';
 import { loadOAuthStatuses, PROVIDER_LABELS, type OAuthProvider } from '@/lib/oauthIntegration';
 import { CheckCircle2, XCircle, AlertTriangle, Activity, Globe, Bell, Link2, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { handleError } from '@/lib/errorHandler';
 
 interface HealthStatus {
   name: string;
@@ -41,7 +42,7 @@ export function IntegrationHealthTab() {
           details: `订阅 ${wh.events?.length || 0} 个事件`,
         });
       }
-    } catch {}
+    } catch (e) { handleError(e, { module: 'IntegrationHealthTab', operation: 'CHECK_WEBHOOKS', severity: 'debug' }); }
 
     // IM 推送通道
     try {
@@ -55,7 +56,7 @@ export function IntegrationHealthTab() {
           details: cfg.webhookUrl ? `URL: ${cfg.webhookUrl.slice(0, 30)}...` : '未配置URL',
         });
       }
-    } catch {}
+    } catch (e) { handleError(e, { module: 'IntegrationHealthTab', operation: 'CHECK_PUSH', severity: 'debug' }); }
 
     // OAuth 连接
     try {
@@ -70,7 +71,7 @@ export function IntegrationHealthTab() {
           details: s.connected ? `用户: ${s.userName || '已连接'}` : '未连接',
         });
       }
-    } catch {}
+    } catch (e) { handleError(e, { module: 'IntegrationHealthTab', operation: 'CHECK_OAUTH', severity: 'debug' }); }
 
     // API 健康检查
     statuses.push({

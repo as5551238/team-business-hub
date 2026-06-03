@@ -12,7 +12,7 @@ interface DetailRelationshipsProps {
   project: Project | null;
   task: Task | null;
   canEdit: boolean;
-  updateItem: (updates: Record<string, any>) => void;
+  updateItem: (updates: Record<string, unknown>) => void;
 }
 
 export function DetailRelationships({ itemType, itemId, goal, project, task, canEdit, updateItem }: DetailRelationshipsProps) {

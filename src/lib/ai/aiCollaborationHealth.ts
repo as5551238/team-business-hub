@@ -2,6 +2,7 @@
  * 协作健康度评分引擎 — 基于评论响应时间、任务逾期率、@mention回复率计算
  * 确定性计算，无需 LLM
  */
+import type { AppState, Comment } from '@/types';
 
 export interface CollaborationHealth {
   overallScore: number; // 0-100
@@ -13,20 +14,20 @@ export interface CollaborationHealth {
   insights: string[];
 }
 
-export function computeCollaborationHealth(state: any): CollaborationHealth {
+export function computeCollaborationHealth(state: AppState): CollaborationHealth {
   const tasks = state.tasks ?? [];
   const comments = state.comments ?? [];
-  const members = (state.members ?? []).filter((m: any) => m.status === 'active');
+  const members = state.members.filter(m => m.status === 'active');
   const notifications = state.notifications ?? [];
 
   // 1. Task on-time rate
-  const completedTasks = tasks.filter((t: any) => t.status === 'done');
-  const completedWithDue = completedTasks.filter((t: any) => t.dueDate && t.completedAt);
-  const onTimeTasks = completedWithDue.filter((t: any) => t.completedAt! <= t.dueDate + 'T23:59:59');
+  const completedTasks = tasks.filter(t => t.status === 'done');
+  const completedWithDue = completedTasks.filter(t => t.dueDate && t.completedAt);
+  const onTimeTasks = completedWithDue.filter(t => t.completedAt! <= t.dueDate + 'T23:59:59');
   const taskOnTimeRate = completedWithDue.length > 0 ? Math.round((onTimeTasks.length / completedWithDue.length) * 100) : 100;
 
   // 2. Comment response rate (comments that got a response within 24h)
-  const commentsByItem = new Map<string, any[]>();
+  const commentsByItem = new Map<string, Comment[]>();
   for (const c of comments) {
     const key = c.itemId;
     if (!commentsByItem.has(key)) commentsByItem.set(key, []);
@@ -39,7 +40,7 @@ export function computeCollaborationHealth(state: any): CollaborationHealth {
   let responseCount = 0;
 
   for (const [, itemComments] of commentsByItem) {
-    const sorted = itemComments.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const sorted = itemComments.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     for (let i = 0; i < sorted.length - 1; i++) {
       const curr = sorted[i];
       const next = sorted[i + 1];
@@ -58,7 +59,7 @@ export function computeCollaborationHealth(state: any): CollaborationHealth {
   const avgResponseHours = responseCount > 0 ? Math.round((totalResponseMs / responseCount) / 3600000 * 10) / 10 : 0;
 
   // 3. @mention response rate (mentioned members who commented on the same item after being mentioned)
-  const mentionComments = comments.filter((c: any) => (c.mentionedMemberIds ?? []).length > 0);
+  const mentionComments = comments.filter(c => (c.mentionedMemberIds ?? []).length > 0);
   let mentionResponded = 0;
   let totalMentions = 0;
 
@@ -67,7 +68,7 @@ export function computeCollaborationHealth(state: any): CollaborationHealth {
     const itemComments = commentsByItem.get(mc.itemId) ?? [];
     for (const mid of mentionedIds) {
       totalMentions++;
-      const afterMention = itemComments.filter((c: any) =>
+      const afterMention = itemComments.filter(c =>
         c.memberId === mid && new Date(c.createdAt).getTime() > new Date(mc.createdAt).getTime()
       );
       if (afterMention.length > 0) mentionResponded++;
@@ -85,8 +86,8 @@ export function computeCollaborationHealth(state: any): CollaborationHealth {
   );
 
   // 5. Trend (compare recent vs older data, simplified)
-  const recentTasks = tasks.filter((t: any) => t.completedAt && new Date(t.completedAt).getTime() > Date.now() - 7 * 86400000);
-  const recentOnTime = recentTasks.filter((t: any) => t.dueDate && t.completedAt! <= t.dueDate + 'T23:59:59');
+  const recentTasks = tasks.filter(t => t.completedAt && new Date(t.completedAt).getTime() > Date.now() - 7 * 86400000);
+  const recentOnTime = recentTasks.filter(t => t.dueDate && t.completedAt! <= t.dueDate + 'T23:59:59');
   const recentRate = recentTasks.length > 0 ? recentOnTime.length / recentTasks.length : 0.5;
   const trend: 'improving' | 'stable' | 'declining' = recentRate > taskOnTimeRate / 100 + 0.05 ? 'improving' : recentRate < taskOnTimeRate / 100 - 0.05 ? 'declining' : 'stable';
 

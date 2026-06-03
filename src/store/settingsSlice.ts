@@ -23,7 +23,7 @@ export function settingsReducer(state: AppState, action: Action): AppState | nul
       const s = needMutate(state, ['statusFlowRules']);
       const { index, rule } = action.payload;
       if (index >= 0 && index < s.statusFlowRules.length) {
-        const others = s.statusFlowRules.filter((_: any, i: number) => i !== index);
+        const others = s.statusFlowRules.filter((_: unknown, i: number) => i !== index);
         const validation = validateNewFlowRule(others, rule);
         if (!validation.valid) { console.warn('Invalid flow rule:', validation.reason); return state; }
         s.statusFlowRules[index] = rule;

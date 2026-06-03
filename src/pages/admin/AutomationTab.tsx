@@ -55,13 +55,13 @@ export function AutomationTab() {
     if (editingId) {
       dispatch({ type: 'UPDATE_AUTOMATION_RULE', payload: { id: editingId, updates: {
         name: form.name, enabled: form.enabled, itemType: form.itemType, trigger: form.trigger,
-        condition: { field: form.conditionField, operator: form.conditionOperator as any, value: form.conditionValue },
+        condition: { field: form.conditionField, operator: form.conditionOperator as AutomationRule['condition']['operator'], value: form.conditionValue },
         actions: form.actions,
       }}});
     } else {
       dispatch({ type: 'ADD_AUTOMATION_RULE', payload: {
         name: form.name, enabled: form.enabled, itemType: form.itemType, trigger: form.trigger,
-        condition: { field: form.conditionField, operator: form.conditionOperator as any, value: form.conditionValue },
+        condition: { field: form.conditionField, operator: form.conditionOperator as AutomationRule['condition']['operator'], value: form.conditionValue },
         actions: form.actions,
       }});
     }

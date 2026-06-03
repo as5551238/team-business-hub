@@ -5,6 +5,7 @@ import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
 import { Trash2, Edit2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check, Users } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import { FilterChipSelect } from '@/components/FilterChipSelect';
@@ -18,6 +19,7 @@ import { viewTabs, statusLabels, statusColors, bizLabels, bizColors, type ViewMo
 import { useDraftSave } from '@/hooks/useDraftSave';
 import { OKRAlignmentView } from './admin/OKRAlignmentTab';
 import { AIItemFlow } from '@/components/AIItemFlow';
+import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 
 export default function Goals() {
   const { state, dispatch } = useStore();
@@ -34,11 +36,13 @@ export default function Goals() {
   // L6: 渐进披露 — 如果当前 viewMode 被过滤掉，回退到 detail
   const allowedGoalModes = filterViewModes('goals', VALID_VIEW_MODES);
   const effectiveViewMode = allowedGoalModes.includes(viewMode) ? viewMode : 'detail';
-  const [detailItem, setDetailItem] = useState<{ type: 'goal'; id: string } | null>(null);
-  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d && d.itemType === 'goal') setDetailItem({ type: 'goal', id: d.itemId }); }; window.addEventListener('tbh-open-detail', h); return () => window.removeEventListener('tbh-open-detail', h); }, []);
-  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (!d || d.page !== 'goals') return; if (d.statuses) setSelectedStatuses(new Set(d.statuses as string[])); }; window.addEventListener('tbh-nav-filter', h); return () => window.removeEventListener('tbh-nav-filter', h); }, []);
 
-  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
+  // URL-driven detail panel (replaces tbh-open-detail event)
+  const { detailItem, openDetail: openGoalDetail, closeDetail: closeGoalDetail } = useDetailFromUrl({ itemType: 'goal', basePath: '/goals' });
+
+  // URL-driven filters (replaces tbh-nav-filter event)
+  const urlFilters = useFiltersFromUrl();
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => urlFilters.statuses || new Set());
   const [selectedPriorities, setSelectedPriorities] = useState<Set<string>>(new Set());
   const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
@@ -46,6 +50,14 @@ export default function Goals() {
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   const [timeRange, setTimeRange] = useState<string>('all');
   const [searchText, setSearchText] = useState('');
+
+  // Apply URL filter params on mount (one-time)
+  useEffect(() => {
+    if (urlFilters.statuses && urlFilters.statuses.size > 0) {
+      setSelectedStatuses(urlFilters.statuses);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
   const [customRepeatDays, setCustomRepeatDays] = useState(0);
@@ -109,8 +121,8 @@ export default function Goals() {
     const getFilteredIds = () => filteredGoals.map(g => g.id);
     const onNavDown = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : -1; setFocusedId(ids[Math.min(idx + 1, ids.length - 1)]); };
     const onNavUp = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : 0; setFocusedId(ids[Math.max(idx - 1, 0)]); };
-    const onEdit = () => { if (focusedId) setDetailItem({ type: 'goal', id: focusedId }); };
-    const onOpen = () => { if (focusedId) setDetailItem({ type: 'goal', id: focusedId }); };
+    const onEdit = () => { if (focusedId) openGoalDetail(focusedId); };
+    const onOpen = () => { if (focusedId) openGoalDetail(focusedId); };
     const onDelete = () => { if (focusedId && can('goal_delete')) dispatch({ type: 'DELETE_GOAL', payload: focusedId }); };
     const onComplete = () => { const id = focusedId; if (id) { const goal = state.goals.find(g => g.id === id); if (goal) { const oldStatus = goal.status; const newStatus = goal.status === 'done' ? 'in_progress' : 'done'; dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: oldStatus, newValue: newStatus }); } } };
     const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
@@ -249,7 +261,8 @@ export default function Goals() {
         title: content.title || tpl.title,
         description: content.description || tpl.description,
       }));
-    } catch {
+    } catch (e) {
+      handleError(e, { module: 'Goals', operation: 'PARSE_TEMPLATE', severity: 'warn' });
       setFormData(f => ({ ...f, title: tpl.title, description: tpl.description }));
     }
     setShowTemplateDropdown(false);
@@ -330,7 +343,7 @@ export default function Goals() {
       {effectiveViewMode === 'detail' && (
         <div className="space-y-4">
           {topGoals.map(goal => (
-            <GoalTreeNode key={goal.id} goal={goal} filteredGoals={filteredGoals} members={state.members} projects={state.projects} expandedGoals={expandedGoals} toggleExpand={toggleExpand} tags={tags} depth={0} onOpenDetail={() => setDetailItem({ type: 'goal', id: goal.id })} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+            <GoalTreeNode key={goal.id} goal={goal} filteredGoals={filteredGoals} members={state.members} projects={state.projects} expandedGoals={expandedGoals} toggleExpand={toggleExpand} tags={tags} depth={0} onOpenDetail={() => openGoalDetail(goal.id)} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
           ))}
           {topGoals.length === 0 && (
             <div className="bg-card rounded-xl border">
@@ -343,7 +356,7 @@ export default function Goals() {
       {effectiveViewMode === 'list' && (
         <div>
           {filteredGoals.length > 0 ? (
-            <GoalListView goals={filteredGoals} members={state.members} onOpenDetail={id => setDetailItem({ type: 'goal', id })} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+            <GoalListView goals={filteredGoals} members={state.members} onOpenDetail={id => openGoalDetail(id)} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
           ) : (
             <div className="bg-card rounded-xl border"><EmptyState icon={Target} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>
           )}
@@ -353,7 +366,7 @@ export default function Goals() {
       {effectiveViewMode === 'matrix' && (
         <div>
           {filteredGoals.length > 0 ? (
-            <GoalMatrixView goals={filteredGoals} members={state.members} onOpenDetail={id => setDetailItem({ type: 'goal', id })} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+            <GoalMatrixView goals={filteredGoals} members={state.members} onOpenDetail={id => openGoalDetail(id)} commentCounts={commentCounts} batchMode={batchMode} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
           ) : (
             <div className="bg-card rounded-xl border"><EmptyState icon={Target} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>
           )}
@@ -479,7 +492,7 @@ export default function Goals() {
 
       {effectiveViewMode === 'okr' && <OKRAlignmentView />}
       </div>
-      {detailItem && <div className="flex-shrink-0 border-l border-border bg-card" style={{ width: 480 }}><ItemDetailPanel key={detailItem.id} inline isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} /></div>}
+      {detailItem && <div className="flex-shrink-0 border-l border-border bg-card" style={{ width: 480 }}><ItemDetailPanel key={detailItem.id} inline isOpen={true} onClose={closeGoalDetail} itemType={detailItem.type} itemId={detailItem.id} /></div>}
 
       {showAIFlow && <AIItemFlow onClose={() => setShowAIFlow(false)} />}
     </div>

@@ -1,22 +1,25 @@
+import type { Member, Template } from '@/types';
+import { handleError } from '@/lib/errorHandler';
+
 export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates';
 
-export const tabItems: { key: AdminTab; label: string; icon: any }[] = [
-  { key: 'team', label: '团队', icon: 'Users' as any },
-  { key: 'flow', label: '流程配置', icon: 'GitBranch' as any },
-  { key: 'automation', label: '自动化', icon: 'Zap' as any },
-  { key: 'kpi', label: 'KPI', icon: 'Target' as any },
-  { key: 'riskradar', label: '风险雷达', icon: 'Shield' as any },
-  { key: 'agent', label: 'Agent审计', icon: 'Bot' as any },
-  { key: 'integrations', label: '集成', icon: 'Globe' as any },
-  { key: 'mcptools', label: 'MCP&Agent', icon: 'Bot' as any },
-  { key: 'marketplace', label: 'Agent市场', icon: 'Store' as any },
-  { key: 'compliance', label: '等保合规', icon: 'ShieldCheck' as any },
-  { key: 'collab', label: '实时协作', icon: 'Radio' as any },
-  { key: 'templates', label: '模板市场', icon: 'LayoutTemplate' as any },
-  { key: 'deploy', label: '部署', icon: 'Server' as any },
-  { key: 'toolbox', label: '工具箱', icon: 'Wrench' as any },
-  { key: 'schedule', label: '日程', icon: 'Calendar' as any },
-  { key: 'settings', label: '设置', icon: 'SettingsIcon' as any },
+export const tabItems: { key: AdminTab; label: string; icon: string }[] = [
+  { key: 'team', label: '团队', icon: 'Users' },
+  { key: 'flow', label: '流程配置', icon: 'GitBranch' },
+  { key: 'automation', label: '自动化', icon: 'Zap' },
+  { key: 'kpi', label: 'KPI', icon: 'Target' },
+  { key: 'riskradar', label: '风险雷达', icon: 'Shield' },
+  { key: 'agent', label: 'Agent审计', icon: 'Bot' },
+  { key: 'integrations', label: '集成', icon: 'Globe' },
+  { key: 'mcptools', label: 'MCP&Agent', icon: 'Bot' },
+  { key: 'marketplace', label: 'Agent市场', icon: 'Store' },
+  { key: 'compliance', label: '等保合规', icon: 'ShieldCheck' },
+  { key: 'collab', label: '实时协作', icon: 'Radio' },
+  { key: 'templates', label: '模板市场', icon: 'LayoutTemplate' },
+  { key: 'deploy', label: '部署', icon: 'Server' },
+  { key: 'toolbox', label: '工具箱', icon: 'Wrench' },
+  { key: 'schedule', label: '日程', icon: 'Calendar' },
+  { key: 'settings', label: '设置', icon: 'SettingsIcon' },
 ];
 
 export const roleLabels: Record<string, string> = { admin: '管理员', manager: '负责人', leader: '组长', member: '成员' };
@@ -45,11 +48,11 @@ export function getRoleDefaultPermission(role: string, permission: string): bool
 }
 
 export interface EditForm { name: string; nickname: string; wechatId: string; phone: string; email: string; role: string; department: string; status: string; }
-export function memberToEditForm(m: any): EditForm { return { name: m.name || '', nickname: m.nickname || '', wechatId: m.wechatId || '', phone: m.phone || '', email: m.email || '', role: m.role || 'member', department: m.department || '', status: m.status || 'active' }; }
+export function memberToEditForm(m: Member): EditForm { return { name: m.name || '', nickname: m.nickname || '', wechatId: m.wechatId || '', phone: m.phone || '', email: m.email || '', role: m.role || 'member', department: m.department || '', status: m.status || 'active' }; }
 
 export interface TForm { title: string; description: string; type: 'goal' | 'project' | 'task' | 'document'; content: string; category: string; isPublic: boolean; }
 export const emptyForm: TForm = { title: '', description: '', type: 'task', content: '', category: '', isPublic: false };
-export function formFromTemplate(t: any): TForm { return { title: t.title, description: t.description, type: t.type, content: t.content, category: t.category, isPublic: t.isPublic }; }
+export function formFromTemplate(t: Template): TForm { return { title: t.title, description: t.description, type: t.type, content: t.content, category: t.category, isPublic: t.isPublic }; }
 
 export interface EvtForm { title: string; description: string; startDate: string; endDate: string; allDay: boolean; color: string; linkedItemId: string; linkedItemType: 'goal' | 'project' | 'task' | null; repeatCycle: string; memberId: string; }
 export const emptyEvtForm: EvtForm = { title: '', description: '', startDate: '', endDate: '', allDay: true, color: '#3b82f6', linkedItemId: '', linkedItemType: null, repeatCycle: 'none', memberId: '' };
@@ -86,11 +89,11 @@ export function getCalendarDays(year: number, month: number): CalendarDay[] {
 
 export interface EmailConfig { enabled: boolean; resendApiKey: string; fromEmail: string; }
 export function loadEmailConfig(): EmailConfig {
-  try { const s = localStorage.getItem('tbh-email-config'); if (s) { const c = JSON.parse(s); return { enabled: c.enabled || false, resendApiKey: c.resendApiKey || c.smtpUser || '', fromEmail: c.fromEmail || '' }; } } catch {}
+  try { const s = localStorage.getItem('tbh-email-config'); if (s) { const c = JSON.parse(s); return { enabled: c.enabled || false, resendApiKey: c.resendApiKey || c.smtpUser || '', fromEmail: c.fromEmail || '' }; } } catch (e) { handleError(e, { module: 'constants', operation: 'LOAD_EMAIL_CONFIG', severity: 'debug' }); }
   return { enabled: false, resendApiKey: '', fromEmail: '' };
 }
 export function saveEmailConfig(c: EmailConfig) {
-  try { localStorage.setItem('tbh-email-config', JSON.stringify(c)); } catch {}
+  try { localStorage.setItem('tbh-email-config', JSON.stringify(c)); } catch (e) { handleError(e, { module: 'constants', operation: 'SAVE_EMAIL_CONFIG', severity: 'debug' }); }
   // Async sync to database for cron jobs - fire and forget
   syncEmailConfigToDb(c);
 }
@@ -103,5 +106,5 @@ async function syncEmailConfigToDb(c: EmailConfig) {
         id: 1, enabled: c.enabled, resend_api_key: c.resendApiKey, from_email: c.fromEmail, updated_at: new Date().toISOString()
       });
     }
-  } catch {}
+  } catch (e) { handleError(e, { module: 'constants', operation: 'SYNC_EMAIL_DB', severity: 'warn' }); }
 }

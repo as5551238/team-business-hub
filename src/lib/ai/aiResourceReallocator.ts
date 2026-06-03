@@ -17,6 +17,7 @@ import { callLLM } from './llmService';
 import { loadAIConfig } from './types';
 import { buildAIContext, type AIProjectContext } from './aiContextEngine';
 import { buildTeamCapabilityLocal, type CapabilityVector, DIMENSION_LABELS } from './aiTeamCapability';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型 =====
 
@@ -250,10 +251,10 @@ export async function reallocateResourcesDeep(state: AppState): Promise<ReallocR
     const raw = await callLLM(prompt, config);
     if (!raw) return localResult;
 
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch {
+    let parsed: { suggestions?: Array<{ action?: string; taskId?: string; taskTitle?: string; fromMemberId?: string; fromMemberName?: string; toMemberId?: string; toMemberName?: string; reason?: string; expectedImprovement?: string; urgency?: string }> } | null = null;
+    try { parsed = JSON.parse(raw); } catch (e) { handleError(e, { module: 'aiResourceReallocator', operation: 'PARSE_LLM_JSON', severity: 'warn' });
       const match = raw.match(/\{[\s\S]*\}/);
-      if (match) try { parsed = JSON.parse(match[0]); } catch {}
+      if (match) try { parsed = JSON.parse(match[0]); } catch (e2) { handleError(e2, { module: 'aiResourceReallocator', operation: 'PARSE_LLM_JSON_FALLBACK', severity: 'warn' }); }
     }
     if (!parsed?.suggestions) return localResult;
 

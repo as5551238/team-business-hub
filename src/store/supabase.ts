@@ -1,7 +1,8 @@
+import { handleError } from '@/lib/errorHandler';
 import type { AppState, Goal, Project, Task, Member, SubTask } from '@/types';
 import { getSupabaseClient } from '@/supabase/client';
 import { STORAGE_KEY, CURRENT_USER_KEY, ensureAppStateDefaults, toCamel, toSnake } from './types';
-import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge } from '@/types';
+import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge, NotificationPreference } from '@/types';
 import { initFactoryRulesIfNeeded } from './shared';
 
 export function saveLocalStateImmediate(state: AppState) {
@@ -17,7 +18,7 @@ export function saveLocalStateImmediate(state: AppState) {
     }
     localStorage.setItem(CURRENT_USER_KEY, state.currentUser?.id || '');
   } catch (e) {
-    console.error('[saveLocalState] localStorage write failed (possibly full):', e);
+    handleError(e, { module: 'store', operation: 'LS_WRITE_STATE', severity: 'debug' });
   }
 }
 
@@ -30,14 +31,14 @@ export function loadLocalState(): AppState {
         localStorage.setItem(STORAGE_KEY, legacy);
         localStorage.removeItem('team-business-hub-data');
       }
-    } catch (e) { console.warn('[loadLocalState] legacy key migration failed:', e); }
+    } catch (e) { handleError(e, { module: 'store', operation: 'LS_MIGRATE_LEGACY', severity: 'debug' }); }
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed && typeof parsed === 'object') return ensureAppStateDefaults(parsed);
     }
   } catch (e) {
-    console.error('[loadLocalState] failed to load state:', e);
+    handleError(e, { module: 'store', operation: 'LS_LOAD_STATE', severity: 'debug' });
   }
   // 首次初始化：生成空数据（不生成示例数据）
   const emptyState = ensureAppStateDefaults({
@@ -73,7 +74,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
   if (!sb) return null;
   const tid = teamId || _currentTeamId || '__default__';
   try {
-    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes] = await Promise.allSettled([
+    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes, notifPrefsRes] = await Promise.allSettled([
       sb.from('members').select('*').eq('status', 'active').order('join_date'),
       sb.from('goals').select('*').eq('team_id', tid).order('level'),
       sb.from('projects').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
@@ -96,20 +97,21 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       sb.from('knowledge').select('*').eq('team_id', tid).order('updated_at', { ascending: false }),
       sb.from('teams').select('*').order('created_at'),
       sb.from('team_members').select('*'),
+      sb.from('notification_preferences').select('*').eq('team_id', tid),
     ]);
-    const val = (r: PromiseSettledResult<any>) => r.status === 'fulfilled' ? r.value : null;
-    const data = (r: any) => Array.isArray(r?.data) ? r.data : [];
+    const val = (r: PromiseSettledResult<unknown>) => r.status === 'fulfilled' ? r.value : null;
+    const data = (r: { data?: unknown } | null) => Array.isArray(r?.data) ? r.data : [];
     const membersRes0 = val(membersRes);
     if (membersRes0?.error) { console.error('Supabase fetch error [members]:', membersRes0.error); return null; }
 
     // Filter members to those in the current team
     const allMembers = data(membersRes0).map(toCamel) as Member[];
     const teamMemberLinks = data(val(teamMembersRes)).map(toCamel);
-    const memberIdsInTeam = new Set(teamMemberLinks.filter((tm: any) => tm.teamId === tid).map((tm: any) => tm.memberId));
+    const memberIdsInTeam = new Set(teamMemberLinks.filter((tm: { teamId: string }) => tm.teamId === tid).map((tm: { memberId: string }) => tm.memberId));
     const teamMembers = allMembers.filter(m => memberIdsInTeam.has(m.id) || m.teamId === tid);
 
     let savedUserId: string | null = null;
-    try { savedUserId = localStorage.getItem(CURRENT_USER_KEY); } catch {}
+    try { savedUserId = localStorage.getItem(CURRENT_USER_KEY); } catch (e) { handleError(e, { module: 'store', operation: 'LS_READ_USER', severity: 'debug' }); }
     const savedUser = savedUserId ? teamMembers.find(m => m.id === savedUserId) : null;
 
     return ensureAppStateDefaults({
@@ -126,6 +128,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       scheduleEvents: data(val(scheduleRes)).map(toCamel) as ScheduleEvent[],
       notes: data(val(notesRes)).map(toCamel) as Note[],
       comments: data(val(commentsRes)).map(toCamel) as Comment[],
+      notificationPreferences: data(val(notifPrefsRes)).map(toCamel) as NotificationPreference[],
       currentUser: savedUser || null,
       tags: data(val(tagsRes)).map(toCamel),
       bookmarks: data(val(bookmarksRes)).map(toCamel) as Bookmark[],
@@ -138,7 +141,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       teamMembers: teamMemberLinks,
       currentTeamId: tid,
     });
-  } catch (e) { console.error('Supabase fetch failed:', e); return null; }
+  } catch (e) { handleError(e, { module: 'store', operation: 'DB_FETCH_ALL', severity: 'error' }); return null; }
 }
 
 // Module-level write error callback — set by StoreProvider to dispatch ADD_NOTIFICATION
@@ -146,7 +149,7 @@ let _onWriteError: ((msg: string) => void) | null = null;
 export function setOnWriteError(cb: (msg: string) => void) { _onWriteError = cb; }
 
 // Failed write queue — persisted to localStorage so tab close doesn't lose data.
-interface PendingWrite { fn: () => Promise<any>; label: string; addedAt: number; version: number; serialized?: string; }
+interface PendingWrite { fn: () => Promise<unknown>; label: string; addedAt: number; version: number; serialized?: string; }
 const failedWrites: PendingWrite[] = [];
 const PENDING_WRITES_KEY = 'tbh-pending-writes';
 const MAX_PENDING_WRITES = 100;
@@ -158,7 +161,7 @@ function persistPendingMeta() {
   try {
     const meta = failedWrites.map(w => ({ label: w.label, addedAt: w.addedAt, version: w.version, serialized: w.serialized }));
     localStorage.setItem(PENDING_WRITES_KEY, JSON.stringify(meta));
-  } catch {}
+  } catch (e) { handleError(e, { module: 'store', operation: 'LS_WRITE_PENDING', severity: 'debug' }); }
 }
 function loadPendingMeta() {
   try {
@@ -173,15 +176,15 @@ function loadPendingMeta() {
         failedWrites.push({ fn: async () => {}, label: m.label, addedAt: m.addedAt, version: m.version, serialized: m.serialized });
       }
     }
-  } catch {}
+  } catch (e) { handleError(e, { module: 'store', operation: 'LS_LOAD_PENDING', severity: 'debug' }); }
 }
 loadPendingMeta();
 
-async function withRetry(fn: () => Promise<any>, retries = 2, label = 'write'): Promise<void> {
+async function withRetry(fn: () => Promise<unknown>, retries = 2, label = 'write'): Promise<void> {
   for (let i = 0; i <= retries; i++) {
     try { await fn(); _writeVersion++; return; } catch (e: unknown) {
       if (i === retries) {
-        console.error(`Supabase ${label} failed after retries:`, e);
+        handleError(e, { module: 'store', operation: `DB_WRITE_${label.toUpperCase()}` as 'DB_WRITE_GOALS', severity: 'error' });
         // Queue for replay on reconnect instead of silently losing data
         if (failedWrites.length < MAX_PENDING_WRITES) {
           failedWrites.push({ fn, label, addedAt: Date.now(), version: _writeVersion });
@@ -208,7 +211,7 @@ export async function replayFailedWrites(): Promise<void> {
       continue;
     }
     try { await pw.fn(); } catch (e) {
-      console.error(`[Supabase] Replay failed for ${pw.label}:`, e);
+      handleError(e, { module: 'store', operation: 'DB_WRITE_REPLAY', severity: 'error' });
       if (failedWrites.length < MAX_PENDING_WRITES) {
         failedWrites.push({ ...pw, addedAt: Date.now(), version: _writeVersion });
         persistPendingMeta();
@@ -223,7 +226,8 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   projects: new Set(['id','title','description','goal_id','status','start_date','end_date','owner_id','member_ids','task_count','progress','created_at','updated_at','leader_id','supporter_ids','parent_id','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','team_id','deleted_at']),
   tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','start_date','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','blocked_by','sprint_id','team_id','deleted_at']),
   members: new Set(['id','name','role','department','avatar','email','status','join_date','created_at','updated_at','nickname','phone','wechat_id','permissions','team_id']),
-  notifications: new Set(['id','type','title','message','related_id','related_type','member_id','read','created_at','team_id']),
+  notifications: new Set(['id','type','title','message','related_id','related_type','member_id','read','created_at','team_id','level']),
+  notification_preferences: new Set(['id','member_id','item_id','item_type','muted','created_at','team_id']),
   activities: new Set(['id','member_id','action','target_type','target_id','target_title','details','created_at','team_id']),
   behavior_events: new Set(['id','user_id','event_type','entity_type','entity_id','metadata','created_at']),
   item_links: new Set(['id','source_id','source_type','target_id','target_type','label','created_at','team_id']),
@@ -233,7 +237,7 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   templates: new Set(['id','title','description','type','content','created_by','updated_by','is_public','category','created_at','updated_at','team_id']),
   schedule_events: new Set(['id','title','description','start_date','end_date','all_day','color','linked_item_id','linked_item_type','member_id','repeat_cycle','created_at','updated_at','team_id']),
   notes: new Set(['id','title','content','folder','color','is_pinned','linked_item_id','linked_item_type','created_by','updated_by','created_at','updated_at','category','tags','team_id']),
-  comments: new Set(['id','item_id','item_type','member_id','member_name','content','created_at','mentioned_member_ids','is_read','follow_up_required','follow_up_status','team_id']),
+  comments: new Set(['id','item_id','item_type','member_id','member_name','content','created_at','mentioned_member_ids','is_read','follow_up_required','follow_up_status','team_id','parent_id','attachments']),
   bookmarks: new Set(['id','title','url','category','icon','order','member_id','created_at','team_id']),
   saved_views: new Set(['id','name','type','filters','filter_logic','member_id','updated_at','created_at','team_id']),
   status_flow_rules: new Set(['id','from_status','to_status','allowed_roles','auto_actions','created_at','updated_at','team_id']),
@@ -249,10 +253,10 @@ const FK_COLUMNS = new Set(['owner_id','leader_id','supporter_ids','assignee_id'
 
 /** Remove keys not present in DB table schema to avoid PostgREST 400 errors.
  *  Converts empty strings to null only for FK columns (Postgres treats '' as non-null). */
-function filterColumns(table: string, snakeData: Record<string, any>): Record<string, any> {
+function filterColumns(table: string, snakeData: Record<string, unknown>): Record<string, unknown> {
   const allowed = TABLE_COLUMNS[table];
   if (!allowed) return snakeData; // unknown table — pass through (e.g. bookmarks/saved_views)
-  const filtered: Record<string, any> = {};
+  const filtered: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(snakeData)) {
     if (!allowed.has(k)) continue;
     filtered[k] = (v === '' && FK_COLUMNS.has(k)) ? null : v;
@@ -260,7 +264,7 @@ function filterColumns(table: string, snakeData: Record<string, any>): Record<st
   return filtered;
 }
 
-export async function supabaseUpsert(table: string, data: Record<string, any> | Record<string, any>[]) {
+export async function supabaseUpsert(table: string, data: Record<string, unknown> | Record<string, unknown>[]) {
   const sb = getSupabaseClient();
   if (!sb) return;
   const arr = Array.isArray(data) ? data : [data];
@@ -273,7 +277,7 @@ export async function supabaseUpsert(table: string, data: Record<string, any> | 
   });
 }
 
-export async function supabaseUpdate(table: string, id: string, data: Record<string, any>, oldUpdatedAt?: string) {
+export async function supabaseUpdate(table: string, id: string, data: Record<string, unknown>, oldUpdatedAt?: string) {
   const sb = getSupabaseClient();
   if (!sb) return;
   await withRetry(async () => {
@@ -290,7 +294,7 @@ export async function supabaseUpdate(table: string, id: string, data: Record<str
   });
 }
 
-export async function supabaseInsert(table: string, data: Record<string, any>) {
+export async function supabaseInsert(table: string, data: Record<string, unknown>) {
   const sb = getSupabaseClient();
   if (!sb) return;
   await withRetry(async () => {
@@ -323,5 +327,5 @@ export function logActivity(params: { memberId?: string; action: string; targetT
       target_title: params.targetTitle.slice(0, 200),
       details: (params.details || '').slice(0, 500),
     }).catch(() => {});
-  } catch {}
+  } catch (e) { handleError(e, { module: 'store', operation: 'LOG_ACTIVITY', severity: 'debug' }); }
 }

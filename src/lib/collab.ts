@@ -10,13 +10,15 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getSupabaseClient } from '@/supabase/client';
+import { handleError } from '@/lib/errorHandler';
 
 // collabDispatch bridge: injected by StoreProvider at runtime to avoid circular dependency.
 // Uses the same late-injection pattern as shared.ts _asyncDispatch.
-let _collabDispatch: ((action: any) => void) | null = null;
-export function setCollabDispatch(fn: (action: any) => void) { _collabDispatch = fn; }
-function getCollabDispatch(): ((action: any) => void) | null { return _collabDispatch; }
+let _collabDispatch: ((action: { type: string; payload?: unknown }) => void) | null = null;
+export function setCollabDispatch(fn: (action: { type: string; payload?: unknown }) => void) { _collabDispatch = fn; }
+function getCollabDispatch(): ((action: { type: string; payload?: unknown }) => void) | null { return _collabDispatch; }
 
 // ===== 类型定义 =====
 
@@ -25,6 +27,8 @@ export interface CollabUser {
   name: string;
   color: string;
   cursor?: { entity: string; entityId: string; field?: string };
+  typingOn?: { itemId: string; itemType: string } | null;
+  editingOn?: { itemId: string; itemType: string; field?: string } | null;
   lastActive: number;
 }
 
@@ -33,8 +37,8 @@ export interface CollabOperation {
   entity: 'goal' | 'project' | 'task' | 'member';
   entityId: string;
   field: string;
-  oldValue: any;
-  newValue: any;
+  oldValue: unknown;
+  newValue: unknown;
   userId: string;
   timestamp: number;
   vectorClock: Record<string, number>;
@@ -176,7 +180,7 @@ export function resolveConflict(local: CollabOperation, remote: CollabOperation)
 
 export function useCollabPresence(userId: string, userName: string) {
   const [onlineUsers, setOnlineUsers] = useState<CollabUser[]>([]);
-  const channelRef = useRef<any>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
   const colorRef = useRef(PRESENCE_COLORS[Math.abs(hashCode(userId)) % PRESENCE_COLORS.length]);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null); // P3#19 fix: track heartbeat interval
 
@@ -197,14 +201,14 @@ export function useCollabPresence(userId: string, userName: string) {
           const state = channel.presenceState();
           const users: CollabUser[] = [];
           for (const [id, presences] of Object.entries(state)) {
-            const p = presences[0] as any;
-            if (p && Date.now() - p.lastActive < PRESENCE_TIMEOUT) {
+            const p = presences[0] as Record<string, unknown>;
+            if (p && Date.now() - (p.lastActive as number) < PRESENCE_TIMEOUT) {
               users.push({
                 id,
-                name: p.name || id.slice(0, 8),
-                color: p.color || '#6b7280',
-                cursor: p.cursor,
-                lastActive: p.lastActive,
+                name: (p.name as string) || id.slice(0, 8),
+                color: (p.color as string) || '#6b7280',
+                cursor: p.cursor as CollabUser['cursor'],
+                lastActive: p.lastActive as number,
               });
             }
           }
@@ -233,20 +237,19 @@ export function useCollabPresence(userId: string, userName: string) {
             channel.track({ ...self, lastActive: Date.now() });
           }
         }, HEARTBEAT_INTERVAL);
-      } catch {}
+      } catch (e) { handleError(e, { module: 'collab', operation: 'SETUP_PRESENCE', severity: 'debug' }); }
     };
 
     setupPresence();
 
     return () => {
       mounted = false;
-      // P3#19 fix: clear heartbeat interval on unmount
       if (heartbeatRef.current) {
         clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
       }
       if (channelRef.current) {
-        try { channelRef.current.unsubscribe(); } catch {}
+        try { channelRef.current.unsubscribe(); } catch (e) { handleError(e, { module: 'collab', operation: 'UNSUBSCRIBE_PRESENCE', severity: 'debug' }); }
       }
     };
   }, [userId, userName]);
@@ -263,13 +266,39 @@ export function useCollabPresence(userId: string, userName: string) {
     }
   }, [userId, userName]);
 
-  return { onlineUsers, updateCursor, myColor: colorRef.current };
+  const trackTyping = useCallback((typingOn: CollabUser['typingOn']) => {
+    if (channelRef.current) {
+      channelRef.current.track({
+        id: userId,
+        name: userName,
+        color: colorRef.current,
+        cursor: undefined,
+        typingOn,
+        lastActive: Date.now(),
+      });
+    }
+  }, [userId, userName]);
+
+  const trackEditing = useCallback((editingOn: CollabUser['editingOn']) => {
+    if (channelRef.current) {
+      channelRef.current.track({
+        id: userId,
+        name: userName,
+        color: colorRef.current,
+        cursor: undefined,
+        editingOn,
+        lastActive: Date.now(),
+      });
+    }
+  }, [userId, userName]);
+
+  return { onlineUsers, updateCursor, trackTyping, trackEditing, myColor: colorRef.current };
 }
 
 // ===== 操作广播 Hook =====
 
 export function useCollabBroadcast(userId: string) {
-  const channelRef = useRef<any>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
   const vectorClockRef = useRef(new VectorClock());
 
   useEffect(() => {
@@ -297,21 +326,19 @@ export function useCollabBroadcast(userId: string) {
             } else if (op.type === 'delete') {
               dispatch({ type: 'REALTIME_DELETE', payload: { table: tableName, id: op.entityId } });
             }
-            // create ops are already handled by postgres_changes Realtime
-          } catch {}
+          } catch (e) { handleError(e, { module: 'collab', operation: 'HANDLE_BROADCAST_OP', severity: 'debug' }); }
         });
 
         channelRef.current = channel;
         channel.subscribe();
-      } catch {}
+      } catch (e) { handleError(e, { module: 'collab', operation: 'SETUP_BROADCAST', severity: 'debug' }); }
     };
 
     setup();
     return () => {
       mounted = false;
-      // P3#20 fix: unsubscribe channel on cleanup
       if (channelRef.current) {
-        try { channelRef.current.unsubscribe(); } catch {}
+        try { channelRef.current.unsubscribe(); } catch (e) { handleError(e, { module: 'collab', operation: 'UNSUBSCRIBE_BROADCAST', severity: 'debug' }); }
         channelRef.current = null;
       }
     };

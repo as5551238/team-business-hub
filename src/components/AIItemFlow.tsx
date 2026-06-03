@@ -6,7 +6,9 @@ import { useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { generateLocalDecomposition, generateDeepDecomposition } from '@/lib/ai/aiDecomposition';
 import type { DecompositionResult, KRDraft, TaskDraft } from '@/lib/ai/aiDecomposition';
+import type { Attachment, TrackingRecord, SubTask, ItemType } from '@/types';
 import { loadAIConfig } from '@/lib/ai/types';
+import { handleError } from '@/lib/errorHandler';
 import { genId } from '@/store/utils';
 import { Sparkles, Target, FolderKanban, ListTodo, ChevronDown, ChevronRight, Loader2, CheckCircle2, X, Wand2 } from 'lucide-react';
 
@@ -40,7 +42,8 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
       }
       // Auto expand first project
       setExpandedProjects(new Set([0]));
-    } catch {
+    } catch (e) {
+      handleError(e, { module: 'AIItemFlow', operation: 'DECOMPOSE', severity: 'warn' });
       const r = generateLocalDecomposition(goalTitle.trim(), goalDesc.trim(), goalType);
       setResult(r);
     }
@@ -92,8 +95,8 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
         confidence: kr.confidence,
       })),
       selectedKRIds: [] as string[],
-      attachments: [] as any[],
-      trackingRecords: [] as any[],
+      attachments: [] as Attachment[],
+      trackingRecords: [] as TrackingRecord[],
       repeatCycle: 'none' as const,
       discussionThreadId: null as string | null,
       summary: result.methodologySuggestion,
@@ -117,8 +120,8 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
         tags: [] as string[],
         category: '',
         taskCount: 0,
-        attachments: [] as any[],
-        trackingRecords: [] as any[],
+        attachments: [] as Attachment[],
+        trackingRecords: [] as TrackingRecord[],
         repeatCycle: 'none' as const,
         discussionThreadId: null as string | null,
         summary: '',
@@ -149,9 +152,9 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
             dueDate: plusDays(task.estimatedDays + idx * 5),
             reminderDate: null as string | null,
             completedAt: null as string | null,
-            subtasks: [] as any[],
-            attachments: [] as any[],
-            trackingRecords: [] as any[],
+            subtasks: [] as SubTask[],
+            attachments: [] as Attachment[],
+            trackingRecords: [] as TrackingRecord[],
             repeatCycle: 'none' as const,
             blockedBy: [] as string[],
             summary: '',
@@ -181,9 +184,9 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
             dueDate: plusDays(task.estimatedDays),
             reminderDate: null as string | null,
             completedAt: null as string | null,
-            subtasks: [] as any[],
-            attachments: [] as any[],
-            trackingRecords: [] as any[],
+            subtasks: [] as SubTask[],
+            attachments: [] as Attachment[],
+            trackingRecords: [] as TrackingRecord[],
             repeatCycle: 'none' as const,
             blockedBy: [] as string[],
             summary: '',
@@ -243,7 +246,7 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
                   ].map(t => (
                     <button
                       key={t.val}
-                      onClick={() => setGoalType(t.val as any)}
+                      onClick={() => setGoalType(t.val as 'okr' | 'kpi' | 'milestone')}
                       className={`flex-1 p-2.5 rounded-lg border text-center transition-colors ${goalType === t.val ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:border-primary/30'}`}
                     >
                       <span className="text-sm font-medium block">{t.label}</span>

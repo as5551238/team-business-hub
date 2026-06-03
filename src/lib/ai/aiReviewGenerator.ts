@@ -18,6 +18,7 @@ import { loadAIConfig } from './types';
 import { buildAIContext, type AIProjectContext } from './aiContextEngine';
 import { computeHealth, detectRisks } from './analysisEngine';
 import { collectSnapshot, getPeriodRange } from './dataCollector';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型 =====
 
@@ -234,10 +235,10 @@ export async function generateReviewDeep(state: AppState, goalId: string): Promi
     const raw = await callLLM(prompt, config);
     if (!raw) return localResult;
 
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch {
+    let parsed: { deepAnalysis?: string; successPatterns?: unknown[]; lessons?: unknown[]; nextCycleOKRSuggestion?: { objectives?: string[]; keyResultsIndicators?: string[] }; teamGrowthInsight?: string } | null = null;
+    try { parsed = JSON.parse(raw); } catch (e) { handleError(e, { module: 'aiReviewGenerator', operation: 'PARSE_LLM_JSON', severity: 'warn' });
       const match = raw.match(/\{[\s\S]*\}/);
-      if (match) try { parsed = JSON.parse(match[0]); } catch {}
+      if (match) try { parsed = JSON.parse(match[0]); } catch (e2) { handleError(e2, { module: 'aiReviewGenerator', operation: 'PARSE_LLM_JSON_FALLBACK', severity: 'warn' }); }
     }
     if (!parsed) return localResult;
 

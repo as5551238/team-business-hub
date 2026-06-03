@@ -5,6 +5,7 @@
 
 import { getSupabaseClient } from './client';
 import { loadEmailConfig, type EmailConfig } from '@/pages/admin/constants';
+import { handleError } from '@/lib/errorHandler';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -113,5 +114,5 @@ export function getLastEmailError(): string {
   try { return localStorage.getItem(EMAIL_LAST_ERROR_KEY) || ''; } catch { return ''; }
 }
 export function setLastEmailError(msg: string) {
-  try { localStorage.setItem(EMAIL_LAST_ERROR_KEY, msg); } catch {}
+  try { localStorage.setItem(EMAIL_LAST_ERROR_KEY, msg); } catch (e) { handleError(e, { module: 'email', operation: 'SET_LAST_ERROR', severity: 'debug' }); }
 }

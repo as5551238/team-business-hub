@@ -7,6 +7,8 @@
  * - 审计日志: 所有 Agent 操作可追溯、不可篡改
  */
 
+import { handleError } from '@/lib/errorHandler';
+
 // ===== A2A Agent Card (Google A2A 规范) =====
 
 export interface AgentCard {
@@ -62,7 +64,7 @@ export interface GatewayRequest {
 
 export interface GatewayResponse {
   success: boolean;
-  data?: any;
+  data?: unknown;
   error?: string;
   protocol: GatewayProtocol;
   auditId?: string;
@@ -172,8 +174,8 @@ export function writeAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): s
     // 保持最大条目限制
     while (logs.length > MAX_AUDIT_ENTRIES) logs.shift();
     localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(logs));
-  } catch {
-    // localStorage 不可用时静默失败
+  } catch (e) {
+    handleError(e, { module: 'agentGateway', operation: 'WRITE_AUDIT', severity: 'debug' });
   }
   return id;
 }
@@ -185,7 +187,7 @@ export function readAuditLogs(limit = 100, agentId?: string): AuditLogEntry[] {
     const logs: AuditLogEntry[] = raw ? JSON.parse(raw) : [];
     const filtered = agentId ? logs.filter(l => l.agentId === agentId) : logs;
     return filtered.slice(-limit);
-  } catch {
+  } catch (e) { handleError(e, { module: 'agentGateway', operation: 'READ_AUDIT', severity: 'debug' });
     return [];
   }
 }

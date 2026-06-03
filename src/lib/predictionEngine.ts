@@ -11,7 +11,8 @@
 import { calculateCriticalPath } from './gantt/cpm';
 import { predictDelayRisk } from './delayPrediction';
 import { calcMemberLoads, type MemberLoad } from './resourceBottleneck';
-import type { Task, Goal, KeyResult } from '@/types';
+import { handleError } from '@/lib/errorHandler';
+import type { Task, Goal, KeyResult, Member } from '@/types';
 
 // ===== 类型定义 =====
 
@@ -24,7 +25,7 @@ export interface PredictionResult {
   score: number; // 0-100, 越高越危险
   level: 'none' | 'low' | 'medium' | 'high' | 'critical';
   summary: string;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   suggestions: string[];
   confidence: 'low' | 'medium' | 'high';
   timestamp: string;
@@ -48,7 +49,7 @@ export function predictDelayEnhanced(task: Task, allTasks: Task[]): PredictionRe
   try {
     const cpm = calculateCriticalPath(tasksForCPM);
     isOnCriticalPath = cpm.criticalTaskIds.has(task.id);
-  } catch {}
+  } catch (e) { handleError(e, { module: 'predictionEngine', operation: 'CPM_CALC', severity: 'warn' }); }
 
   const baseScore = base.risk === 'high' ? 80 : base.risk === 'medium' ? 50 : base.risk === 'low' ? 25 : 5;
   const cpmBoost = isOnCriticalPath ? 15 : 0;
@@ -78,7 +79,7 @@ export function predictDelayEnhanced(task: Task, allTasks: Task[]): PredictionRe
 
 // ===== 资源预测 =====
 
-export function predictResourceBottleneck(tasks: Task[], members: any[]): PredictionResult {
+export function predictResourceBottleneck(tasks: Task[], members: Member[]): PredictionResult {
   const loads = calcMemberLoads(tasks, members);
   const critical = loads.filter((l: MemberLoad) => l.status === 'critical');
   const overloaded = loads.filter((l: MemberLoad) => l.status === 'overloaded');
@@ -174,7 +175,7 @@ export function predictOKRAchievement(goal: Goal): PredictionResult {
 
 export function generateRiskRadar(
   allTasks: Task[],
-  members: any[],
+  members: Member[],
   goals: Goal[],
   projectId?: string,
 ): RiskRadar {
@@ -229,7 +230,7 @@ export function predictDelayV2(task: Task, allTasks: Task[]): PredictionResult {
   const base = predictDelayEnhanced(task, allTasks);
 
   // 进度修正：如果进度已高，风险降低
-  const progress = (task as any).progress ?? 0;
+  const progress = (task as Record<string, unknown>).progress as number ?? 0;
   const hasDue = !!task.dueDate;
   let progressDiscount = 0;
   if (hasDue && progress > 0) {
@@ -321,7 +322,7 @@ export function predictCascadeDelay(task: Task, allTasks: Task[]): PredictionRes
 }
 
 /** 统一 V2 风险雷达 — 整合原引擎 + 进度感知 + 级联传播 */
-export function generateRiskRadarV2(tasks: Task[], members: any[], goals: Goal[], projectId?: string): RiskRadar {
+export function generateRiskRadarV2(tasks: Task[], members: Member[], goals: Goal[], projectId?: string): RiskRadar {
   // 用 V2 进度感知延期预测替代原始预测
   const activeTasks = tasks
     .filter(t => !t.deletedAt && t.status !== 'done' && t.status !== 'cancelled')

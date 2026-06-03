@@ -1,3 +1,4 @@
+import { handleError } from '@/lib/errorHandler';
 import type { AppState, Goal, Project, Task, Member, SubTask, ItemLink, Bookmark, Permission, StatusFlowRule, AutomationRule, Sprint, Knowledge } from '@/types';
 import { isSupabaseConfigured } from '@/supabase/client';
 import type { Action } from './types';
@@ -52,6 +53,7 @@ const TABLE_TO_STATE_KEY: Record<string, string> = {
   schedule_events: 'scheduleEvents',
   knowledge: 'knowledge',
   sprints: 'sprints',
+  notification_preferences: 'notificationPreferences',
   teams: 'teams',
   team_members: 'teamMembers',
 };
@@ -84,7 +86,7 @@ export function reducer(state: AppState, action: Action): AppState {
       let conflictCount = 0;
       const conflictNames: string[] = [];
       let offlineSince = 0;
-      try { offlineSince = parseInt(localStorage.getItem('tbh-went-offline-at') || '0'); } catch {}
+      try { offlineSince = parseInt(localStorage.getItem('tbh-went-offline-at') || '0'); } catch (e) { handleError(e, { module: 'store', operation: 'LS_READ_OFFLINE_SINCE', severity: 'debug' }); }
       for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
         const newVal = payload[key];
         if (!Array.isArray(newVal)) {
@@ -133,13 +135,13 @@ export function reducer(state: AppState, action: Action): AppState {
         }
         (s as Record<string, unknown>)[key as string] = merged;
       }
-      if (offlineSince > 0) { try { localStorage.removeItem('tbh-went-offline-at'); } catch {} }
+      if (offlineSince > 0) { try { localStorage.removeItem('tbh-went-offline-at'); } catch (e) { handleError(e, { module: 'store', operation: 'LS_REMOVE_OFFLINE', severity: 'debug' }); } }
       if (conflictCount > 0 && now - lastSyncNotificationTime > 60000) {
         lastSyncNotificationTime = now;
         const desc = conflictCount <= 3 ? conflictNames.join('、') : `${conflictNames.slice(0, 2).join('、')} 等${conflictCount}项`;
       // P3#3 fix: map state key to entity type instead of hardcoding 'task'
       const keyToEntityType: Record<string, string> = { goals: 'goal', projects: 'project', tasks: 'task', members: 'member', notifications: 'notification', activities: 'activity', comments: 'comment', tags: 'tag' };
-      const conflictType = keyToEntityType[conflictNames.length > 0 ? (Object.keys(payload).find(k => Array.isArray((payload as any)[k])) || 'tasks') : 'tasks'] || 'task';
+      const conflictType = keyToEntityType[conflictNames.length > 0 ? (Object.keys(payload).find(k => Array.isArray((payload as Record<string, unknown>)[k])) || 'tasks') : 'tasks'] || 'task';
       s.notifications.unshift({ id: `sync-${Date.now()}-conflict`, type: 'sync', title: '数据同步更新', message: `${desc} 已被其他设备更新`, read: false, createdAt: new Date().toISOString(), relatedId: '', relatedType: conflictType, memberId: s.currentUser?.id || '' });
       }
       return ensureAppStateDefaults(s as Partial<AppState> & { members: Member[] });
@@ -163,7 +165,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'SET_CURRENT_TEAM': {
       const s = needMutate(state, ['currentTeamId']);
       s.currentTeamId = action.payload;
-      try { localStorage.setItem('tbh-current-team', action.payload || ''); } catch {}
+      try { localStorage.setItem('tbh-current-team', action.payload || ''); } catch (e) { handleError(e, { module: 'store', operation: 'LS_WRITE_TEAM', severity: 'debug' }); }
       return s;
     }
 

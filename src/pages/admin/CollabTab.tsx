@@ -290,8 +290,8 @@ export function CollabTab() {
               <div className="pl-4">entity: &apos;goal&apos; | &apos;project&apos; | &apos;task&apos; | &apos;member&apos;,</div>
               <div className="pl-4">entityId: string,</div>
               <div className="pl-4">field: string,</div>
-              <div className="pl-4">oldValue: any,</div>
-              <div className="pl-4">newValue: any,</div>
+              <div className="pl-4">oldValue: unknown,</div>
+              <div className="pl-4">newValue: unknown,</div>
               <div className="pl-4">userId: string,</div>
               <div className="pl-4">timestamp: number,</div>
               <div className="pl-4">vectorClock: {'{ [userId: string]: number }'}</div>

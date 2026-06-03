@@ -8,17 +8,19 @@ import { Plus, Trash2, FolderKanban, CheckSquare, Square } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 import { genId } from '@/store/utils';
+import { useAppNavigate } from '@/lib/routes';
 import { Section, STATUS_MAP } from './detail-shared';
 import { calcDualTrack, calcKpiKrScore, getKpiStatusColor, getKpiStatusLabel } from '@/lib/kpiScoring';
 
 interface DetailKRsProps {
   goal: Goal;
   canEdit: boolean;
-  updateItem: (updates: Record<string, any>) => void;
+  updateItem: (updates: Record<string, unknown>) => void;
 }
 
 export function DetailKRs({ goal, canEdit, updateItem }: DetailKRsProps) {
   const { state, dispatch } = useStore();
+  const { goToItem } = useAppNavigate();
   const [editingKrId, setEditingKrId] = useState<string | null>(null);
   const [krDraft, setKrDraft] = useState<Partial<KeyResult>>({});
   const [showAddProject, setShowAddProject] = useState(false);
@@ -32,7 +34,7 @@ export function DetailKRs({ goal, canEdit, updateItem }: DetailKRsProps) {
 
   function handleUpdateKR(krId: string, updates: Partial<KeyResult>) {
     const newKRs = goal.keyResults.map(kr => kr.id === krId ? { ...kr, ...updates } : kr);
-    const extraUpdates: Record<string, any> = { keyResults: newKRs };
+    const extraUpdates: Record<string, unknown> = { keyResults: newKRs };
     if ('selected' in updates) {
       const selectedIds = newKRs.filter(kr => kr.selected).map(kr => kr.id);
       extraUpdates.selectedKRIds = selectedIds;
@@ -111,7 +113,7 @@ return (
                       <button
                         key={t.id}
                         className="w-full flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded hover:bg-accent text-left"
-                        onClick={() => window.dispatchEvent(new CustomEvent('tbh-nav-item', { detail: { id: t.id, type: 'task' } }))}
+                        onClick={() => goToItem('task', t.id)}
                       >
                         {t.status === 'done' ? <CheckSquare className="w-3 h-3 text-green-500" /> : <Square className="w-3 h-3 text-muted-foreground" />}
                         <span className={cn('truncate flex-1', t.status === 'done' && 'line-through text-muted-foreground')}>{t.title}</span>

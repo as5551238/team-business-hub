@@ -2,12 +2,13 @@ import type { AppState, Project } from '@/types';
 import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete, logActivity } from './supabase';
 import { genId } from './utils';
-import { needMutate, reducerCanDelete, notifyAssigned, calcGoalProgress, calcProjectProgress, clampTitle, clampDesc, markPendingDelete, diffAssigned, resolveInheritedPriority, executeAutomationActions, matchCondition, tsNow, validateStatusFlow, fireAutomationRules } from './shared';
+import { needMutate, reducerCanDelete, calcProjectProgress, clampTitle, clampDesc, resolveInheritedPriority, diffAssigned, executeAutomationActions, matchCondition, notifyAssigned, tsNow, validateStatusFlow, fireAutomationRules } from './shared';
+import { cascadeAddProject } from './cascadeHandlers';
 
 export function projectReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
     case 'ADD_PROJECT': {
-      const s = needMutate(state, ['projects', 'notifications']);
+      const s = needMutate(state, ['projects', 'goals', 'tasks', 'notifications']);
       const now = tsNow();
       const payload = action.payload;
       const pTitle = clampTitle(payload.title) ?? payload.title;
@@ -36,17 +37,12 @@ export function projectReducer(state: AppState, action: Action): AppState | null
       s.projects.push(p);
       supabaseInsert('projects', p);
       logActivity({ memberId: state.currentUser?.id, action: '创建', targetType: '项目', targetId: p.id, targetTitle: p.title });
-      notifyAssigned(s, state.currentUser?.id, [p.leaderId, ...(p.supporterIds ?? [])].filter(Boolean), p.title, p.id, 'project');
-      for (const rule of s.automationRules) {
-        if (rule.trigger === 'item_created' && rule.itemType === 'project' && rule.enabled !== false) {
-          try { executeAutomationActions(s, rule, p.id, 'project', p.title); } catch (e) { console.warn('item_created automation failed:', e); }
-        }
-      }
+      cascadeAddProject(s, p, state.currentUser?.id);
       return s;
     }
 
     case 'UPDATE_PROJECT': {
-      const s = needMutate(state, ['projects', 'notifications']);
+      const s = needMutate(state, ['projects', 'goals', 'tasks', 'notifications']);
       const now = tsNow();
       const idx = s.projects.findIndex(p => p.id === action.payload.id);
       if (idx !== -1) {

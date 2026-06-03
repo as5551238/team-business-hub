@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { Sun, CheckSquare, Target, User } from 'lucide-react';
+import type { Task as TaskType, Goal } from '@/types';
 
 interface H5LayoutProps {
   children?: React.ReactNode;
@@ -92,7 +93,7 @@ export function H5Layout({ children }: H5LayoutProps) {
 
 // --- Sub-components ---
 
-function H5TodayView({ tasks, dueToday, overdue }: { tasks: any[]; dueToday: any[]; overdue: any[] }) {
+function H5TodayView({ tasks, dueToday, overdue }: { tasks: TaskType[]; dueToday: TaskType[]; overdue: TaskType[] }) {
   return (
     <div className="space-y-4">
       {overdue.length > 0 && (
@@ -135,8 +136,8 @@ function H5TodayView({ tasks, dueToday, overdue }: { tasks: any[]; dueToday: any
   );
 }
 
-function H5TaskList({ tasks }: { tasks: any[] }) {
-  const groups: Record<string, any[]> = { todo: [], in_progress: [], blocked: [] };
+function H5TaskList({ tasks }: { tasks: TaskType[] }) {
+  const groups: Record<string, TaskType[]> = { todo: [], in_progress: [], blocked: [] };
   tasks.forEach(t => { if (groups[t.status]) groups[t.status].push(t); });
   const labels: Record<string, string> = { todo: '待处理', in_progress: '进行中', blocked: '阻塞' };
 
@@ -159,7 +160,7 @@ function H5TaskList({ tasks }: { tasks: any[] }) {
   );
 }
 
-function H5GoalList({ goals }: { goals: any[] }) {
+function H5GoalList({ goals }: { goals: Goal[] }) {
   const active = goals.filter(g => g.status === 'in_progress');
   const done = goals.filter(g => g.status === 'done');
 

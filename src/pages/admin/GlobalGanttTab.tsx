@@ -71,7 +71,7 @@ export function GlobalGanttView() {
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-sm">全局甘特图</h3>
         <div className="flex items-center gap-2">
-          <select className="border border-input rounded px-2 py-1 text-xs" value={filter} onChange={e => setFilter(e.target.value as any)}>
+          <select className="border border-input rounded px-2 py-1 text-xs" value={filter} onChange={e => setFilter(e.target.value as 'all' | 'project')}>
             <option value="all">全部任务</option>
             <option value="project">按项目筛选</option>
           </select>

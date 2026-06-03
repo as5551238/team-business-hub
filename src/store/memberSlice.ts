@@ -3,6 +3,7 @@ import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete } from './supabase';
 import { genId } from './utils';
 import { hasPermission, reducerCanDelete, needMutate, tsNow, markPendingDelete } from './shared';
+import { cascadeDeleteMember } from './cascadeHandlers';
 
 export function memberReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
@@ -39,35 +40,9 @@ export function memberReducer(state: AppState, action: Action): AppState | null 
       const now = tsNow();
       const s = needMutate(state, ['members', 'goals', 'projects', 'tasks', 'comments']);
       markPendingDelete(mid);
-      s.goals.forEach(g => {
-        let changed = false;
-        if (g.leaderId === mid) { g.leaderId = ''; changed = true; }
-        const prevLen = g.supporterIds?.length ?? 0;
-        g.supporterIds = (g.supporterIds ?? []).filter(id => id !== mid);
-        if (g.supporterIds.length !== prevLen) changed = true;
-        if (changed) { g.updatedAt = now; supabaseUpdate('goals', g.id, { leader_id: g.leaderId, supporter_ids: g.supporterIds, updated_at: now }); }
-      });
-      s.projects.forEach(p => {
-        let changed = false;
-        if (p.leaderId === mid) { p.leaderId = ''; changed = true; }
-        const prevLen = p.supporterIds?.length ?? 0;
-        p.supporterIds = (p.supporterIds ?? []).filter(id => id !== mid);
-        if (p.supporterIds.length !== prevLen) changed = true;
-        if (changed) { p.updatedAt = now; supabaseUpdate('projects', p.id, { leader_id: p.leaderId, supporter_ids: p.supporterIds, updated_at: now }); }
-      });
-      s.tasks.forEach(t => {
-        let changed = false;
-        if (t.leaderId === mid) { t.leaderId = ''; changed = true; }
-        const prevLen = t.supporterIds?.length ?? 0;
-        t.supporterIds = (t.supporterIds ?? []).filter(id => id !== mid);
-        if (t.supporterIds.length !== prevLen) changed = true;
-        if (changed) { t.updatedAt = now; supabaseUpdate('tasks', t.id, { leader_id: t.leaderId, supporter_ids: t.supporterIds, updated_at: now }); }
-      });
-      s.comments.forEach(c => {
-        if (c.memberId === mid) { c.memberId = null; supabaseUpdate('comments', c.id, { member_id: null }); } // P3#8 fix: use null instead of ''
-      });
+      cascadeDeleteMember(s, mid, now);
       s.members = s.members.filter(m => m.id !== mid);
-      supabaseDelete('members', mid); // P3#7 fix: removed conflicting supabaseUpdate('members', mid, { status: 'inactive' })
+      supabaseDelete('members', mid);
       return s;
     }
   }

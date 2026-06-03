@@ -42,6 +42,7 @@ export type Action =
   | { type: 'ADD_NOTIFICATION'; payload: Omit<Notification, 'read'> & { read?: boolean } }
   | { type: 'MARK_NOTIFICATION_READ'; payload: string }
   | { type: 'MARK_ALL_NOTIFICATIONS_READ' }
+  | { type: 'TOGGLE_NOTIFICATION_MUTE'; payload: { itemId: string; itemType: string; memberId: string } }
   | { type: 'ADD_MEMBER'; payload: Omit<Member, 'id' | 'joinDate'> & { id?: string } }
   | { type: 'UPDATE_MEMBER'; payload: { id: string; updates: Partial<Member> } }
   | { type: 'DELETE_MEMBER'; payload: string }
@@ -127,6 +128,7 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: Memb
     projects: arr(data.projects),
     tasks: arr(data.tasks),
     notifications: arr(data.notifications),
+    notificationPreferences: arr(data.notificationPreferences),
     activities: arr(data.activities),
     itemLinks: arr(data.itemLinks),
     tags: arr(data.tags),

@@ -1,5 +1,6 @@
 import type { TaskStatus, TaskPriority } from '@/types';
 import { Clock, AlertCircle, CheckCircle2, Circle, Ban } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export type ViewMode = 'board' | 'list' | 'table' | 'matrix' | 'timeline';
 export type BusinessPriority = 'S' | 'A' | 'B' | 'C';
@@ -7,7 +8,7 @@ export type KanbanGroupBy = 'status' | 'tag' | 'priority' | 'category' | 'level'
 
 export interface BatchProps { batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }
 
-export const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; icon: any }> = {
+export const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; icon: LucideIcon }> = {
   todo: { label: '待处理', color: 'bg-gray-100 text-gray-600', icon: Circle },
   in_progress: { label: '进行中', color: 'bg-blue-100 text-blue-700', icon: Clock },
   done: { label: '已完成', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },

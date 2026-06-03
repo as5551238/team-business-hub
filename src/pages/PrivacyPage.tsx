@@ -1,11 +1,10 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Shield, FileText, ChevronRight, ArrowLeft } from 'lucide-react';
+import { handleError } from '@/lib/errorHandler';
 
-interface PrivacyPageProps {
-  onBack?: () => void;
-}
-
-export function PrivacyPage({ onBack }: PrivacyPageProps) {
+export function PrivacyPage() {
+  const navigate = useNavigate();
   const [expandedSection, setExpandedSection] = useState<string | null>('collection');
 
   const sections = [
@@ -94,8 +93,8 @@ export function PrivacyPage({ onBack }: PrivacyPageProps) {
       <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          {onBack && (
-            <button onClick={onBack} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
+          {(
+            <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
               <ArrowLeft size={20} />
             </button>
           )}
@@ -118,10 +117,7 @@ export function PrivacyPage({ onBack }: PrivacyPageProps) {
         <div className="space-y-3">
           {sections.map((section) => (
             <div key={section.id} className="bg-card dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <button
-                onClick={() => setExpandedSection(expandedSection === section.id ? null : section.id)}
-                className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
-              >
+              <button onClick={() => setExpandedSection(expandedSection === section.id ? null : section.id)} className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                 <span className="text-indigo-600">{section.icon}</span>
                 <span className="font-medium text-gray-900 dark:text-gray-100 flex-1 text-left">{section.title}</span>
                 <ChevronRight
@@ -163,7 +159,7 @@ export function ConsentDialog({ onAccept, onDecline }: { onAccept: () => void; o
       onAccept();
       return null;
     }
-  } catch {}
+  } catch (e) { handleError(e, { module: 'PrivacyPage', operation: 'CHECK_CONSENT', severity: 'debug' }); }
 
   if (showPrivacy) {
     return (
@@ -178,13 +174,7 @@ export function ConsentDialog({ onAccept, onDecline }: { onAccept: () => void; o
           </div>
           <div className="sticky bottom-0 bg-card dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 flex gap-3">
             <button onClick={() => setShowPrivacy(false)} className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700">返回</button>
-            <button
-              onClick={() => {
-                try { localStorage.setItem(CONSENT_KEY, String(Date.now())); } catch {}
-                onAccept();
-              }}
-              className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"
-            >我已阅读并同意</button>
+            <button onClick={() => { try { localStorage.setItem(CONSENT_KEY, String(Date.now())); } catch (e) { handleError(e, { module: 'PrivacyPage', operation: 'SAVE_CONSENT', severity: 'debug' }); } onAccept(); }} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">我已阅读并同意</button>
           </div>
         </div>
       </div>
@@ -227,17 +217,8 @@ export function ConsentDialog({ onAccept, onDecline }: { onAccept: () => void; o
         </p>
 
         <div className="flex gap-3">
-          <button
-            onClick={onDecline}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-          >不同意</button>
-          <button
-            onClick={() => {
-              try { localStorage.setItem(CONSENT_KEY, String(Date.now())); } catch {}
-              onAccept();
-            }}
-            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 font-medium"
-          >我已阅读并同意</button>
+          <button onClick={onDecline} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">不同意</button>
+          <button onClick={() => { try { localStorage.setItem(CONSENT_KEY, String(Date.now())); } catch (e) { handleError(e, { module: 'PrivacyPage', operation: 'SAVE_CONSENT', severity: 'debug' }); } onAccept(); }} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 font-medium">我已阅读并同意</button>
         </div>
       </div>
     </div>

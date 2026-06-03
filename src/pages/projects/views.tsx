@@ -4,6 +4,7 @@ import { useMemberLookup, usePermissions } from '@/store/hooks';
 import type { Project, ProjectStatus, TaskPriority } from '@/types';
 import { FolderKanban, Calendar, MoreHorizontal, Edit2, Trash2, GripVertical, ChevronRight, MessageSquare, CheckCircle2, Target, Tag } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { handleError } from '@/lib/errorHandler';
 import { statusLabels, statusColors, priorityLabels, priorityColors, bpLabels, bpFromPriority, getTouchPos } from './constants';
 import type { BatchProps } from './constants';
 import { useVirtualScroll } from '@/hooks/useVirtualScroll';
@@ -202,7 +203,7 @@ export function ProjectTableView({ projects, members, setDetailItem, commentCoun
   const sorted = useMemo(() => {
     if (!sortCol) return projects;
     return [...projects].sort((a, b) => {
-      const av = (a as any)[sortCol]; const bv = (b as any)[sortCol];
+      const av = (a as Record<string, unknown>)[sortCol]; const bv = (b as Record<string, unknown>)[sortCol];
       if (typeof av === 'number' && typeof bv === 'number') return sortDir === 'asc' ? av - bv : bv - av;
       return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
     });
@@ -297,12 +298,12 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
   tags: Array<{ id: string; name: string; color: string }>;
 } & { batchProps: BatchProps }) {
   const KANBAN_LS_KEY = 'tbh-projects-kanban';
-  const [lsRaw] = useState(() => { try { return JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}'); } catch { return {}; } });
+  const [lsRaw] = useState(() => { try { return JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}'); } catch (e) { handleError(e, { module: 'Projects', operation: 'READ_KANBAN', severity: 'debug' }); return {}; } });
   const [kanbanCustomMode, setKanbanCustomMode] = useState(lsRaw.customMode || false);
   const [customColumns, setCustomColumns] = useState<string[]>(lsRaw.columns || ['规划中', '进行中', '已完成']);
   const [kanbanGroupBy, setKanbanGroupBy] = useState<'status' | 'tag' | 'priority' | 'category' | 'level' | 'person' | 'time'>(lsRaw.groupBy || 'status');
   const [newColName, setNewColName] = useState('');
-  useEffect(() => { try { localStorage.setItem(KANBAN_LS_KEY, JSON.stringify({ customMode: kanbanCustomMode, columns: customColumns, groupBy: kanbanGroupBy })); } catch {} }, [kanbanCustomMode, customColumns, kanbanGroupBy]);
+  useEffect(() => { try { localStorage.setItem(KANBAN_LS_KEY, JSON.stringify({ customMode: kanbanCustomMode, columns: customColumns, groupBy: kanbanGroupBy })); } catch (e) { handleError(e, { module: 'Projects', operation: 'SAVE_KANBAN', severity: 'debug' }); } }, [kanbanCustomMode, customColumns, kanbanGroupBy]);
   const defaultColumns: Array<{ key: ProjectStatus; label: string; color: string }> = [
     { key: 'todo', label: '待办', color: 'border-t-gray-400' },
     { key: 'in_progress', label: '进行中', color: 'border-t-blue-500' },
@@ -341,7 +342,7 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
   const groupByBtns = (
     <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-1 px-1">
       {GROUP_OPTIONS.map(opt => (
-        <button key={opt.key} className={`text-xs px-2.5 py-1 rounded-md transition-colors whitespace-nowrap flex-shrink-0 ${kanbanGroupBy === opt.key ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setKanbanGroupBy(opt.key as any)}>{opt.label}</button>
+        <button key={opt.key} className={`text-xs px-2.5 py-1 rounded-md transition-colors whitespace-nowrap flex-shrink-0 ${kanbanGroupBy === opt.key ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setKanbanGroupBy(opt.key as 'status' | 'tag' | 'priority' | 'category' | 'level' | 'person' | 'time')}>{opt.label}</button>
       ))}
     </div>
   );
@@ -477,7 +478,7 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
   );
 }
 
-const MatrixQuadrantCard = React.memo(function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, batchProps, dispatch, dragRef }: { project: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; dispatch: React.Dispatch<any>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
+const MatrixQuadrantCard = React.memo(function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, batchProps, dispatch, dragRef }: { project: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; dispatch: React.Dispatch<unknown>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
   const { can } = usePermissions();
   const leader = (members || []).find(m => m.id === project.leaderId);
   return (

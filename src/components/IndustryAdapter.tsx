@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { Building2, Check, Wand2, RefreshCw, Tag, Target, BarChart3, AlertTriangle } from 'lucide-react';
 import { trackBehavior } from '@/store/behaviorTracking';
+import { handleError } from '@/lib/errorHandler';
 
 interface IndustryTemplate {
   key: string;
@@ -77,7 +78,7 @@ export default function IndustryAdapter() {
     try {
       const { data } = await sb.from('team_industry_profile').select('*').limit(1).single();
       if (data) setCurrentIndustry(data.industry_key);
-    } catch {}
+    } catch (e) { handleError(e, { module: 'IndustryAdapter', operation: 'LOAD_INDUSTRY', severity: 'warn' }); }
   }, []);
 
   const detectIndustry = useCallback(async () => {
@@ -87,7 +88,7 @@ export default function IndustryAdapter() {
     try {
       const { data } = await sb.rpc('detect_industry', { p_team_id: state.currentUser.teamId });
       if (data) setDetection(data as DetectionResult);
-    } catch {}
+    } catch (e) { handleError(e, { module: 'IndustryAdapter', operation: 'DETECT_INDUSTRY', severity: 'warn' }); }
     setLoading(false);
   }, [state.currentUser?.teamId]);
 
@@ -97,7 +98,7 @@ export default function IndustryAdapter() {
     try {
       const { data } = await sb.rpc('get_industry_template', { p_industry_key: key });
       if (data) setPreviewTemplate(data as IndustryTemplate);
-    } catch {}
+    } catch (e) { handleError(e, { module: 'IndustryAdapter', operation: 'LOAD_TEMPLATE', severity: 'warn' }); }
   }, []);
 
   const applyIndustry = useCallback(async (key: string) => {
@@ -114,8 +115,8 @@ export default function IndustryAdapter() {
         confirmed_at: new Date().toISOString(),
       }, { onConflict: 'team_id' });
       setCurrentIndustry(key);
-      trackBehavior({ type: 'INDUSTRY_SELECTED', payload: { industryKey: key } } as any);
-    } catch {}
+      trackBehavior({ type: 'INDUSTRY_SELECTED', payload: { industryKey: key } } as { type: string; payload: Record<string, unknown> });
+    } catch (e) { handleError(e, { module: 'IndustryAdapter', operation: 'APPLY_INDUSTRY', severity: 'error' }); }
     setLoading(false);
   }, [state.currentUser]);
 

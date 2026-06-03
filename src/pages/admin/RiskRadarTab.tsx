@@ -8,6 +8,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useStore } from '@/store/useStore';
+import { handleError } from '@/lib/errorHandler';
 import {
   generateRiskRadarV2,
   predictDelayV2,
@@ -171,7 +172,8 @@ export function RiskRadarTab() {
         state.members,
         state.goals,
       );
-    } catch {
+    } catch (e) {
+      handleError(e, { module: 'RiskRadarTab', operation: 'GENERATE_RADAR', severity: 'warn' });
       return {
         overall: 0,
         dimensions: { delay: 0, resource: 0, okr: 0, risk: 0 },

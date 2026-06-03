@@ -1,5 +1,7 @@
 /** AI 分析模块类型定义 */
 
+import { handleError } from '@/lib/errorHandler';
+
 export type AIModelProvider = 'deepseek' | 'doubao';
 
 /** 任务复杂度等级，影响模型选择和token预算 */
@@ -21,7 +23,7 @@ export interface AIConfig {
 export type SuggestedAction = {
   type: 'update_status' | 'reassign' | 'add_tag';
   label: string;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
 };
 
 export type AnalysisPeriod = 'daily' | 'weekly' | 'monthly' | 'quarterly';
@@ -193,12 +195,12 @@ export function loadAIConfig(): AIConfig {
       if (migrated) saveAIConfig(saved);
       return saved;
     }
-  } catch {}
+  } catch (e) { handleError(e, { module: 'aiTypes', operation: 'LOAD_AI_CONFIG', severity: 'debug' }); }
   return { ...DEFAULT_AI_CONFIG };
 }
 
 export function saveAIConfig(c: AIConfig) {
-  try { localStorage.setItem('tbh-ai-config', JSON.stringify(c)); } catch {}
+  try { localStorage.setItem('tbh-ai-config', JSON.stringify(c)); } catch (e) { handleError(e, { module: 'aiTypes', operation: 'SAVE_AI_CONFIG', severity: 'debug' }); }
 }
 
 export const PERIOD_LABELS: Record<AnalysisPeriod, string> = { daily: '每日', weekly: '每周', monthly: '每月', quarterly: '每季度' };

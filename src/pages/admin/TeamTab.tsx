@@ -3,8 +3,9 @@ import { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { usePermissions } from '@/store/hooks';
 import { Users, Plus, Shield, Briefcase, Mail, Calendar, Trash2, ChevronDown, ChevronUp, Edit2, Save, X, Phone, MessageCircle, User, Copy, RefreshCw, Check } from 'lucide-react';
-import type { MemberRole, Permission, PermissionModule } from '@/types';
+import type { MemberRole, Permission, PermissionModule, Member } from '@/types';
 import { inputCls, roleLabels, roleColors, permissionDesc, allPermissions, getRoleDefaultPermission, memberToEditForm, type EditForm } from './constants';
+import { handleError } from '@/lib/errorHandler';
 
 export function TeamTab() {
   const { state, dispatch } = useStore();
@@ -22,7 +23,7 @@ export function TeamTab() {
 
   async function copyInviteCode() {
     if (!currentTeam?.inviteCode) return;
-    try { await navigator.clipboard.writeText(currentTeam.inviteCode); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
+    try { await navigator.clipboard.writeText(currentTeam.inviteCode); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) { handleError(e, { module: 'TeamTab', operation: 'COPY_INVITE', severity: 'debug' }); }
   }
 
   async function regenerateInviteCode() {
@@ -73,11 +74,11 @@ export function TeamTab() {
   function handleToggleStatus(member: { id: string; status: string }) {
     dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { status: member.status === 'active' ? 'inactive' as const : 'active' as const } } });
   }
-  function startEditing(member: any) { setEditingId(member.id); setEditForm(memberToEditForm(member)); }
+  function startEditing(member: Member) { setEditingId(member.id); setEditForm(memberToEditForm(member)); }
   function cancelEditing() { setEditingId(null); }
   function saveEditing() {
     if (!editingId || !editForm.name.trim()) return;
-    const updates: any = { name: editForm.name.trim(), nickname: editForm.nickname.trim(), wechatId: editForm.wechatId.trim(), phone: editForm.phone.trim(), email: editForm.email.trim(), role: editForm.role, department: editForm.department.trim() || '未分配', status: editForm.status as 'active' | 'inactive', avatar: editForm.name.trim().slice(0, 2) };
+    const updates: Partial<Member> = { name: editForm.name.trim(), nickname: editForm.nickname.trim(), wechatId: editForm.wechatId.trim(), phone: editForm.phone.trim(), email: editForm.email.trim(), role: editForm.role, department: editForm.department.trim() || '未分配', status: editForm.status as 'active' | 'inactive', avatar: editForm.name.trim().slice(0, 2) };
     const originalMember = state.members.find(m => m.id === editingId);
     if (originalMember && originalMember.role !== editForm.role) updates.permissions = [];
     dispatch({ type: 'UPDATE_MEMBER', payload: { id: editingId, updates } });
@@ -87,7 +88,7 @@ export function TeamTab() {
   const PERM_MOD_LABELS: Record<string, string> = { goals: '目标', projects: '项目', tasks: '任务', team: '团队', settings: '设置', export: '导出', knowledge: '知识库' };
   const ACTION_LABELS: Record<string, string> = { view: '查看', create: '创建', edit: '编辑', delete: '删除', manage: '管理' };
 
-  function renderMemberCard(member: any, isActive: boolean) {
+  function renderMemberCard(member: Member, isActive: boolean) {
     const stats = getMemberTaskStats(member.id);
     const projCount = getMemberProjectCount(member.id);
     const isSelected = selectedMember === member.id;
@@ -180,7 +181,7 @@ export function TeamTab() {
                   return (
                     <div key={mod} className="mb-2 border border-border/50 rounded-lg p-2">
                       <div className="flex items-center gap-2 mb-1">
-                        <input type="checkbox" className="rounded" ref={el => { if (el) el.indeterminate = !allChecked && !noneChecked; }} checked={allChecked} onChange={e => { e.stopPropagation(); const current = member.permissions?.length ? [...member.permissions] : (allPermissions as readonly string[]).filter(p => getRoleDefaultPermission(member.role, p)); const newP = allChecked ? current.filter((p: any) => !modPerms.includes(p)) : [...new Set([...current, ...modPerms])]; dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: newP } } }); }} />
+                        <input type="checkbox" className="rounded" ref={el => { if (el) el.indeterminate = !allChecked && !noneChecked; }} checked={allChecked} onChange={e => { e.stopPropagation(); const current = member.permissions?.length ? [...member.permissions] : (allPermissions as readonly string[]).filter(p => getRoleDefaultPermission(member.role, p)); const newP = allChecked ? current.filter((p: string) => !modPerms.includes(p)) : [...new Set([...current, ...modPerms])]; dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: newP } } }); }} />
                         <span className="text-xs font-semibold">{PERM_MOD_LABELS[mod] || mod}</span>
                       </div>
                       <div className="flex flex-wrap gap-x-4 gap-y-0.5 ml-5">
@@ -188,7 +189,7 @@ export function TeamTab() {
                           const action = perm.split('_')[1];
                           return (
                             <label key={perm} className="flex items-center gap-1 cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                              <input type="checkbox" className="rounded" checked={effectivePerms.includes(perm as Permission)} onChange={e => { e.stopPropagation(); const cur = member.permissions?.length ? [...member.permissions] : (allPermissions as readonly string[]).filter(p => getRoleDefaultPermission(member.role, p)); const newP = cur.includes(perm as Permission) ? cur.filter((p: any) => p !== perm) : [...cur, perm]; dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: newP } } }); }} />
+                              <input type="checkbox" className="rounded" checked={effectivePerms.includes(perm as Permission)} onChange={e => { e.stopPropagation(); const cur = member.permissions?.length ? [...member.permissions] : (allPermissions as readonly string[]).filter(p => getRoleDefaultPermission(member.role, p)); const newP = cur.includes(perm as Permission) ? cur.filter((p: string) => p !== perm) : [...cur, perm]; dispatch({ type: 'UPDATE_MEMBER', payload: { id: member.id, updates: { permissions: newP } } }); }} />
                               <span>{ACTION_LABELS[action] || action}</span>
                             </label>
                           );

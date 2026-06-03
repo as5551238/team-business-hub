@@ -1,6 +1,7 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { BarChart3, TrendingUp, AlertTriangle, Zap, Target, Brain, User } from 'lucide-react';
+import { handleError } from '@/lib/errorHandler';
 
 interface ProfileData {
   efficiency: number;
@@ -91,7 +92,7 @@ export default function MemberProfileCard({ memberId }: { memberId: string }) {
       if (!error && data) {
         setProfile(data as ProfileData);
       }
-    } catch {}
+    } catch (e) { handleError(e, { module: 'MemberProfileCard', operation: 'FETCH_PROFILE', severity: 'warn' }); }
     setLoading(false);
   }, [memberId]);
 

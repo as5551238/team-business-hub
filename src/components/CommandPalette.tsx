@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Search, Target, FolderKanban, CheckSquare, Settings, LayoutDashboard, X, Plus, Zap, BarChart3, GitBranch, Users, Command, ArrowRight } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 // ===== 增强命令定义 =====
 
@@ -7,7 +8,7 @@ interface CommandItem {
   id: string;
   label: string;
   shortcut?: string;
-  icon: any;
+  icon: LucideIcon;
   group: string;
   action: () => void;
   keywords?: string[]; // 模糊搜索关键词

@@ -71,7 +71,7 @@ export function FlowConfigTab() {
   }
 
   function toggleRole(role: string) {
-    const next = form.allowedRoles.includes(role as any) ? form.allowedRoles.filter(r => r !== role) : [...form.allowedRoles, role as any];
+    const next = form.allowedRoles.includes(role as MemberRole) ? form.allowedRoles.filter(r => r !== role) : [...form.allowedRoles, role as MemberRole];
     setForm({ ...form, allowedRoles: next });
   }
 

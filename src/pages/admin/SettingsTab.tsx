@@ -11,6 +11,7 @@ import {
   Tag as TagIcon,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { handleError } from '@/lib/errorHandler';
 import { inputCls, loadEmailConfig, saveEmailConfig } from './constants';
 import type { EmailConfig } from './constants';
 import { sendTestEmail, isEmailEnabled, getLastEmailError, setLastEmailError } from '@/supabase/email';
@@ -112,7 +113,21 @@ alter publication supabase_realtime add table goals;
 alter publication supabase_realtime add table projects;
 alter publication supabase_realtime add table tasks;
 alter publication supabase_realtime add table notifications;
-alter publication supabase_realtime add table activities;`}</pre>
+alter publication supabase_realtime add table activities;
+alter publication supabase_realtime add table notes;
+alter publication supabase_realtime add table categories;
+alter publication supabase_realtime add table templates;
+alter publication supabase_realtime add table schedule_events;
+alter publication supabase_realtime add table bookmarks;
+alter publication supabase_realtime add table saved_views;
+alter publication supabase_realtime add table reviews;
+alter publication supabase_realtime add table knowledge;
+alter publication supabase_realtime add table tags;
+alter publication supabase_realtime add table sprints;
+alter publication supabase_realtime add table automation_rules;
+alter publication supabase_realtime add table status_flow_rules;
+alter publication supabase_realtime add table item_links;
+alter publication supabase_realtime add table comments;`}</pre>
           </div>
           <button onClick={() => setStep(3)} className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90">已执行完SQL，下一步 <ArrowRight size={14} /></button>
         </div>
@@ -304,7 +319,7 @@ function BackupSection() {
   const [errorMsg, setErrorMsg] = useState('');
   const [exporting, setExporting] = useState(false);
   const [autoExport, setAutoExport] = useState(() => {
-    try { return localStorage.getItem('tbh-auto-export') === 'true'; } catch { return false; }
+    try { return localStorage.getItem('tbh-auto-export') === 'true'; } catch (e) { handleError(e, { module: 'SettingsTab', operation: 'READ_AUTO_EXPORT', severity: 'debug' }); return false; }
   });
   const stateRef = useRef(backupData);
   stateRef.current = backupData;
@@ -341,7 +356,7 @@ function BackupSection() {
           if (!backup) { setErrorMsg('Excel文件格式不正确'); setImportStatus('error'); setTimeout(() => setImportStatus('idle'), 3000); return; }
           setImportStatus('confirming');
           pendingBackupRef.current = backup;
-        } catch { setErrorMsg('无法解析Excel文件'); setImportStatus('error'); setTimeout(() => setImportStatus('idle'), 3000); }
+        } catch (e) { handleError(e, { module: 'SettingsTab', operation: 'IMPORT_EXCEL', severity: 'warn' }); setErrorMsg('无法解析Excel文件'); setImportStatus('error'); setTimeout(() => setImportStatus('idle'), 3000); }
       };
       reader.readAsArrayBuffer(file);
     } else {
@@ -352,7 +367,7 @@ function BackupSection() {
           if (!backup) { setErrorMsg('JSON文件结构不完整'); setImportStatus('error'); setTimeout(() => setImportStatus('idle'), 3000); return; }
           setImportStatus('confirming');
           pendingBackupRef.current = backup;
-        } catch { setErrorMsg('无法解析文件'); setImportStatus('error'); setTimeout(() => setImportStatus('idle'), 3000); }
+        } catch (e) { handleError(e, { module: 'SettingsTab', operation: 'IMPORT_JSON', severity: 'warn' }); setErrorMsg('无法解析文件'); setImportStatus('error'); setTimeout(() => setImportStatus('idle'), 3000); }
       };
       reader.readAsText(file);
     }
@@ -365,7 +380,7 @@ function BackupSection() {
     <div className="bg-card rounded-xl border border-border shadow-sm p-5">
       <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><Database size={14} className="text-primary" /> 数据备份与恢复</h3>
       <div className="space-y-3">
-        <div className="flex items-center justify-between px-1"><div><span className="text-xs font-medium">每日17:00自动导出</span><span className="text-[10px] text-muted-foreground ml-1">开启后每天整点自动下载备份</span></div><button onClick={() => { const next = !autoExport; setAutoExport(next); try { localStorage.setItem('tbh-auto-export', String(next)); } catch {} }} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoExport ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-card transition-transform ${autoExport ? 'translate-x-4' : 'translate-x-0.5'}`} /></button></div>
+        <div className="flex items-center justify-between px-1"><div><span className="text-xs font-medium">每日17:00自动导出</span><span className="text-[10px] text-muted-foreground ml-1">开启后每天整点自动下载备份</span></div><button onClick={() => { const next = !autoExport; setAutoExport(next); try { localStorage.setItem('tbh-auto-export', String(next)); } catch (e) { handleError(e, { module: 'SettingsTab', operation: 'SAVE_AUTO_EXPORT', severity: 'debug' }); } }} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoExport ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-card transition-transform ${autoExport ? 'translate-x-4' : 'translate-x-0.5'}`} /></button></div>
         <div className="flex items-center gap-2">
           <button onClick={handleExport} disabled={exporting} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-border hover:bg-muted transition-colors disabled:opacity-50">{exporting ? '导出中...' : <><Download size={12} /> 导出备份（Excel）</>}</button>
           <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-border hover:bg-muted transition-colors cursor-pointer"><Upload size={12} /> 导入恢复<input type="file" accept=".xlsx,.xls,.json" className="hidden" onChange={handleFileSelect} /></label>

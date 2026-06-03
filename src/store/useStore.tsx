@@ -1,3 +1,4 @@
+import { handleError } from '@/lib/errorHandler';
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import type { AppState } from '@/types';
 import { getSupabaseClient, initSupabase, resetSupabase } from '@/supabase/client';
@@ -42,15 +43,15 @@ import { setCollabDispatch } from '@/lib/collab';
 import { trackBehavior, setBehaviorUserId } from '@/store/behaviorTracking';
 
 // Module-level dispatch bridge for collab operations (set by StoreProvider)
-let _collabDispatch: ((action: any) => void) | null = null;
-export function collabDispatch(action: any) { _collabDispatch?.(action); }
+let _collabDispatch: ((action: Action) => void) | null = null;
+export function collabDispatch(action: Action) { _collabDispatch?.(action); }
 
 // Store context approach (stable and proven)
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, null, loadLocalState);
   const [connectionMode, setConnectionMode] = useReducer((_: ConnectionMode, v: ConnectionMode) => v, 'local' as ConnectionMode);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const realtimeChannels = useRef<any[]>([]);
+  const realtimeChannels = useRef<unknown[]>([]);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const offlineWriteCountRef = useRef(0);
 
@@ -63,20 +64,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ADD_PROJECT: 'projects', UPDATE_PROJECT: 'projects', DELETE_PROJECT: 'projects',
     ADD_TASK: 'tasks', UPDATE_TASK: 'tasks', DELETE_TASK: 'tasks',
     ADD_NOTIFICATION: 'notifications', UPDATE_NOTIFICATION: 'notifications', DELETE_NOTIFICATION: 'notifications',
+    TOGGLE_NOTIFICATION_MUTE: 'notification_preferences',
     ADD_MEMBER: 'members', UPDATE_MEMBER: 'members', DELETE_MEMBER: 'members',
     ADD_COMMENT: 'comments', UPDATE_COMMENT: 'comments', DELETE_COMMENT: 'comments',
+    ADD_NOTE: 'notes', UPDATE_NOTE: 'notes', DELETE_NOTE: 'notes',
+    ADD_CATEGORY: 'categories', UPDATE_CATEGORY: 'categories', DELETE_CATEGORY: 'categories',
+    ADD_TEMPLATE: 'templates', UPDATE_TEMPLATE: 'templates', DELETE_TEMPLATE: 'templates',
+    ADD_SCHEDULE_EVENT: 'schedule_events', UPDATE_SCHEDULE_EVENT: 'schedule_events', DELETE_SCHEDULE_EVENT: 'schedule_events',
+    ADD_BOOKMARK: 'bookmarks', UPDATE_BOOKMARK: 'bookmarks', DELETE_BOOKMARK: 'bookmarks', REORDER_BOOKMARKS: 'bookmarks',
+    ADD_SAVED_VIEW: 'saved_views', UPDATE_SAVED_VIEW: 'saved_views', DELETE_SAVED_VIEW: 'saved_views',
+    ADD_REVIEW: 'reviews', UPDATE_REVIEW: 'reviews', DELETE_REVIEW: 'reviews',
+    ADD_KNOWLEDGE: 'knowledge', UPDATE_KNOWLEDGE: 'knowledge', DELETE_KNOWLEDGE: 'knowledge',
+    ADD_TAG: 'tags', UPDATE_TAG: 'tags', DELETE_TAG: 'tags',
+    ADD_SPRINT: 'sprints', UPDATE_SPRINT: 'sprints', DELETE_SPRINT: 'sprints',
+    ADD_AUTOMATION_RULE: 'automation_rules', UPDATE_AUTOMATION_RULE: 'automation_rules', DELETE_AUTOMATION_RULE: 'automation_rules',
+    ADD_STATUS_FLOW_RULE: 'status_flow_rules', UPDATE_STATUS_FLOW_RULE: 'status_flow_rules', DELETE_STATUS_FLOW_RULE: 'status_flow_rules',
+    ADD_ITEM_LINK: 'item_links', DELETE_ITEM_LINK: 'item_links',
+    ADD_ACTIVITY: 'activities',
   };
   const ACTION_TO_EVENT: Record<string, string> = {
     ADD_GOAL: 'INSERT', ADD_PROJECT: 'INSERT', ADD_TASK: 'INSERT',
     ADD_NOTIFICATION: 'INSERT', ADD_MEMBER: 'INSERT', ADD_COMMENT: 'INSERT',
+    ADD_NOTE: 'INSERT', ADD_CATEGORY: 'INSERT', ADD_TEMPLATE: 'INSERT',
+    ADD_SCHEDULE_EVENT: 'INSERT', ADD_BOOKMARK: 'INSERT', ADD_SAVED_VIEW: 'INSERT',
+    ADD_REVIEW: 'INSERT', ADD_KNOWLEDGE: 'INSERT', ADD_TAG: 'INSERT',
+    ADD_SPRINT: 'INSERT', ADD_AUTOMATION_RULE: 'INSERT', ADD_STATUS_FLOW_RULE: 'INSERT',
+    ADD_ITEM_LINK: 'INSERT', ADD_ACTIVITY: 'INSERT',
     UPDATE_GOAL: 'UPDATE', UPDATE_PROJECT: 'UPDATE', UPDATE_TASK: 'UPDATE',
     UPDATE_NOTIFICATION: 'UPDATE', UPDATE_MEMBER: 'UPDATE', UPDATE_COMMENT: 'UPDATE',
+    UPDATE_NOTE: 'UPDATE', UPDATE_CATEGORY: 'UPDATE', UPDATE_TEMPLATE: 'UPDATE',
+    UPDATE_SCHEDULE_EVENT: 'UPDATE', UPDATE_BOOKMARK: 'UPDATE', UPDATE_SAVED_VIEW: 'UPDATE',
+    UPDATE_REVIEW: 'UPDATE', UPDATE_KNOWLEDGE: 'UPDATE', UPDATE_TAG: 'UPDATE',
+    UPDATE_SPRINT: 'UPDATE', UPDATE_AUTOMATION_RULE: 'UPDATE', UPDATE_STATUS_FLOW_RULE: 'UPDATE',
     DELETE_GOAL: 'DELETE', DELETE_PROJECT: 'DELETE', DELETE_TASK: 'DELETE',
     DELETE_NOTIFICATION: 'DELETE', DELETE_MEMBER: 'DELETE', DELETE_COMMENT: 'DELETE',
+    DELETE_NOTE: 'DELETE', DELETE_CATEGORY: 'DELETE', DELETE_TEMPLATE: 'DELETE',
+    DELETE_SCHEDULE_EVENT: 'DELETE', DELETE_BOOKMARK: 'DELETE', DELETE_SAVED_VIEW: 'DELETE',
+    DELETE_REVIEW: 'DELETE', DELETE_KNOWLEDGE: 'DELETE', DELETE_TAG: 'DELETE',
+    DELETE_SPRINT: 'DELETE', DELETE_AUTOMATION_RULE: 'DELETE', DELETE_STATUS_FLOW_RULE: 'DELETE',
+    DELETE_ITEM_LINK: 'DELETE',
   };
 
   // Dispatch proxy that tracks offline writes for Layout.tsx badge + undo/redo
-  const trackedDispatch = useCallback((action: any) => {
+  const trackedDispatch = useCallback((action: Action) => {
     // Handle undo/redo special actions
     if (action.type === 'UNDO') {
       const inverseAction = popUndo();
@@ -111,7 +141,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           offlineWriteCountRef.current++;
           localStorage.setItem('tbh-offline-writes', String(offlineWriteCountRef.current));
         }
-      } catch {}
+      } catch (e) { handleError(e, { module: 'store', operation: 'OFFLINE_WRITE_TRACK', severity: 'debug' }); }
     }
   }, []);
 
@@ -172,7 +202,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         doConnect(defaultUrl, defaultKey);
       }
     } catch (e) {
-      console.error('[StoreProvider] failed to load Supabase config:', e);
+      handleError(e, { module: 'store', operation: 'LOAD_SUPABASE_CONFIG', severity: 'debug' });
     }
     return () => { connectSeqRef.current++; cleanupRealtime(); };
   }, []);
@@ -189,19 +219,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (connectSeqRef.current !== mySeq) return false;
       if (data) {
         // Set current team from localStorage or data
-        const savedTeamId = (() => { try { return localStorage.getItem('tbh-current-team'); } catch { return null; } })();
+        const savedTeamId = (() => { try { return localStorage.getItem('tbh-current-team'); } catch (e) { handleError(e, { module: 'store', operation: 'LS_READ_TEAM', severity: 'debug' }); return null; } })();
         const teamId = savedTeamId || data.currentTeamId || null;
         if (teamId) setCurrentTeamId(teamId);
         // Set RLS context for subsequent queries
-        const savedUserId = (() => { try { return localStorage.getItem(CURRENT_USER_KEY); } catch { return null; } })();
+        const savedUserId = (() => { try { return localStorage.getItem(CURRENT_USER_KEY); } catch (e) { handleError(e, { module: 'store', operation: 'LS_READ_USER', severity: 'debug' }); return null; } })();
         if (teamId && savedUserId) setRLSContext(teamId, savedUserId);
         if (data.currentTeamId && !savedTeamId) {
-          try { localStorage.setItem('tbh-current-team', data.currentTeamId); } catch {}
+          try { localStorage.setItem('tbh-current-team', data.currentTeamId); } catch (e) { handleError(e, { module: 'store', operation: 'LS_WRITE_TEAM', severity: 'debug' }); }
         }
         data.currentTeamId = teamId;
         const curView = stateRef.current?.viewingMemberId || null;
         const localTags = Array.isArray(stateRef.current?.tags) ? stateRef.current.tags : [];
-        const remoteTagIds = new Set(data.tags.map((t: any) => t.id));
+        const remoteTagIds = new Set(data.tags.map((t: { id: string }) => t.id));
         const unsyncedTags = localTags.filter(t => !remoteTagIds.has(t.id));
         if (unsyncedTags.length > 0) {
           for (const tag of unsyncedTags) { await supabaseUpsert('tags', tag); }
@@ -212,37 +242,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const localBookmarks = stateRef.current?.bookmarks || [];
         const localSavedViews = stateRef.current?.savedViews || [];
         // Merge: keep local items not in remote (created offline), plus all remote items
-        const remoteBmIds = new Set((data.bookmarks || []).map((b: any) => b.id));
-        const remoteSvIds = new Set((data.savedViews || []).map((v: any) => v.id));
-        const mergedBookmarks = [...(data.bookmarks || []), ...localBookmarks.filter((b: any) => !remoteBmIds.has(b.id))];
-        const mergedSavedViews = [...(data.savedViews || []), ...localSavedViews.filter((v: any) => !remoteSvIds.has(v.id))];
-        const dbUser = curUser ? data.members.find((m: any) => m.id === curUser.id) || null : null;
+        const remoteBmIds = new Set((data.bookmarks || []).map((b: { id: string }) => b.id));
+        const remoteSvIds = new Set((data.savedViews || []).map((v: { id: string }) => v.id));
+        const mergedBookmarks = [...(data.bookmarks || []), ...localBookmarks.filter((b: { id: string }) => !remoteBmIds.has(b.id))];
+        const mergedSavedViews = [...(data.savedViews || []), ...localSavedViews.filter((v: { id: string }) => !remoteSvIds.has(v.id))];
+        const dbUser = curUser ? data.members.find((m: { id: string }) => m.id === curUser.id) || null : null;
         // Fallback: try to find currentUser from localStorage key even if stateRef hasn't updated yet
         const dbMembers = data.members;
         let resolvedUser = dbUser || curUser;
         if (!resolvedUser) {
           try {
             const savedId = localStorage.getItem(CURRENT_USER_KEY);
-            if (savedId) resolvedUser = dbMembers.find((m: any) => m.id === savedId) || null;
-          } catch {}
+            if (savedId) resolvedUser = dbMembers.find((m: { id: string }) => m.id === savedId) || null;
+          } catch (e) { handleError(e, { module: 'store', operation: 'LS_READ_USER_RESOLVE', severity: 'debug' }); }
         }
         // Single MERGE_STATE with members already included — no second SET_STATE that would overwrite
         dispatch({ type: 'MERGE_STATE', payload: { ...data, members: dbMembers, currentUser: resolvedUser, viewingMemberId: curView, bookmarks: mergedBookmarks, savedViews: mergedSavedViews } });
         // P0: 接入行为追踪的当前用户ID
         setBehaviorUserId(resolvedUser?.id || null);
-        try { localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey })); } catch {}
+        try { localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey })); } catch (e) { handleError(e, { module: 'store', operation: 'LS_WRITE_CONFIG', severity: 'debug' }); }
         setConnectionMode('supabase');
         setupRealtime();
         return true;
       } else {
-        try { localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey })); } catch {}
+        try { localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey })); } catch (e) { handleError(e, { module: 'store', operation: 'LS_WRITE_CONFIG', severity: 'debug' }); }
         setConnectionMode('supabase');
         setupRealtime();
         return true;
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error('[doConnect] Connection failed:', msg);
+      handleError(e, { module: 'store', operation: 'DB_CONNECT', severity: 'error' });
       setConnectionError(msg || '连接失败');
       setConnectionMode('local');
       resetSupabase();
@@ -281,18 +311,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const curView = curState?.viewingMemberId || null;
         // Preserve user-created data that may not have synced to DB yet
         const preserveKeys = ['tags', 'categories', 'templates', 'comments', 'notes', 'scheduleEvents', 'itemLinks', 'notifications', 'activities', 'reviews', 'bookmarks', 'savedViews'] as const;
-        const preserved: Record<string, any> = {};
-        for (const k of preserveKeys) { const local = (curState as any)?.[k]; if (local?.length) preserved[k] = local; }
+        const preserved: Record<string, unknown[]> = {};
+        for (const k of preserveKeys) { const local = (curState as Record<string, unknown>)?.[k]; if (Array.isArray(local) && local.length) preserved[k] = local; }
         dispatch({ type: 'SET_STATE', payload: { ...fresh, currentUser: curUser, viewingMemberId: curView, ...preserved } });
       }
       setConnectionMode('supabase');
       return true;
     } catch (e: unknown) {
+      handleError(e, { module: 'store', operation: 'DB_INITIALIZE', severity: 'error' });
       setConnectionError(e instanceof Error ? e.message : '初始化失败');
       setConnectionMode('local');
       return false;
     }
   }, []);
+
+  interface RealtimePayload {
+    eventType: string;
+    new: Record<string, unknown> | null;
+    old: Record<string, unknown> | null;
+  }
 
   function setupRealtime() {
     cleanupRealtime();
@@ -307,7 +344,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       origDispatch(action);
     };
 
-    const handleDbChange = (table: string, payload: any) => {
+    const handleDbChange = (table: string, payload: RealtimePayload) => {
       const { eventType, new: newRow, old: oldRow } = payload;
       // Skip events caused by our own recent write (within 2s)
       const writeKey = `${table}:${eventType}`;
@@ -338,6 +375,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_links', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('item_links', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('tags', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sprints', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('sprints', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('notes', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('categories', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'templates', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('templates', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_events', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('schedule_events', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookmarks', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('bookmarks', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'saved_views', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('saved_views', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('reviews', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'knowledge', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('knowledge', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notification_preferences', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('notification_preferences', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activities', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('activities', p))
       .subscribe();
 
     // --- Fallback REST polling (120s) for missed Realtime events ---
@@ -345,8 +392,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       item_links: 'itemLinks', schedule_events: 'scheduleEvents', saved_views: 'savedViews',
       status_flow_rules: 'statusFlowRules', automation_rules: 'automationRules',
     };
-    const allTables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules'];
-    const teamScopedTables = new Set(['goals', 'projects', 'tasks', 'notifications', 'activities', 'item_links', 'comments', 'categories', 'templates', 'schedule_events', 'notes', 'reviews', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules', 'sprints', 'knowledge']);
+    const allTables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules', 'sprints', 'knowledge', 'notification_preferences'];
+    const teamScopedTables = new Set(['goals', 'projects', 'tasks', 'notifications', 'activities', 'item_links', 'comments', 'categories', 'templates', 'schedule_events', 'notes', 'reviews', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules', 'sprints', 'knowledge', 'notification_preferences']);
     let polling = false;
     const fallbackPoll = async () => {
       if (polling || document.visibilityState === 'hidden') return;
@@ -354,7 +401,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       try {
         const teamId = stateRef.current?.currentTeamId;
         const results = await Promise.allSettled(allTables.map(table => {
-          let query: any;
+          let query: { eq(col: string, val: unknown): typeof query; then<R>(resolve: (result: { data: Record<string, unknown>[] | null }) => R): Promise<R> };
           if (table === 'members') {
             query = sb.from(table).select('*').eq('status', 'active');
           } else {
@@ -369,13 +416,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             return { key, data: Array.isArray(data) ? data.map(toCamel) : [] };
           });
         }));
-        const payload: Record<string, any> = {};
+        const payload: Record<string, unknown[]> = {};
         results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; } });
         dispatch({ type: 'MERGE_STATE', payload });
         notifySelectorListeners();
-        try { bc.postMessage({ type: 'MERGE_STATE', payload }); } catch {}
+        try { bc.postMessage({ type: 'MERGE_STATE', payload }); } catch (e) { handleError(e, { module: 'store', operation: 'BC_POST_MERGE', severity: 'debug' }); }
       } catch (e) {
-        console.error('[fallbackPoll] data sync failed:', e);
+        handleError(e, { module: 'store', operation: 'FALLBACK_POLL', severity: 'warn' });
       } finally {
         polling = false;
       }
@@ -383,7 +430,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     // BroadcastChannel for cross-tab instant sync
     let bc: BroadcastChannel | null = null;
-    try { bc = new BroadcastChannel('tbh-sync'); } catch {}
+    try { bc = new BroadcastChannel('tbh-sync'); } catch (e) { handleError(e, { module: 'store', operation: 'BC_CREATE', severity: 'debug' }); }
     const onBcMessage = (e: MessageEvent) => {
       if (e.data && e.data.type === 'MERGE_STATE' && e.data.payload) {
         // P2#3 fix: reject cross-team data contamination
@@ -408,7 +455,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     // Offline/online detection
     let reconnectFailures = 0;
-    const onOffline = () => { setConnectionMode('offline'); reconnectFailures = 0; offlineWriteCountRef.current = 0; try { localStorage.setItem('tbh-went-offline-at', String(Date.now())); localStorage.setItem('tbh-offline-writes', '0'); } catch {} };
+    const onOffline = () => { setConnectionMode('offline'); reconnectFailures = 0; offlineWriteCountRef.current = 0; try { localStorage.setItem('tbh-went-offline-at', String(Date.now())); localStorage.setItem('tbh-offline-writes', '0'); } catch (e) { handleError(e, { module: 'store', operation: 'LS_WRITE_OFFLINE', severity: 'debug' }); } };
     const onOnline = () => {
       const delay = Math.min(100 * Math.pow(2, reconnectFailures), 5000);
       setTimeout(async () => {
@@ -417,7 +464,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           reconnectFailures = 0;
           offlineWriteCountRef.current = 0;
           setConnectionMode('supabase');
-          try { localStorage.removeItem('tbh-offline-writes'); replayFailedWrites(); } catch {}
+          try { localStorage.removeItem('tbh-offline-writes'); replayFailedWrites(); } catch (e) { handleError(e, { module: 'store', operation: 'ONLINE_RECONNECT', severity: 'warn' }); }
         } else { reconnectFailures++; }
       }, delay);
     };
@@ -425,8 +472,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     window.addEventListener('online', onOnline);
 
     // Store all cleanup references
-    if (bc) (bc as any)._onMessage = onBcMessage;
-    realtimeChannels.current = [realtimeChannel, { clear: () => window.clearInterval(fallbackTimer) } as any, onVisibilityChange, onOffline, onOnline, ...(bc ? [bc] : [])];
+    if (bc) ((bc as unknown) as { _onMessage?: () => void })._onMessage = onBcMessage;
+    realtimeChannels.current = [realtimeChannel, { clear: () => window.clearInterval(fallbackTimer) }, onVisibilityChange, onOffline, onOnline, ...(bc ? [bc] : [])];
   }
 
   function cleanupRealtime() {
@@ -438,15 +485,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         window.removeEventListener('online', item);
       }
       else if (item instanceof BroadcastChannel) {
-        if ((item as any)._onMessage) item.removeEventListener('message', (item as any)._onMessage);
+        const bcItem = item as BroadcastChannel & { _onMessage?: () => void };
+        if (bcItem._onMessage) bcItem.removeEventListener('message', bcItem._onMessage);
         item.close();
       }
-      else if (item && typeof (item as any).unsubscribe === 'function') {
-        // Supabase Realtime channel
-        try { (item as any).unsubscribe(); } catch {}
+      else if (item && typeof (item as { unsubscribe?: unknown }).unsubscribe === 'function') {
+        try { (item as { unsubscribe: () => void }).unsubscribe(); } catch (e) { handleError(e, { module: 'store', operation: 'REALTIME_UNSUBSCRIBE', severity: 'debug' }); }
       }
-      else if (item && typeof (item as any).clear === 'function') {
-        (item as any).clear();
+      else if (item && typeof (item as { clear?: unknown }).clear === 'function') {
+        (item as { clear: () => void }).clear();
       }
     });
     realtimeChannels.current = [];
@@ -456,7 +503,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     cleanupRealtime();
     resetSupabase();
     clearUndoStack();
-    try { localStorage.removeItem(SUPABASE_CONFIG_KEY); } catch {}
+    try { localStorage.removeItem(SUPABASE_CONFIG_KEY); } catch (e) { handleError(e, { module: 'store', operation: 'LS_REMOVE_CONFIG', severity: 'debug' }); }
     setConnectionMode('local');
     setConnectionError(null);
   }, []);

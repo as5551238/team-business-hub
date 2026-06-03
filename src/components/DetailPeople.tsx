@@ -15,7 +15,7 @@ interface DetailPeopleProps {
   project: Project | null;
   task: Task | null;
   canEdit: boolean;
-  updateItem: (updates: Record<string, any>) => void;
+  updateItem: (updates: Record<string, unknown>) => void;
 }
 
 export function DetailPeople({ itemType, itemId, goal, project, task, canEdit, updateItem }: DetailPeopleProps) {

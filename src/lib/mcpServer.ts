@@ -43,8 +43,8 @@ const TOOL_PERMISSIONS: Record<string, ToolPermission[]> = {
 export interface MCPTool {
   name: string;
   description: string;
-  inputSchema: Record<string, any>;
-  execute: (args: any, context: MCPContext) => Promise<MCPToolResult>;
+  inputSchema: Record<string, unknown>;
+  execute: (args: Record<string, unknown>, context: MCPContext) => Promise<MCPToolResult>;
 }
 
 export interface MCPContext {
@@ -55,7 +55,7 @@ export interface MCPContext {
 
 export interface MCPToolResult {
   success: boolean;
-  data?: any;
+  data?: unknown;
   error?: string;
 }
 
@@ -64,14 +64,14 @@ export interface MCPToolResult {
 const SUPABASE_URL = 'https://atexvoyvnnuaonvrgzhn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie';
 
-async function restGet(table: string, query?: Record<string, string>): Promise<any[]> {
+async function restGet(table: string, query?: Record<string, string>): Promise<unknown[]> {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
   if (query) for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
   const resp = await fetch(url.toString(), { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
   return resp.json();
 }
 
-async function restPost(table: string, record: Record<string, any>): Promise<any> {
+async function restPost(table: string, record: Record<string, unknown>): Promise<unknown> {
   const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     method: 'POST',
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
@@ -80,7 +80,7 @@ async function restPost(table: string, record: Record<string, any>): Promise<any
   return resp.json();
 }
 
-async function restPatch(table: string, id: string, updates: Record<string, any>): Promise<any> {
+async function restPatch(table: string, id: string, updates: Record<string, unknown>): Promise<unknown> {
   const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
     method: 'PATCH',
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
@@ -101,37 +101,37 @@ async function restDelete(table: string, id: string): Promise<void> {
 export const mcpTools: MCPTool[] = [
   // ---- Goals CRUD ----
   { name: 'list_goals', description: '获取目标列表', inputSchema: { type: 'object', properties: { status: { type: 'string' }, category: { type: 'string' }, limit: { type: 'number', default: 50 } } },
-    execute: async (args) => { const data = await restGet('goals', args.status ? { status: `eq.${args.status}` } : undefined); return { success: true, data: (data || []).slice(0, args.limit || 50) }; } },
+    execute: async (args) => { const data = await restGet('goals', args.status ? { status: `eq.${args.status}` } : undefined); return { success: true, data: (data || []).slice(0, (args.limit as number) || 50) }; } },
   { name: 'get_goal', description: '获取单个目标详情', inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
     execute: async (args) => { const data = await restGet('goals', { id: `eq.${args.id}` }); return { success: true, data: data?.[0] || null }; } },
   { name: 'create_goal', description: '创建目标', inputSchema: { type: 'object', required: ['title'], properties: { title: { type: 'string' }, type: { type: 'string', enum: ['okr', 'kpi', 'milestone'] }, priority: { type: 'string', enum: ['urgent', 'high', 'medium', 'low'] }, start_date: { type: 'string' }, end_date: { type: 'string' }, leader_id: { type: 'string' } } },
-    execute: async (args) => { const record = { title: args.title, type: args.type || 'okr', status: 'todo', priority: args.priority || 'medium', start_date: args.start_date || null, end_date: args.end_date || null, leader_id: args.leader_id || '', key_results: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; const data = await restPost('goals', record); return { success: true, data }; } },
+    execute: async (args) => { const record: Record<string, unknown> = { title: args.title, type: args.type || 'okr', status: 'todo', priority: args.priority || 'medium', start_date: args.start_date || null, end_date: args.end_date || null, leader_id: args.leader_id || '', key_results: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; const data = await restPost('goals', record); return { success: true, data }; } },
   { name: 'update_goal', description: '更新目标', inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' }, priority: { type: 'string' }, progress: { type: 'number' } } },
-    execute: async (args) => { const { id, ...updates } = args; const data = await restPatch('goals', id, updates); return { success: true, data }; } },
+    execute: async (args) => { const { id, ...updates } = args; const data = await restPatch('goals', id as string, updates); return { success: true, data }; } },
   { name: 'delete_goal', description: '删除目标', inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
-    execute: async (args) => { await restDelete('goals', args.id); return { success: true }; } },
+    execute: async (args) => { await restDelete('goals', args.id as string); return { success: true }; } },
 
   // ---- Projects CRUD ----
   { name: 'list_projects', description: '获取项目列表', inputSchema: { type: 'object', properties: { status: { type: 'string' }, goal_id: { type: 'string' }, limit: { type: 'number', default: 50 } } },
-    execute: async (args) => { const q: Record<string, string> = {}; if (args.status) q.status = `eq.${args.status}`; if (args.goal_id) q.goal_id = `eq.${args.goal_id}`; const data = await restGet('projects', q); return { success: true, data: (data || []).slice(0, args.limit || 50) }; } },
+    execute: async (args) => { const q: Record<string, string> = {}; if (args.status) q.status = `eq.${args.status}`; if (args.goal_id) q.goal_id = `eq.${args.goal_id}`; const data = await restGet('projects', q); return { success: true, data: (data || []).slice(0, (args.limit as number) || 50) }; } },
   { name: 'get_project', description: '获取单个项目详情', inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
     execute: async (args) => { const data = await restGet('projects', { id: `eq.${args.id}` }); return { success: true, data: data?.[0] || null }; } },
   { name: 'create_project', description: '创建项目', inputSchema: { type: 'object', required: ['title'], properties: { title: { type: 'string' }, goal_id: { type: 'string' }, priority: { type: 'string' }, leader_id: { type: 'string' }, start_date: { type: 'string' }, end_date: { type: 'string' } } },
-    execute: async (args) => { const record = { title: args.title, goal_id: args.goal_id || null, status: 'todo', priority: args.priority || 'medium', leader_id: args.leader_id || '', start_date: args.start_date || '', end_date: args.end_date || '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; const data = await restPost('projects', record); return { success: true, data }; } },
+    execute: async (args) => { const record: Record<string, unknown> = { title: args.title, goal_id: args.goal_id || null, status: 'todo', priority: args.priority || 'medium', leader_id: args.leader_id || '', start_date: args.start_date || '', end_date: args.end_date || '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; const data = await restPost('projects', record); return { success: true, data }; } },
   { name: 'update_project', description: '更新项目', inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' }, priority: { type: 'string' } } },
-    execute: async (args) => { const { id, ...updates } = args; const data = await restPatch('projects', id, updates); return { success: true, data }; } },
+    execute: async (args) => { const { id, ...updates } = args; const data = await restPatch('projects', id as string, updates); return { success: true, data }; } },
 
   // ---- Tasks CRUD ----
   { name: 'list_tasks', description: '获取任务列表', inputSchema: { type: 'object', properties: { status: { type: 'string' }, project_id: { type: 'string' }, leader_id: { type: 'string' }, limit: { type: 'number', default: 50 } } },
-    execute: async (args) => { const q: Record<string, string> = {}; if (args.status) q.status = `eq.${args.status}`; if (args.project_id) q.project_id = `eq.${args.project_id}`; if (args.leader_id) q.leader_id = `eq.${args.leader_id}`; const data = await restGet('tasks', q); return { success: true, data: (data || []).slice(0, args.limit || 50) }; } },
+    execute: async (args) => { const q: Record<string, string> = {}; if (args.status) q.status = `eq.${args.status}`; if (args.project_id) q.project_id = `eq.${args.project_id}`; if (args.leader_id) q.leader_id = `eq.${args.leader_id}`; const data = await restGet('tasks', q); return { success: true, data: (data || []).slice(0, (args.limit as number) || 50) }; } },
   { name: 'get_task', description: '获取单个任务详情', inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
     execute: async (args) => { const data = await restGet('tasks', { id: `eq.${args.id}` }); return { success: true, data: data?.[0] || null }; } },
   { name: 'create_task', description: '创建任务', inputSchema: { type: 'object', required: ['title'], properties: { title: { type: 'string' }, project_id: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'medium', 'low'] }, leader_id: { type: 'string' }, start_date: { type: 'string' }, due_date: { type: 'string' }, blocked_by: { type: 'array', items: { type: 'string' } } } },
-    execute: async (args) => { const record = { title: args.title, project_id: args.project_id || null, status: 'todo', priority: args.priority || 'medium', leader_id: args.leader_id || '', start_date: args.start_date || null, due_date: args.due_date || null, blocked_by: args.blocked_by || [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; const data = await restPost('tasks', record); return { success: true, data }; } },
+    execute: async (args) => { const record: Record<string, unknown> = { title: args.title, project_id: args.project_id || null, status: 'todo', priority: args.priority || 'medium', leader_id: args.leader_id || '', start_date: args.start_date || null, due_date: args.due_date || null, blocked_by: args.blocked_by || [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; const data = await restPost('tasks', record); return { success: true, data }; } },
   { name: 'update_task', description: '更新任务', inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string', enum: ['todo', 'in_progress', 'done', 'blocked', 'cancelled'] }, priority: { type: 'string' }, due_date: { type: 'string' }, blocked_by: { type: 'array', items: { type: 'string' } } } },
-    execute: async (args) => { const { id, ...updates } = args; if (updates.status === 'done') updates.completed_at = new Date().toISOString(); const data = await restPatch('tasks', id, updates); return { success: true, data }; } },
+    execute: async (args) => { const { id, ...updates } = args; if (updates.status === 'done') (updates as Record<string, unknown>).completed_at = new Date().toISOString(); const data = await restPatch('tasks', id as string, updates); return { success: true, data }; } },
   { name: 'delete_task', description: '删除任务', inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
-    execute: async (args) => { await restDelete('tasks', args.id); return { success: true }; } },
+    execute: async (args) => { await restDelete('tasks', args.id as string); return { success: true }; } },
 
   // ---- Members ----
   { name: 'list_members', description: '获取团队成员列表', inputSchema: { type: 'object', properties: { role: { type: 'string' } } },
@@ -139,22 +139,22 @@ export const mcpTools: MCPTool[] = [
 
   // ---- 智能分析 ----
   { name: 'get_critical_path', description: '计算任务集的关键路径（需要传入任务ID列表）', inputSchema: { type: 'object', required: ['task_ids'], properties: { task_ids: { type: 'array', items: { type: 'string' }, description: '任务ID列表' } } },
-    execute: async (args) => { const tasks = await restGet('tasks'); const filtered = tasks.filter((t: any) => args.task_ids.includes(t.id)); const { calculateCriticalPath } = await import('@/lib/gantt/cpm'); const result = calculateCriticalPath(filtered); return { success: true, data: { criticalPath: result.criticalPath, projectDuration: result.projectDuration, criticalTaskIds: [...result.criticalTaskIds] } }; } },
+    execute: async (args) => { const tasks = await restGet('tasks'); const taskIds = args.task_ids as string[]; const filtered = (tasks as Record<string, unknown>[]).filter(t => taskIds.includes(t.id as string)); const { calculateCriticalPath } = await import('@/lib/gantt/cpm'); const result = calculateCriticalPath(filtered as Parameters<typeof calculateCriticalPath>[0]); return { success: true, data: { criticalPath: result.criticalPath, projectDuration: result.projectDuration, criticalTaskIds: [...result.criticalTaskIds] } }; } },
   { name: 'predict_delay', description: '预测指定任务的延期风险（需要传入所有相关任务ID）', inputSchema: { type: 'object', required: ['task_id'], properties: { task_id: { type: 'string', description: '要预测的任务ID' } } },
-    execute: async (args) => { const tasks = await restGet('tasks'); const target = tasks.find((t: any) => t.id === args.task_id); if (!target) return { success: false, error: 'Task not found' }; const { predictDelayRisk } = await import('@/lib/delayPrediction'); const result = predictDelayRisk(target, tasks); return { success: true, data: result }; } },
+    execute: async (args) => { const tasks = await restGet('tasks'); const target = (tasks as Record<string, unknown>[]).find(t => t.id === args.task_id); if (!target) return { success: false, error: 'Task not found' }; const { predictDelayRisk } = await import('@/lib/delayPrediction'); const result = predictDelayRisk(target as Parameters<typeof predictDelayRisk>[0], tasks as Parameters<typeof predictDelayRisk>[1]); return { success: true, data: result }; } },
   { name: 'calc_kpi_score', description: '计算目标的KPI评分', inputSchema: { type: 'object', required: ['goal_id'], properties: { goal_id: { type: 'string' } } },
-    execute: async (args) => { const goals = await restGet('goals', { id: `eq.${args.goal_id}` }); const goal = goals?.[0]; if (!goal?.key_results) return { success: false, error: 'Goal or KRs not found' }; const { calcKpiGoalScore, calcDualTrack } = await import('@/lib/kpiScoring'); const kpiResult = calcKpiGoalScore(goal.key_results); const dualTrack = calcDualTrack(goal.key_results); return { success: true, data: { kpi: kpiResult, dualTrack } }; } },
+    execute: async (args) => { const goals = await restGet('goals', { id: `eq.${args.goal_id}` }); const goal = (goals as Record<string, unknown>[])?.[0]; if (!(goal?.key_results)) return { success: false, error: 'Goal or KRs not found' }; const { calcKpiGoalScore, calcDualTrack } = await import('@/lib/kpiScoring'); const krs = goal.key_results; const kpiResult = calcKpiGoalScore(krs as Parameters<typeof calcKpiGoalScore>[0]); const dualTrack = calcDualTrack(krs as Parameters<typeof calcDualTrack>[0]); return { success: true, data: { kpi: kpiResult, dualTrack } }; } },
   { name: 'resource_bottleneck', description: '获取团队资源瓶颈摘要', inputSchema: { type: 'object', properties: {} },
-    execute: async () => { const [tasks, members] = await Promise.all([restGet('tasks'), restGet('members', { status: 'eq.active' })]); const { generateBottleneckSummary, calcMemberLoads } = await import('@/lib/resourceBottleneck'); const summary = generateBottleneckSummary(tasks, members); const loads = calcMemberLoads(tasks, members); return { success: true, data: { summary, loads: loads.map(l => ({ name: l.memberName, activeTasks: l.activeTasks, loadIndex: l.loadIndex, status: l.status })) } }; } },
+    execute: async () => { const [tasks, members] = await Promise.all([restGet('tasks'), restGet('members', { status: 'eq.active' })]); const { generateBottleneckSummary, calcMemberLoads } = await import('@/lib/resourceBottleneck'); const summary = generateBottleneckSummary(tasks as Parameters<typeof generateBottleneckSummary>[0], members as Parameters<typeof generateBottleneckSummary>[1]); const loads = calcMemberLoads(tasks as Parameters<typeof calcMemberLoads>[0], members as Parameters<typeof calcMemberLoads>[1]); return { success: true, data: { summary, loads: loads.map(l => ({ name: l.memberName, activeTasks: l.activeTasks, loadIndex: l.loadIndex, status: l.status })) } }; } },
   { name: 'recommend_assignee', description: '为任务推荐最优责任人', inputSchema: { type: 'object', properties: { preferred_member_ids: { type: 'array', items: { type: 'string' }, description: '候选项（可选）' } } },
-    execute: async (args) => { const [tasks, members] = await Promise.all([restGet('tasks'), restGet('members', { status: 'eq.active' })]); const { recommendAssignee } = await import('@/lib/resourceBottleneck'); const result = recommendAssignee(tasks, members, args.preferred_member_ids); return { success: true, data: result }; } },
+    execute: async (args) => { const [tasks, members] = await Promise.all([restGet('tasks'), restGet('members', { status: 'eq.active' })]); const { recommendAssignee } = await import('@/lib/resourceBottleneck'); const result = recommendAssignee(tasks as Parameters<typeof recommendAssignee>[0], members as Parameters<typeof recommendAssignee>[1], args.preferred_member_ids as string[] | undefined); return { success: true, data: result }; } },
 ];
 
 // ===== MCP 调用入口（带权限校验） =====
 
 export async function callMCPTool(
   toolName: string,
-  args: Record<string, any>,
+  args: Record<string, unknown>,
   tokenValue?: string,
 ): Promise<MCPToolResult> {
   const tool = mcpTools.find(t => t.name === toolName);
@@ -180,7 +180,7 @@ export async function callMCPTool(
 }
 
 /** 获取工具列表（供 MCP 协议注册） */
-export function getMCPToolList(): Array<{ name: string; description: string; inputSchema: Record<string, any> }> {
+export function getMCPToolList(): Array<{ name: string; description: string; inputSchema: Record<string, unknown> }> {
   return mcpTools.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
 }
 

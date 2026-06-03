@@ -3,6 +3,7 @@ import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete } from './supabase';
 import { genId } from './utils';
 import { reducerCanDelete, needMutate, tsNow } from './shared';
+import { cascadeDeleteSprint } from './cascadeHandlers';
 
 export function sprintReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
@@ -31,9 +32,7 @@ export function sprintReducer(state: AppState, action: Action): AppState | null 
       const spid = action.payload;
       const now = tsNow();
       const s = needMutate(state, ['sprints', 'tasks']);
-      s.tasks.forEach(t => {
-        if (t.sprintId === spid) { t.sprintId = null; t.updatedAt = now; supabaseUpdate('tasks', t.id, { sprint_id: null, updated_at: now }); }
-      });
+      cascadeDeleteSprint(s, spid, now);
       s.sprints = s.sprints.filter(sp => sp.id !== spid);
       supabaseDelete('sprints', spid);
       return s;

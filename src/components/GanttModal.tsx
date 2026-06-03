@@ -8,6 +8,7 @@ import { useMemberLookup, usePermissions } from '@/store/hooks';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag, X, Filter, Save, GitCompare, Sparkles, Zap } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { handleError } from '@/lib/errorHandler';
 import { autoScheduleLocal, autoScheduleDeep, type ScheduleSuggestion } from '@/lib/ai/aiAutoScheduler';
 import {
   DAY_MS, parseDate, formatDate, addDays, getMonday, computeTimeRange,
@@ -29,8 +30,8 @@ const BASELINE_KEY = 'tbh-gantt-baselines';
 const BASELINE_MAX_COUNT = 20;
 const BASELINE_MAX_SIZE = 500 * 1024;
 
-function isValidBaseline(b: any): b is BaselineSnapshot {
-  return b && typeof b.id === 'string' && typeof b.name === 'string' && typeof b.createdAt === 'string' && Array.isArray(b.tasks);
+function isValidBaseline(b: unknown): b is BaselineSnapshot {
+  return typeof b === 'object' && b !== null && typeof (b as Record<string, unknown>).id === 'string' && typeof (b as Record<string, unknown>).name === 'string' && typeof (b as Record<string, unknown>).createdAt === 'string' && Array.isArray((b as Record<string, unknown>).tasks);
 }
 
 function loadBaselines(): BaselineSnapshot[] {
@@ -42,7 +43,7 @@ function loadBaselines(): BaselineSnapshot[] {
     const valid = parsed.filter(isValidBaseline);
     if (valid.length !== parsed.length) localStorage.setItem(BASELINE_KEY, JSON.stringify(valid));
     return valid;
-  } catch { return []; }
+  } catch (e) { handleError(e, { module: 'GanttModal', operation: 'LOAD_BASELINES', severity: 'debug' }); return []; }
 }
 function saveBaselines(bs: BaselineSnapshot[]) {
   try {
@@ -50,7 +51,7 @@ function saveBaselines(bs: BaselineSnapshot[]) {
     const json = JSON.stringify(bs);
     if (json.length > BASELINE_MAX_SIZE) return;
     localStorage.setItem(BASELINE_KEY, json);
-  } catch {}
+  } catch (e) { handleError(e, { module: 'GanttModal', operation: 'SAVE_BASELINE', severity: 'debug' }); }
 }
 
 interface GanttModalProps {

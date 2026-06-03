@@ -3,6 +3,7 @@
  * + Agent Card 发现 + 协议路由
  */
 import { useState, useMemo } from 'react';
+import { handleError } from '@/lib/errorHandler';
 import { useStore } from '@/store/useStore';
 import { mcpTools, type MCPTool } from '@/lib/mcpServer';
 import { Bot, Play, CheckCircle2, XCircle, Loader2, Terminal, Globe, Route, Zap, Server, Radio } from 'lucide-react';
@@ -31,12 +32,12 @@ export function McpToolsTab() {
   const { state } = useStore();
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
-  const [results, setResults] = useState<Record<string, { success: boolean; data: any; timestamp: string }>>({});
+  const [results, setResults] = useState<Record<string, { success: boolean; data: unknown; timestamp: string }>>({});
   const [executing, setExecuting] = useState<string | null>(null);
   const [subTab, setSubTab] = useState<McpSubTab>('tools');
 
   const tools = useMemo(() => {
-    try { return mcpTools || []; } catch { return []; }
+    try { return mcpTools || []; } catch (e) { handleError(e, { module: 'McpToolsTab', operation: 'LOAD_TOOLS', severity: 'debug' }); return []; }
   }, []);
 
   const handleExecute = async (toolName: string) => {
@@ -129,7 +130,7 @@ export function McpToolsTab() {
                       {paramEntries.length > 0 && (
                         <div className="space-y-2">
                           <div className="text-xs font-semibold text-muted-foreground">参数</div>
-                          {paramEntries.map(([key, schema]: [string, any]) => (
+                          {paramEntries.map(([key, schema]: [string, Record<string, unknown>]) => (
                             <div key={key} className="space-y-0.5">
                               <label className="text-[10px] font-medium text-muted-foreground">{key} <span className="text-gray-400">{schema.type}</span></label>
                               <input type="text" className="w-full text-xs border border-input rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring" placeholder={schema.description || key} value={paramValues[key] || ''} onChange={e => setParamValues(prev => ({ ...prev, [key]: e.target.value }))} />

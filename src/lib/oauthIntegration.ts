@@ -7,6 +7,8 @@
  * - token 安全存储
  */
 
+import { handleError } from '@/lib/errorHandler';
+
 // ===== 类型定义 =====
 
 export type OAuthProvider = 'feishu' | 'dingtalk' | 'wechat_work';
@@ -71,7 +73,7 @@ const PROVIDER_LABELS: Record<OAuthProvider, { name: string; desc: string }> = {
 export function loadOAuthStatuses(): OAuthStatus[] {
   try {
     return JSON.parse(localStorage.getItem(OAUTH_STATUS_KEY) || '[]');
-  } catch { return []; }
+  } catch (e) { handleError(e, { module: 'oauthIntegration', operation: 'LOAD_STATUSES', severity: 'debug' }); return []; }
 }
 
 function saveOAuthStatuses(statuses: OAuthStatus[]) {

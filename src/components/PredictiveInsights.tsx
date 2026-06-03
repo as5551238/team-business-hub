@@ -2,14 +2,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { Brain, AlertTriangle, UserX, Target, Clock, TrendingDown, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { handleError } from '@/lib/errorHandler';
 
 interface TaskRisk {
   taskId: string; title: string; leaderId: string; daysLeft: number;
-  priority: string; riskScore: number; riskLevel: string; factors: any[];
+  priority: string; riskScore: number; riskLevel: string; factors: Record<string, unknown>[];
 }
 interface BurnoutMember {
   userId: string; userName: string; role: string;
-  burnoutScore: number; riskLevel: string; signals: any[];
+  burnoutScore: number; riskLevel: string; signals: Record<string, unknown>[];
 }
 interface GoalRisk {
   goalId: string; title: string; currentProgress: number;
@@ -56,7 +57,7 @@ export default function PredictiveInsights() {
         burnout: bo.data || { totalAtRisk: 0, members: [] },
         goalRisks: gr.data || { totalAtRisk: 0, goals: [] },
       });
-    } catch {}
+    } catch (e) { handleError(e, { module: 'PredictiveInsights', operation: 'FETCH_DATA', severity: 'warn' }); }
     setLoading(false);
   }, [state.currentUser?.teamId]);
 
@@ -142,7 +143,7 @@ export default function PredictiveInsights() {
                       <RiskBadge level={m.riskLevel} />
                     </div>
                     <div className="flex flex-wrap gap-1 mt-0.5">
-                      {m.signals.map((s: any, i: number) => (
+                      {m.signals.map((s: Record<string, unknown>, i: number) => (
                         <span key={i} className="text-[9px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded">
                           {s.type === 'activity_drop' ? '活跃度下降' : s.type === 'low_presence' ? '出勤不足' : '负载过高'}：{s.detail}
                         </span>

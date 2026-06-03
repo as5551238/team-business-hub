@@ -1,13 +1,16 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { useViewingMember, useMemberLookup, useActiveMembers } from '@/store/hooks';
 import { hasPermission } from '@/store/reducer';
 import type { Permission, ItemType } from '@/types';
 import type { Notification } from '@/types';
+import { cn } from '@/lib/utils';
 import { QuickCreateModal } from '@/components/QuickCreateModal';
 import { CommandPalette } from '@/components/CommandPalette';
 import { OnboardingWizard, shouldShowOnboarding } from '@/components/OnboardingWizard';
 import { useTheme } from '@/hooks/useTheme';
+import { handleError } from '@/lib/errorHandler';
 import { PageTransition } from '@/components/ui/motion';
 import { computeUserLevel, isFeatureVisible, getLevelDescription, setUserLevel, recordAction } from '@/lib/progressiveDisclosure';
 import { pushTaskEvent, pushGoalEvent, pushRiskAlert } from '@/lib/pushEventEngine';
@@ -19,6 +22,7 @@ import { OperationToast } from '@/components/OperationToast';
 import { requestNotificationPermission, sendBrowserNotification, isNotificationSupported } from '@/lib/browserNotify';
 import { isWeChatEnabled, sendWeChatMessage } from '@/supabase/wechat';
 import { setWeChatNotify, fireAutomationRules } from '@/store/shared';
+import { getPageFromPathname, PAGE_TO_PATH, useAppNavigate } from '@/lib/routes';
 
 // Detect H5 embedded mode (WeChat/Feishu in-app browser or ?h5=1 param)
 function isH5Mode(): boolean {
@@ -28,7 +32,7 @@ function isH5Mode(): boolean {
     const isFeishu = ua.includes('lark') || ua.includes('feishu');
     const hasParam = new URLSearchParams(window.location.search).get('h5') === '1';
     return isWechat || isFeishu || hasParam;
-  } catch { return false; }
+  } catch (e) { handleError(e, { module: 'Layout', operation: 'H5_MODE_DETECT', severity: 'debug' }); return false; }
 }
 import {
   LayoutDashboard, Target, FolderKanban, CheckSquare, StickyNote,
@@ -45,11 +49,9 @@ import { CURRENT_USER_KEY } from '@/store/types';
 export type DensityMode = 'comfortable' | 'compact';
 export const DensityContext = React.createContext<DensityMode>('comfortable');
 
-type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'knowledge' | 'admin' | 'privacy';
+export type Page = 'dashboard' | 'goals' | 'projects' | 'tasks' | 'insight' | 'knowledge' | 'admin' | 'privacy';
 
 interface LayoutProps {
-  currentPage: Page;
-  onPageChange: (page: Page) => void;
   children: React.ReactNode;
   currentUser?: { id: string; role: string; name: string; avatar: string; department: string } | undefined;
 }
@@ -119,9 +121,13 @@ const NotificationDropdown = React.memo(function NotificationDropdown({ notifica
             <div key={n.id} className={`px-4 py-3 border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors ${!n.read ? 'bg-primary/5' : ''}`}
               onClick={() => { onMarkRead(n.id); if (targetPage) onNavigate(targetPage, n.relatedId, n.relatedType); }}>
               <div className="flex items-start gap-2">
-                {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />}
+                {!n.read && <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0', (n.level === 'urgent') ? 'bg-red-500' : (n.level === 'important') ? 'bg-amber-500' : 'bg-primary')} />}
                 <div className={!n.read ? '' : 'pl-3.5'}>
-                  <div className="text-sm font-medium">{n.title}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium">{n.title}</span>
+                    {n.level === 'urgent' && <span className="px-1 py-0.5 rounded text-[9px] bg-red-100 text-red-700 font-medium">紧急</span>}
+                    {n.level === 'important' && <span className="px-1 py-0.5 rounded text-[9px] bg-amber-100 text-amber-700 font-medium">重要</span>}
+                  </div>
                   <div className="text-xs text-muted-foreground mt-0.5">{n.message}</div>
                   <div className="text-xs text-muted-foreground/60 mt-1">{new Date(n.createdAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
@@ -188,11 +194,19 @@ const MobileContextMenu: React.FC<{ x: number; y: number; items: ContextMenuItem
 
 // --- Main Layout ---
 
-export default function Layout({ currentPage, onPageChange, children, currentUser }: LayoutProps) {
+export default function Layout({ children, currentUser }: LayoutProps) {
   // H5 embedded mode: render mobile-optimized layout instead
   if (isH5Mode()) {
     return <H5Layout>{children}</H5Layout>;
   }
+
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { goToPage, goToItem } = useAppNavigate();
+
+  // Derive currentPage from URL pathname (not from prop)
+  const currentPage = useMemo(() => getPageFromPathname(location.pathname), [location.pathname]);
+  const onPageChange = useCallback((page: Page) => { goToPage(page); }, [goToPage]);
 
   const { state, dispatch, connectionMode } = useStore();
   const { viewingMemberId, setViewingMember, isTeamView, viewingMember } = useViewingMember();
@@ -200,7 +214,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const { activeMembers } = useActiveMembers();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<'wide' | 'narrow' | 'hidden'>(() => {
-    try { const s = localStorage.getItem('tbh-sidebar-mode'); if (s === 'wide' || s === 'narrow' || s === 'hidden') return s; } catch {}
+    try { const s = localStorage.getItem('tbh-sidebar-mode'); if (s === 'wide' || s === 'narrow' || s === 'hidden') return s; } catch (e) { handleError(e, { module: 'Layout', operation: 'LOAD_SIDEBAR_MODE', severity: 'debug' }); }
     // 小屏默认收起，大屏默认展开
     return window.innerWidth < 768 ? 'hidden' : 'wide';
   });
@@ -214,7 +228,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const [quickCreateType, setQuickCreateType] = useState<'task' | 'goal' | 'project'>('task');
   const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding());
   const [density, setDensity] = useState<DensityMode>(() => {
-    try { const d = localStorage.getItem('tbh-density'); if (d === 'comfortable' || d === 'compact') return d; } catch {} return 'comfortable';
+    try { const d = localStorage.getItem('tbh-density'); if (d === 'comfortable' || d === 'compact') return d; } catch (e) { handleError(e, { module: 'Layout', operation: 'LOAD_DENSITY', severity: 'debug' }); } return 'comfortable';
   });
   const { theme, toggleTheme } = useTheme();
   // Mobile long-press context menu
@@ -231,7 +245,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const toggleDensity = useCallback(() => {
     setDensity(prev => {
       const next = prev === 'comfortable' ? 'compact' : 'comfortable';
-      try { localStorage.setItem('tbh-density', next); } catch {}
+      try { localStorage.setItem('tbh-density', next); } catch (e) { handleError(e, { module: 'Layout', operation: 'SAVE_DENSITY', severity: 'debug' }); }
       return next;
     });
   }, []);
@@ -261,7 +275,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   // Track offline write count from localStorage (COL: offline indicator)
   useEffect(() => {
     if (connectionMode !== 'offline') { setOfflineWrites(0); return; }
-    const check = () => { try { const c = parseInt(localStorage.getItem('tbh-offline-writes') || '0'); setOfflineWrites(c); } catch {} };
+    const check = () => { try { const c = parseInt(localStorage.getItem('tbh-offline-writes') || '0'); setOfflineWrites(c); } catch (e) { handleError(e, { module: 'Layout', operation: 'CHECK_OFFLINE_WRITES', severity: 'debug' }); } };
     check();
     const id = setInterval(check, 2000);
     return () => clearInterval(id);
@@ -309,8 +323,8 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           if (existingKeys.has(key)) continue;
           dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'novd_' + t.id + '_' + t.dueDate, type: 'overdue' as const, title: '任务已逾期', message: `"${t.title}" 已逾期 (截止 ${t.dueDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
           pushTaskEvent('overdue', t, memberLookup.getName);
-          try { fireAutomationRules(state, t.id, 'task', t.title, 'due_arrive', { dueDate: t.dueDate }, t as any); } catch {}
-          try { fireAutomationRules(state, t.id, 'task', t.title, 'overdue', { dueDate: t.dueDate, status: t.status }, t as any); } catch {}
+          try { fireAutomationRules(state, t.id, 'task', t.title, 'due_arrive', { dueDate: t.dueDate }, t as Record<string, unknown>); } catch (e) { handleError(e, { module: 'Layout', operation: 'FIRE_AUTOMATION_DUE_ARRIVE', severity: 'warn' }); }
+          try { fireAutomationRules(state, t.id, 'task', t.title, 'overdue', { dueDate: t.dueDate, status: t.status }, t as Record<string, unknown>); } catch (e) { handleError(e, { module: 'Layout', operation: 'FIRE_AUTOMATION_OVERDUE', severity: 'warn' }); }
         }
         // Approaching deadline check (1-3 days)
         else if (t.dueDate <= threeDaysLater) {
@@ -319,7 +333,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           if (existingKeys.has(key)) continue;
           dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'napr_' + t.id + '_' + t.dueDate, type: 'sync' as const, title: '任务即将到期', message: `"${t.title}" 将于 ${t.dueDate} 到期（还有${daysLeft}天）`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
           // Also send WeChat/browser push for approaching deadlines
-          try { sendBrowserNotification('任务即将到期', { body: `"${t.title}" 将于${t.dueDate}到期（还有${daysLeft}天）`, tag: 'approaching-' + t.id }); } catch {}
+          try { sendBrowserNotification('任务即将到期', { body: `"${t.title}" 将于${t.dueDate}到期（还有${daysLeft}天）`, tag: 'approaching-' + t.id }); } catch (e) { handleError(e, { module: 'Layout', operation: 'SEND_BROWSER_NOTIFY', severity: 'debug' }); }
           pushTaskEvent('reminder', t, memberLookup.getName);
         }
       }
@@ -367,7 +381,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const cycleSidebarMode = useCallback(() => {
     setSidebarMode(prev => {
       const next = prev === 'wide' ? 'narrow' : prev === 'narrow' ? 'hidden' : 'wide';
-      try { localStorage.setItem('tbh-sidebar-mode', next); } catch {}
+      try { localStorage.setItem('tbh-sidebar-mode', next); } catch (e) { handleError(e, { module: 'Layout', operation: 'SAVE_SIDEBAR_MODE', severity: 'debug' }); }
       return next;
     });
   }, []);
@@ -475,14 +489,14 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
       if (mod && e.key === 'g') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-open-gantt')); return; }
       if (mod && e.key === 'f') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-focus-filter')); return; }
       if (mod && e.key === 's') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-save-current')); return; }
-      if (mod && e.key === ',') { e.preventDefault(); onPageChange('admin'); return; } // Settings
+      if (mod && e.key === ',') { e.preventDefault(); goToPage('admin'); return; } // Settings
 
       // --- g-prefix (Vim-style navigation) — P3#13 fix: check BEFORE single-key shortcuts to avoid conflicts ---
       if (keyBufferRef.current === 'g') {
         keyBufferRef.current = '';
         if (keyTimerRef.current) { clearTimeout(keyTimerRef.current); keyTimerRef.current = null; }
         const gNav: Record<string, Page> = { d: 'dashboard', o: 'goals', p: 'projects', t: 'tasks', i: 'insight', a: 'admin', k: 'knowledge' };
-        if (gNav[e.key]) { onPageChange(gNav[e.key]); return; }
+        if (gNav[e.key]) { goToPage(gNav[e.key]); return; }
         // gg: scroll to top
         if (e.key === 'g') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
         // Not a recognized g-prefix combo — fall through to single-key handling
@@ -504,7 +518,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
 
       // 1-7: quick navigation
       const navMap: Record<string, Page> = { '1': 'dashboard', '2': 'goals', '3': 'projects', '4': 'tasks', '5': 'insight', '6': 'knowledge', '7': 'admin' };
-      if (navMap[e.key]) { onPageChange(navMap[e.key]); return; }
+      if (navMap[e.key]) { goToPage(navMap[e.key]); return; }
 
       // c: quick create (task by default)
       if (e.key === 'c') { e.preventDefault(); setQuickCreateType('task'); setQuickCreateOpen(true); return; }
@@ -546,24 +560,23 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onPageChange, closeAllDropdowns, dispatch, cycleSidebarMode]);
+  }, [goToPage, closeAllDropdowns, dispatch, cycleSidebarMode]);
 
   const handlePageClick = useCallback((page: Page) => {
-    onPageChange(page);
+    goToPage(page);
     setSidebarOpen(false);
     recordAction();
-  }, [onPageChange]);
+  }, [goToPage]);
 
   const handleMarkAllRead = useCallback(() => dispatch({ type: 'MARK_ALL_NOTIFICATIONS_READ' }), [dispatch]);
   const handleMarkRead = useCallback((id: string) => dispatch({ type: 'MARK_NOTIFICATION_READ', payload: id }), [dispatch]);
   const handleNotificationNavigate = useCallback((page: Page, itemId: string, itemType: string) => {
-    onPageChange(page);
+    goToItem(itemType as 'goal' | 'project' | 'task', itemId);
     setShowNotifications(false);
-    setTimeout(() => { window.dispatchEvent(new CustomEvent('tbh-open-detail', { detail: { itemId, itemType } })); }, 600);
-  }, [onPageChange]);
+  }, [goToItem]);
   const handleSwitchUser = useCallback((id: string) => { dispatch({ type: 'SET_CURRENT_USER', payload: id }); setShowUserMenu(false); }, [dispatch]);
   const handleLogout = useCallback(() => {
-    try { localStorage.removeItem(CURRENT_USER_KEY); } catch {}
+    try { localStorage.removeItem(CURRENT_USER_KEY); } catch (e) { handleError(e, { module: 'Layout', operation: 'LOGOUT_REMOVE_KEY', severity: 'debug' }); }
     dispatch({ type: 'SET_CURRENT_USER', payload: null });
     setShowUserMenu(false);
     // Clear Sentry user context on logout
@@ -574,13 +587,15 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
     const q = (e.target as HTMLInputElement).value.trim();
     if (!q) return;
     const matched = state.members.filter(m => m.status === 'active' && (m.name === q || m.nickname === q));
-    onPageChange('tasks');
     if (matched.length > 0) {
-      setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'tasks', persons: matched.map(m => m.id) } })), 100);
+      // Navigate to tasks with person filter via URL search params
+      navigate(`/tasks?persons=${matched.map(m => m.id).join(',')}`);
     } else {
+      // Navigate to tasks and set search query
+      navigate('/tasks');
       setTimeout(() => { const el = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (el) { el.value = q; el.focus(); el.dispatchEvent(new Event('input', { bubbles: true })); } }, 600);
     }
-  }, [state.members, onPageChange]);
+  }, [state.members, navigate]);
 
   // Memoize notification slice to prevent re-render when other state changes
   const notificationsMemo = useMemo(() => state.notifications, [state.notifications]);
@@ -667,7 +682,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
                 const desc = getLevelDescription(level);
                 return (
                   <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-sidebar-foreground/50 hover:text-sidebar-foreground/80 transition-colors cursor-pointer rounded hover:bg-sidebar-accent" onClick={() => {
-                    const next: Record<string, any> = { beginner: 'intermediate', intermediate: 'advanced', advanced: 'beginner' };
+                    const next: Record<string, string> = { beginner: 'intermediate', intermediate: 'advanced', advanced: 'beginner' };
                     setUserLevel(next[level]);
                     window.location.reload();
                   }} title={`点击切换体验等级（当前: ${desc.title}）`}>
@@ -834,11 +849,11 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onPageChange={onPageChange}
-        onNavigateItem={(id, type) => { window.dispatchEvent(new CustomEvent('tbh-nav-item', { detail: { id, type } })); }}
+        onNavigateItem={(id, type) => { goToItem(type as 'goal' | 'project' | 'task', id); }}
         onCreateItem={(type) => {
-          if (type === 'task') { onPageChange('tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'task' } })), 200); }
-          else if (type === 'project') { onPageChange('projects'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'project' } })), 200); }
-          else { onPageChange('goals'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'goal' } })), 200); }
+          if (type === 'task') { navigate('/tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'task' } })), 200); }
+          else if (type === 'project') { navigate('/projects'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'project' } })), 200); }
+          else { navigate('/goals'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'goal' } })), 200); }
         }}
       />
       <QuickCreateModal open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} initialType={quickCreateType} />

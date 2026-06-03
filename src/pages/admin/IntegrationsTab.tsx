@@ -11,6 +11,7 @@ import { getApiTokens, createApiToken, revokeApiToken, ALL_PERMISSIONS, type Api
 import { getPushConfigs, savePushConfigs, pushNotification, formatTaskNotification, type PushConfig, type PushChannel } from '@/lib/pushConnector';
 import { initiateOAuth, loadOAuthStatuses, getOAuthStatus, disconnectOAuth, PROVIDER_LABELS, type OAuthProvider } from '@/lib/oauthIntegration';
 import { IntegrationHealthTab } from './IntegrationHealthTab';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== Types =====
 interface WebhookEndpoint {
@@ -35,10 +36,10 @@ const WEBHOOK_EVENTS = [
 const WEBHOOK_STORAGE_KEY = 'tbh-webhook-endpoints';
 
 function loadWebhooks(): WebhookEndpoint[] {
-  try { const s = localStorage.getItem(WEBHOOK_STORAGE_KEY); return s ? JSON.parse(s) : []; } catch { return []; }
+  try { const s = localStorage.getItem(WEBHOOK_STORAGE_KEY); return s ? JSON.parse(s) : []; } catch (e) { handleError(e, { module: 'IntegrationsTab', operation: 'LOAD_WEBHOOKS', severity: 'debug' }); return []; }
 }
 function saveWebhooks(ws: WebhookEndpoint[]) {
-  try { localStorage.setItem(WEBHOOK_STORAGE_KEY, JSON.stringify(ws)); } catch {}
+  try { localStorage.setItem(WEBHOOK_STORAGE_KEY, JSON.stringify(ws)); } catch (e) { handleError(e, { module: 'IntegrationsTab', operation: 'SAVE_WEBHOOKS', severity: 'debug' }); }
 }
 
 // ===== Open API Reference =====
@@ -287,7 +288,8 @@ function WebhookSection() {
       } else {
         setTestResult(p => ({ ...p, [id]: 'fail' }));
       }
-    } catch {
+    } catch (e) {
+      handleError(e, { module: 'IntegrationsTab', operation: 'TEST_WEBHOOK', severity: 'warn' });
       setTestResult(p => ({ ...p, [id]: 'fail' }));
     }
     setTimeout(() => setTestResult(p => { const n = { ...p }; delete n[id]; return n; }), 3000);
@@ -432,7 +434,8 @@ function PushConnectorSection() {
       const results = await pushNotification({ title: '团队业务中台测试', content: '这是一条来自风险雷达的测试推送消息' }, [cfg.channel]);
       const ok = results.some(r => r.success);
       setTestResult(p => ({ ...p, [key]: ok ? 'ok' : 'fail' }));
-    } catch {
+    } catch (e) {
+      handleError(e, { module: 'IntegrationsTab', operation: 'TEST_PUSH', severity: 'warn' });
       setTestResult(p => ({ ...p, [key]: 'fail' }));
     }
     setTimeout(() => setTestResult(p => { const n = { ...p }; delete n[key]; return n; }), 3000);

@@ -31,8 +31,7 @@ const UNDOABLE_ACTIONS = new Set([
 ]);
 
 function getActionLabel(action: Action): string {
-  const a = action as any;
-  switch (a.type) {
+  switch (action.type) {
     case 'ADD_GOAL': return '创建目标';
     case 'UPDATE_GOAL': return '更新目标';
     case 'DELETE_GOAL': return '删除目标';
@@ -46,7 +45,7 @@ function getActionLabel(action: Action): string {
     case 'DELETE_TASK': return '删除任务';
     case 'RESTORE_TASK': return '恢复任务';
     case 'TOGGLE_SUBTASK': return '切换子任务';
-    default: return a.type;
+    default: return action.type;
   }
 }
 
@@ -55,40 +54,21 @@ function getActionLabel(action: Action): string {
  * 入栈时预计算,确保 popUndo 永远能成功。
  */
 function computeInverse(action: Action): Action | null {
-  const a = action as any;
-  switch (a.type) {
+  switch (action.type) {
     // DELETE ↔ RESTORE
-    case 'DELETE_GOAL': return { type: 'RESTORE_GOAL', payload: a.payload };
-    case 'DELETE_PROJECT': return { type: 'RESTORE_PROJECT', payload: a.payload };
-    case 'DELETE_TASK': return { type: 'RESTORE_TASK', payload: a.payload };
+    case 'DELETE_GOAL': return { type: 'RESTORE_GOAL', payload: action.payload };
+    case 'DELETE_PROJECT': return { type: 'RESTORE_PROJECT', payload: action.payload };
+    case 'DELETE_TASK': return { type: 'RESTORE_TASK', payload: action.payload };
     // RESTORE → DELETE (需要 id)
-    case 'RESTORE_GOAL': {
-      const id = typeof a.payload === 'string' ? a.payload : a.payload?.id;
-      return id ? { type: 'DELETE_GOAL', payload: id } : null;
-    }
-    case 'RESTORE_PROJECT': {
-      const id = typeof a.payload === 'string' ? a.payload : a.payload?.id;
-      return id ? { type: 'DELETE_PROJECT', payload: id } : null;
-    }
-    case 'RESTORE_TASK': {
-      const id = typeof a.payload === 'string' ? a.payload : a.payload?.id;
-      return id ? { type: 'DELETE_TASK', payload: id } : null;
-    }
+    case 'RESTORE_GOAL': return { type: 'DELETE_GOAL', payload: action.payload };
+    case 'RESTORE_PROJECT': return { type: 'DELETE_PROJECT', payload: action.payload };
+    case 'RESTORE_TASK': return { type: 'DELETE_TASK', payload: action.payload };
     // ADD → DELETE (需要 payload 中有 id)
-    case 'ADD_GOAL': {
-      const id = a.payload?.id;
-      return id ? { type: 'DELETE_GOAL', payload: id } : null;
-    }
-    case 'ADD_PROJECT': {
-      const id = a.payload?.id;
-      return id ? { type: 'DELETE_PROJECT', payload: id } : null;
-    }
-    case 'ADD_TASK': {
-      const id = a.payload?.id;
-      return id ? { type: 'DELETE_TASK', payload: id } : null;
-    }
+    case 'ADD_GOAL': return { type: 'DELETE_GOAL', payload: action.payload.id };
+    case 'ADD_PROJECT': return { type: 'DELETE_PROJECT', payload: action.payload.id };
+    case 'ADD_TASK': return { type: 'DELETE_TASK', payload: action.payload.id };
     // TOGGLE 自逆
-    case 'TOGGLE_SUBTASK': return { type: 'TOGGLE_SUBTASK', payload: a.payload };
+    case 'TOGGLE_SUBTASK': return { type: 'TOGGLE_SUBTASK', payload: action.payload };
     default:
       return null;
   }

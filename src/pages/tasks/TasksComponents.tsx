@@ -1,7 +1,8 @@
 import React from 'react';
-import type { Task, TaskStatus, TaskPriority } from '@/types';
+import type { Task, TaskStatus, TaskPriority, Tag } from '@/types';
 import { cn } from '@/lib/utils';
 import { Calendar, ChevronDown, ChevronRight, CheckCircle2, MessageSquare, GripVertical } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   STATUS_CONFIG, URGENCY_CONFIG, IMPORTANCE_CONFIG,
   priorityToBP, isOverdue, type BatchProps
@@ -13,11 +14,11 @@ const PriorityBadge = React.memo(function PriorityBadge({ priority }: { priority
 
 export { StatusBadge, PriorityBadge };
 
-export const BoardColHeader = React.memo(function BoardColHeader({ icon: Icon, label, color, count }: { icon: any; label: string; color: string; count: number }) {
+export const BoardColHeader = React.memo(function BoardColHeader({ icon: Icon, label, color, count }: { icon: LucideIcon; label: string; color: string; count: number }) {
   return <div className={cn('flex items-center gap-2 px-4 pb-2 border-b-2 mx-3 mb-3', color)}><Icon className="w-4 h-4" /><span className="font-semibold text-sm">{label}</span><span className="text-xs text-muted-foreground ml-auto">{count}</span></div>;
 });
 
-interface TaskCardProps { task: Task; compact?: boolean; tags: any[]; commentCounts: Record<string, number>; batchProps: BatchProps; onOpenDetail: (task: Task) => void; getName: (id: string) => string; getAvatar: (id: string) => string; enableDrag?: boolean; }
+interface TaskCardProps { task: Task; compact?: boolean; tags: Tag[]; commentCounts: Record<string, number>; batchProps: BatchProps; onOpenDetail: (task: Task) => void; getName: (id: string) => string; getAvatar: (id: string) => string; enableDrag?: boolean; }
 
 export const TaskCard = React.memo(function TaskCard({ task, compact, tags, commentCounts, batchProps, onOpenDetail, getName, getAvatar, enableDrag }: TaskCardProps) {
   const bp = priorityToBP(task.priority);
@@ -48,7 +49,7 @@ export const TaskCard = React.memo(function TaskCard({ task, compact, tags, comm
       {(uniqueTags.length > 0 || task.category) && (
         <div className="flex flex-wrap gap-1 mt-2">
           {task.category && <span className="text-[10px] px-1.5 py-0.5 bg-accent rounded">{task.category}</span>}
-          {uniqueTags.slice(0, 3).map(tag => { const tg = tags.find((t: any) => t.name === tag); return <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: (tg?.color || '#888') + '20', color: tg?.color || '#888' }}>{tag}</span>; })}
+          {uniqueTags.slice(0, 3).map(tag => { const tg = tags.find((t: Tag) => t.name === tag); return <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: (tg?.color || '#888') + '20', color: tg?.color || '#888' }}>{tag}</span>; })}
           {uniqueTags.length > 3 && <span className="text-[10px] text-muted-foreground">+{uniqueTags.length - 3}</span>}
         </div>
       )}

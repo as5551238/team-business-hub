@@ -16,6 +16,7 @@ import type { AppState } from '@/types';
 import { callLLM } from './llmService';
 import { loadAIConfig } from './types';
 import { buildAIContext, type AIProjectContext } from './aiContextEngine';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型 =====
 
@@ -88,6 +89,12 @@ export interface MethodologyResult {
   fromLLM: boolean;
   /** 生成时间 */
   generatedAt: string;
+}
+
+interface LLMMethodologyResponse {
+  recommendations?: Array<{ id?: string; name?: string; fitnessScore?: number; reason?: string; expectedBenefits?: string[]; applicableWhen?: string[]; notApplicableWhen?: string[]; steps?: Array<{ title?: string; description?: string; estimatedDays?: number; successCriteria?: string[] }>; requirements?: string[]; fitTags?: string[] }>;
+  painPoints?: string[];
+  [key: string]: unknown;
 }
 
 // ===== 方法论知识库 =====
@@ -398,24 +405,23 @@ export async function recommendMethodologyDeep(state: AppState): Promise<Methodo
     const raw = await callLLM(prompt, config);
     if (!raw) return localResult;
 
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch {
+    let parsed: LLMMethodologyResponse | null = null;    try { parsed = JSON.parse(raw); } catch (e) { handleError(e, { module: 'aiMethodology', operation: 'PARSE_LLM_JSON', severity: 'warn' });
       const match = raw.match(/\{[\s\S]*"recommendations"[\s\S]*\}/);
-      if (match) try { parsed = JSON.parse(match[0]); } catch {}
+      if (match) try { parsed = JSON.parse(match[0]); } catch (e2) { handleError(e2, { module: 'aiMethodology', operation: 'PARSE_LLM_JSON_FALLBACK', severity: 'warn' }); }
     }
     if (!parsed?.recommendations) return localResult;
 
     const validIds = ['okr', 'pdca', 'scrum', 'kanban', 'agile', 'waterfall', 'lean', 'six_sigma'];
 
-    const llmRecs: MethodologyRecommendation[] = (parsed.recommendations as any[]).map((r: any) => ({
-      id: validIds.includes(r.id) ? r.id : 'okr',
+    const llmRecs: MethodologyRecommendation[] = (parsed.recommendations ?? []).map(r => ({
+      id: validIds.includes(r.id ?? '') ? r.id as MethodologyId : 'okr',
       name: String(r.name || '未知方法论').slice(0, 50),
       fitnessScore: Math.min(100, Math.max(0, Number(r.fitnessScore) || 50)),
       reason: String(r.reason || '').slice(0, 300),
       expectedBenefits: Array.isArray(r.expectedBenefits) ? r.expectedBenefits.map(String).slice(0, 5) : [],
       applicableWhen: Array.isArray(r.applicableWhen) ? r.applicableWhen.map(String).slice(0, 5) : [],
       notApplicableWhen: Array.isArray(r.notApplicableWhen) ? r.notApplicableWhen.map(String).slice(0, 3) : [],
-      steps: Array.isArray(r.steps) ? r.steps.slice(0, 6).map((s: any, i: number) => ({
+      steps: Array.isArray(r.steps) ? r.steps.slice(0, 6).map((s, i) => ({
         step: i + 1, title: String(s.title || '').slice(0, 50),
         description: String(s.description || '').slice(0, 200),
         estimatedDays: Number(s.estimatedDays) || 3,

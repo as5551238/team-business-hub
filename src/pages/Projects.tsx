@@ -5,6 +5,7 @@ import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { Project, ProjectStatus, TaskPriority, Comment } from '@/types';
 import { Plus, FolderKanban, Search, Check, Users, Trash2, X, Filter, ChevronDown } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence } from '@/lib/collab';
 import { useDraftSave } from '@/hooks/useDraftSave';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
@@ -12,6 +13,7 @@ import ViewModeSwitch from '@/components/ViewModeSwitch';
 import { viewTabs, statusOptions, priorityOptions, bpOptions, timeOptions, priorityFromBp } from './projects/constants';
 import type { ViewMode, BatchProps } from './projects/constants';
 import { ProjectTreeNode, ProjectListView, ProjectTableView, ProjectKanbanView, ProjectMatrixView, ProjectTimelineView } from './projects/views';
+import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 
 export default function Projects() {
   const { state, dispatch } = useStore();
@@ -20,14 +22,26 @@ export default function Projects() {
   const { isTeamView, viewingMember, setViewingMember, viewingMemberId } = useViewingMember();
   const { onlineUsers } = useCollabPresence(state.currentUser?.id || '', state.currentUser?.name || '');
   const currentUser = state.currentUser;
-  const [detailItem, setDetailItem] = useState<{ type: 'project'; id: string } | null>(null);
-  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d && d.itemType === 'project') setDetailItem({ type: 'project', id: d.itemId }); }; window.addEventListener('tbh-open-detail', h); return () => window.removeEventListener('tbh-open-detail', h); }, []);
-  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (!d || d.page !== 'projects') return; if (d.statuses) setSelectedStatuses(new Set(d.statuses as string[])); }; window.addEventListener('tbh-nav-filter', h); return () => window.removeEventListener('tbh-nav-filter', h); }, []);
+
+  // URL-driven detail panel (replaces tbh-open-detail event)
+  const { detailItem, openDetail: openProjectDetail, closeDetail: closeProjectDetail } = useDetailFromUrl({ itemType: 'project', basePath: '/projects' });
+
+  // URL-driven filters (replaces tbh-nav-filter event)
+  const urlFilters = useFiltersFromUrl();
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => urlFilters.statuses || new Set());
+  const [selectedPriorities, setSelectedPriorities] = useState<Set<string>>(new Set());
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('detail');
-  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
-  const [selectedPriorities, setSelectedPriorities] = useState<Set<string>>(new Set());
+
+  // Apply URL filter params on mount (one-time)
+  useEffect(() => {
+    if (urlFilters.statuses && urlFilters.statuses.size > 0) {
+      setSelectedStatuses(urlFilters.statuses);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
@@ -38,6 +52,11 @@ export default function Projects() {
   const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchStatus, setBatchStatus] = useState('');
+  // Adapter: sub-views pass { type, id } objects; we route to URL
+  const setDetailItem = useCallback((item: { type: 'project'; id: string } | null) => {
+    if (item) openProjectDetail(item.id);
+    else closeProjectDetail();
+  }, [openProjectDetail, closeProjectDetail]);
   const [batchLeader, setBatchLeader] = useState('');
 
   // All users default to team view — no auto-switch to personal view
@@ -132,7 +151,7 @@ export default function Projects() {
     const tpl = projectTemplates.find(t => t.id === tplId);
     if (!tpl) return;
     try { const parsed = JSON.parse(tpl.content); setFormData(f => ({ ...f, title: parsed.title || tpl.title, description: parsed.description || tpl.description || '', tags: parsed.tags || [], category: parsed.category || '', priority: parsed.priority || 'medium' })); }
-    catch { setFormData(f => ({ ...f, title: tpl.title, description: tpl.description })); }
+    catch (e) { handleError(e, { module: 'Projects', operation: 'PARSE_TEMPLATE', severity: 'warn' }); setFormData(f => ({ ...f, title: tpl.title, description: tpl.description })); }
   }
 
   function togglePersonFilter(pid: string) { setPersonFilter(prev => prev.includes(pid) ? prev.filter(id => id !== pid) : [...prev, pid]); }
@@ -252,7 +271,7 @@ export default function Projects() {
         </div>
       )}
 
-      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={!!detailItem} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
+      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={!!detailItem} onClose={closeProjectDetail} itemType={detailItem.type} itemId={detailItem.id} />}
     </div>
   );
 }

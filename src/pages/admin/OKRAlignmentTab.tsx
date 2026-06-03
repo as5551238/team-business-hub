@@ -11,10 +11,11 @@
  */
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useStore } from '@/store/useStore';
-import type { Goal } from '@/types';
+import type { Goal, KeyResult } from '@/types';
 import { ZoomIn, ZoomOut, Maximize2, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { dispatchAiPushEvent } from '@/lib/pushEventEngine';
+import { useAppNavigate } from '@/lib/routes';
 
 const STATUS_COLORS: Record<string, string> = { todo: '#94a3b8', in_progress: '#3b82f6', done: '#22c55e', blocked: '#f59e0b', cancelled: '#ef4444' };
 
@@ -52,6 +53,7 @@ interface TreeNode {
 
 export function OKRAlignmentView() {
   const { state } = useStore();
+  const { goToItem } = useAppNavigate();
   const [zoom, setZoom] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -132,7 +134,7 @@ export function OKRAlignmentView() {
 
   const handleNodeClick = useCallback((id: string) => {
     setSelectedId(prev => prev === id ? null : id);
-    window.dispatchEvent(new CustomEvent('tbh-nav-item', { detail: { id, type: 'goal' } }));
+    goToItem('goal', id);
   }, []);
 
   const pushedRedRef = useRef<Set<string>>(new Set());
@@ -266,7 +268,7 @@ export function OKRAlignmentView() {
             {(selectedGoal.keyResults || []).length > 0 && (
               <div className="space-y-1.5">
                 <div className="text-[10px] font-semibold text-muted-foreground">关键结果</div>
-                {(selectedGoal.keyResults || []).map((kr: any, i: number) => {
+                {(selectedGoal.keyResults || []).map((kr: KeyResult, i: number) => {
                   const krProgress = kr.targetValue > 0 ? Math.min(100, Math.round(((kr.currentValue || 0) / kr.targetValue) * 100)) : 0;
                   return (
                     <div key={kr.id || i} className="space-y-0.5">

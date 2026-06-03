@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useStore } from '@/store/useStore';
 import { collectSnapshot, analyzeTeam, generateLocalInsights, getAIInsights, loadAIConfig, PERIOD_LABELS, HEALTH_LEVEL_LABELS, HEALTH_LEVEL_COLORS, HEALTH_LEVEL_BG, RISK_SEVERITY_LABELS, RISK_SEVERITY_COLORS, RISK_TYPE_LABELS } from '@/lib/ai';
 import type { AnalysisPeriod, TeamAnalysis, AIInsight, HealthScore, RiskItem, MemberAnalysis } from '@/lib/ai';
+import type { Goal, Project, Task } from '@/types';
 
 const CARD = 'bg-card rounded-xl border border-border p-4 space-y-3';
 const STAT_CARD = 'bg-card rounded-xl border border-border p-4';
@@ -167,8 +168,8 @@ export default function AIAnalysisTab({ viewingMemberId, isTeamView }: { viewing
   const filteredState = useMemo(() => {
     if (isTeamView || !viewingMemberId) return state;
     const mid = viewingMemberId;
-    const memberFilter = (items: any[], field: string) =>
-      items.filter((it: any) => it[field] === mid || (it.supporterIds ?? []).includes(mid));
+    const memberFilter = (items: (Goal | Project | Task)[], field: string) =>
+      items.filter((it) => String((it as Record<string, unknown>)[field]) === mid || (it.supporterIds ?? []).includes(mid));
     return {
       ...state,
       goals: memberFilter(state.goals, 'leaderId'),
@@ -192,8 +193,8 @@ export default function AIAnalysisTab({ viewingMemberId, isTeamView }: { viewing
           getAIInsights(snap, team).then((aiInsights) => {
             if (aiInsights.length > 0) setInsights(prev => [...prev, ...aiInsights]);
             setAiLoading(false);
-          }).catch((err: any) => {
-            setAiError(err?.message || 'AI 分析失败');
+          }).catch((err: unknown) => {
+            setAiError(err instanceof Error ? err.message : 'AI 分析失败');
             setAiLoading(false);
           });
         }
@@ -208,7 +209,7 @@ export default function AIAnalysisTab({ viewingMemberId, isTeamView }: { viewing
     const { payload } = insight.suggestedAction;
     if (insight.suggestedAction.type === 'update_status') {
       const actionType = payload.itemType === 'goal' ? 'UPDATE_GOAL' : payload.itemType === 'project' ? 'UPDATE_PROJECT' : 'UPDATE_TASK';
-      dispatch({ type: actionType as any, payload: { id: payload.itemId, updates: { status: payload.newStatus } } });
+      dispatch({ type: actionType as 'UPDATE_GOAL' | 'UPDATE_PROJECT' | 'UPDATE_TASK', payload: { id: payload.itemId, updates: { status: payload.newStatus } } });
     }
     setHandledInsightIds(prev => new Set(prev).add(insight.id));
   }, [dispatch]);

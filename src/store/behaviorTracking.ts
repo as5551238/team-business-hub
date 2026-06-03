@@ -15,7 +15,7 @@ let _queue: Array<{
   eventType: string;
   entityType?: string;
   entityId?: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }> = [];
 let _flushTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -45,11 +45,11 @@ function enqueue(event: typeof _queue[0]) {
 }
 
 // Action → 行为事件映射
-const ACTION_BEHAVIOR_MAP: Record<string, (action: any) => {
+const ACTION_BEHAVIOR_MAP: Record<string, (action: Action) => {
   eventType: string;
   entityType?: string;
   entityId?: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 } | null> = {
   // 任务行为
   ADD_TASK: (a) => ({

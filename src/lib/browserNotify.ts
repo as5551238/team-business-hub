@@ -4,6 +4,8 @@
  * 优先通过 Service Worker 推送，回退到直接 Notification API
  */
 
+import { handleError } from '@/lib/errorHandler';
+
 let permissionGranted = false;
 
 export async function requestNotificationPermission(): Promise<boolean> {
@@ -42,7 +44,7 @@ export function sendBrowserNotification(title: string, options?: NotificationOpt
         payload: { title, body: options?.body || '', url: options?.data?.url as string | undefined },
       });
       return;
-    } catch {}
+    } catch (e) { handleError(e, { module: 'browserNotify', operation: 'SW_PUSH', severity: 'warn' }); }
   }
 
   try {
@@ -55,9 +57,8 @@ export function sendBrowserNotification(title: string, options?: NotificationOpt
       window.focus();
       notification.close();
     };
-    // 自动关闭
     setTimeout(() => notification.close(), 8000);
-  } catch {}
+  } catch (e) { handleError(e, { module: 'browserNotify', operation: 'DIRECT_NOTIFY', severity: 'info' }); }
 }
 
 /**
@@ -70,7 +71,7 @@ export function sendUrgentNotification(title: string, options?: NotificationOpti
     const audio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
     audio.volume = 0.3;
     audio.play().catch(() => {});
-  } catch {}
+  } catch (e) { handleError(e, { module: 'browserNotify', operation: 'PLAY_SOUND', severity: 'info' }); }
 
   // Always show browser notification for urgent mentions (even when page is visible)
   if (!permissionGranted && Notification.permission !== 'granted') return;
@@ -87,6 +88,6 @@ export function sendUrgentNotification(title: string, options?: NotificationOpti
       notification.close();
     };
     setTimeout(() => notification.close(), 15000);
-  } catch {}
+  } catch (e) { handleError(e, { module: 'browserNotify', operation: 'URGENT_NOTIFY', severity: 'info' }); }
 }
 

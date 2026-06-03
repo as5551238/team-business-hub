@@ -6,7 +6,7 @@ import { BarChart3, Target, CheckCircle2, Clock, TrendingUp, Users, FolderKanban
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
-import type { ReviewPeriod, ReviewMetrics } from '@/types';
+import type { ReviewPeriod, ReviewMetrics, Goal, Project, Task, ReviewEntry } from '@/types';
 
 const AIAnalysisTab = lazy(() => import('@/pages/admin/AIAnalysisTab'));
 const AIReviewPanel = lazy(() => import('@/components/AIReviewPanel').then(m => ({ default: m.AIReviewPanel })));
@@ -42,8 +42,10 @@ function getPeriodRange(period: string, customStart: string, customEnd: string):
   return ['', ''];
 }
 
-function computeMetrics(goals: any[], projects: any[], tasks: any[], start: string, end: string): ReviewMetrics {
-  const inRange = (item: any) => {
+type DateRangeItem = { startDate?: string | null; createdAt: string; endDate?: string | null; completedAt?: string | null; dueDate?: string | null; status: string };
+
+function computeMetrics(goals: Goal[], projects: Project[], tasks: Task[], start: string, end: string): ReviewMetrics {
+  const inRange = (item: DateRangeItem) => {
     const s = item.startDate || item.createdAt;
     const e = item.endDate || item.completedAt || item.dueDate;
     if (s && s > end) return false;
@@ -122,9 +124,9 @@ export default function Insight() {
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const mid = viewingMember?.id || null;
-  const memberFilter = useCallback((items: any[], field: string) => {
+  const memberFilter = useCallback((items: (Goal | Project | Task)[], field: string) => {
     if (isTeamView || !mid) return items;
-    return items.filter((it: any) => it[field] === mid || (it.supporterIds ?? []).includes(mid));
+    return items.filter((it) => String((it as Record<string, unknown>)[field]) === mid || (it.supporterIds ?? []).includes(mid));
   }, [isTeamView, mid]);
 
   const activeGoals = useMemo(() => memberFilter(state.goals, 'leaderId'), [memberFilter, state.goals]);
@@ -259,7 +261,7 @@ export default function Insight() {
     setContent('');
   }
 
-  function handleEdit(review: any) { setEditingId(review.id); setPeriod(review.period); setContent(review.content); }
+  function handleEdit(review: ReviewEntry) { setEditingId(review.id); setPeriod(review.period); setContent(review.content); }
   function handleDelete(id: string) { dispatch({ type: 'DELETE_REVIEW', payload: id }); if (editingId === id) { setEditingId(null); setContent(''); } }
 
   return (

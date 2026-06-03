@@ -7,6 +7,7 @@
  * E1: 核心CRUD操作（goals/projects/tasks/members）通过API可读写
  */
 import { supabaseInsert, supabaseUpdate, supabaseDelete } from '@/store/supabase';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== API Token 认证 =====
 const API_TOKEN_KEY = 'tbh-api-tokens';
@@ -22,7 +23,7 @@ export interface ApiToken {
 export function getApiTokens(): ApiToken[] {
   try {
     return JSON.parse(localStorage.getItem(API_TOKEN_KEY) || '[]');
-  } catch { return []; }
+  } catch (e) { handleError(e, { module: 'api', operation: 'LOAD_TOKENS', severity: 'debug' }); return []; }
 }
 
 export function saveApiTokens(tokens: ApiToken[]) {
@@ -49,7 +50,7 @@ export function revokeApiToken(tokenId: string) {
 }
 
 // ===== API 响应格式 =====
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -73,7 +74,7 @@ export function getApiHeaders(): Record<string, string> {
 }
 
 /** 通用创建 */
-export async function apiCreate(table: string, record: Record<string, any>): Promise<ApiResponse> {
+export async function apiCreate(table: string, record: Record<string, unknown>): Promise<ApiResponse> {
   try {
     if (record.title && record.title.length > 200) return { success: false, error: '标题不能超过200字符' };
     const result = await supabaseInsert(table, record);
@@ -84,7 +85,7 @@ export async function apiCreate(table: string, record: Record<string, any>): Pro
 }
 
 /** 通用更新 */
-export async function apiUpdate(table: string, id: string, updates: Record<string, any>): Promise<ApiResponse> {
+export async function apiUpdate(table: string, id: string, updates: Record<string, unknown>): Promise<ApiResponse> {
   try {
     if (updates.title && updates.title.length > 200) return { success: false, error: '标题不能超过200字符' };
     const result = await supabaseUpdate(table, id, updates);
@@ -186,22 +187,22 @@ export function validateToolAccess(
 
 /** Goals API */
 export const goalsApi = {
-  create: (record: any) => apiCreate('goals', record),
-  update: (id: string, updates: any) => apiUpdate('goals', id, updates),
+  create: (record: Record<string, unknown>) => apiCreate('goals', record),
+  update: (id: string, updates: Record<string, unknown>) => apiUpdate('goals', id, updates),
   delete: (id: string) => apiDelete('goals', id),
 };
 
 /** Projects API */
 export const projectsApi = {
-  create: (record: any) => apiCreate('projects', record),
-  update: (id: string, updates: any) => apiUpdate('projects', id, updates),
+  create: (record: Record<string, unknown>) => apiCreate('projects', record),
+  update: (id: string, updates: Record<string, unknown>) => apiUpdate('projects', id, updates),
   delete: (id: string) => apiDelete('projects', id),
 };
 
 /** Tasks API */
 export const tasksApi = {
-  create: (record: any) => apiCreate('tasks', record),
-  update: (id: string, updates: any) => apiUpdate('tasks', id, updates),
+  create: (record: Record<string, unknown>) => apiCreate('tasks', record),
+  update: (id: string, updates: Record<string, unknown>) => apiUpdate('tasks', id, updates),
   delete: (id: string) => apiDelete('tasks', id),
 };
 

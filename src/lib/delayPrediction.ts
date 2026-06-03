@@ -12,6 +12,7 @@
  * 5. 每次任务完成时，持久化偏差率到 localStorage（跨会话学习）
  */
 import type { Task, TaskPriority } from '@/types';
+import { handleError } from '@/lib/errorHandler';
 
 export type DelayRisk = 'none' | 'low' | 'medium' | 'high';
 
@@ -35,7 +36,7 @@ export function loadLibrary(): HistoricalRecord[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     return data ? JSON.parse(data) : [];
-  } catch { return []; }
+  } catch (e) { handleError(e, { module: 'delayPrediction', operation: 'LOAD_LIBRARY', severity: 'debug' }); return []; }
 }
 
 function saveLibrary(records: HistoricalRecord[]) {
@@ -46,7 +47,7 @@ function saveLibrary(records: HistoricalRecord[]) {
     .slice(-MAX_LIBRARY_SIZE);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-  } catch {}
+  } catch (e) { handleError(e, { module: 'delayPrediction', operation: 'SAVE_LIBRARY', severity: 'debug' }); }
 }
 
 /**

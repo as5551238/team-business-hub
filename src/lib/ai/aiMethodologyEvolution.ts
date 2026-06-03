@@ -16,6 +16,7 @@ import { loadAIConfig } from './types';
 import { buildAIContext, type AIProjectContext } from './aiContextEngine';
 import { buildTeamCapabilityLocal } from './aiTeamCapability';
 import type { MethodologyId } from './aiMethodology';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型 =====
 
@@ -65,22 +66,22 @@ function loadEffectRecords(): MethodologyEffectRecord[] {
   try {
     const raw = localStorage.getItem(EFFECT_STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  } catch (e) { handleError(e, { module: 'aiMethodologyEvolution', operation: 'LOAD_EFFECTS', severity: 'debug' }); return []; }
 }
 
 function saveEffectRecords(records: MethodologyEffectRecord[]) {
-  try { localStorage.setItem(EFFECT_STORAGE_KEY, JSON.stringify(records.slice(-50))); } catch {}
+  try { localStorage.setItem(EFFECT_STORAGE_KEY, JSON.stringify(records.slice(-50))); } catch (e) { handleError(e, { module: 'aiMethodologyEvolution', operation: 'SAVE_EFFECTS', severity: 'debug' }); }
 }
 
 function loadEvolutionLog(): EvolutionEntry[] {
   try {
     const raw = localStorage.getItem(EVOLUTION_STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  } catch (e) { handleError(e, { module: 'aiMethodologyEvolution', operation: 'LOAD_EVOLUTION', severity: 'debug' }); return []; }
 }
 
 function saveEvolutionLog(log: EvolutionEntry[]) {
-  try { localStorage.setItem(EVOLUTION_STORAGE_KEY, JSON.stringify(log.slice(-100))); } catch {}
+  try { localStorage.setItem(EVOLUTION_STORAGE_KEY, JSON.stringify(log.slice(-100))); } catch (e) { handleError(e, { module: 'aiMethodologyEvolution', operation: 'SAVE_EVOLUTION', severity: 'debug' }); }
 }
 
 // ===== 确定性进化 =====
@@ -221,8 +222,8 @@ export async function evolveMethodologyDeep(state: AppState): Promise<Methodolog
     const prompt = `你是方法论进化专家。团队方法论效果记录:${recordsSummary || '暂无'}。当前最优:${local.topMethodology?.name || '无'}。请识别方法论运用的时机、组合和深度优化的机会，输出JSON:{"timingInsights":"时机洞察","combinationSuggestions":["组合1"],"depthOptimizations":[{"methodology":"","suggestion":""}],"newEvolutionSuggestions":["建议1"]}`;
     const raw = await callLLM(prompt, config);
     if (!raw) return local;
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch { const m = raw.match(/\{[\s\S]*\}/); if (m) try { parsed = JSON.parse(m[0]); } catch {} }
+    let parsed: { newEvolutionSuggestions?: unknown[]; depthOptimizations?: Array<{ methodology?: string; suggestion?: string }> } | null = null;
+    try { parsed = JSON.parse(raw); } catch (e) { handleError(e, { module: 'aiMethodologyEvolution', operation: 'PARSE_LLM_JSON', severity: 'warn' }); const m = raw.match(/\{[\s\S]*\}/); if (m) try { parsed = JSON.parse(m[0]); } catch (e2) { handleError(e2, { module: 'aiMethodologyEvolution', operation: 'PARSE_LLM_JSON_FALLBACK', severity: 'warn' }); } }
     if (!parsed) return local;
     if (Array.isArray(parsed.newEvolutionSuggestions)) {
       local.evolutionSuggestions.push(...parsed.newEvolutionSuggestions.map(String).slice(0, 3));
@@ -238,5 +239,5 @@ export async function evolveMethodologyDeep(state: AppState): Promise<Methodolog
     }
     local.fromLLM = true;
     return local;
-  } catch { return local; }
+  } catch (e) { handleError(e, { module: 'aiMethodologyEvolution', operation: 'LLM_CALL', severity: 'warn' }); return local; }
 }

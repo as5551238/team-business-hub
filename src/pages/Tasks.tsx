@@ -5,6 +5,7 @@ import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import { useVirtualScroll } from '@/hooks/useVirtualScroll';
 import type { Task, TaskStatus, TaskPriority, Comment } from '@/types';
 import { cn } from '@/lib/utils';
+import { handleError } from '@/lib/errorHandler';
 import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, FileText, Copy, MessageSquare, Trash2, Check, Filter, Sparkles, Users } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
@@ -18,6 +19,7 @@ import {
   getTodayStr, priorityToBP, getQuadrantForPriority, isOverdue, isInTimeRange,
   type ViewMode, type BusinessPriority, type BatchProps, type KanbanGroupBy
 } from './tasks/constants';
+import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 
 export default function Tasks() {
   const { state, dispatch } = useStore();
@@ -27,21 +29,40 @@ export default function Tasks() {
   const { onlineUsers } = useCollabPresence(state.currentUser?.id || '', state.currentUser?.name || '');
   const { broadcastOp } = useCollabBroadcast(state.currentUser?.id || '');
   const currentUser = state.currentUser;
+
+  // URL-driven detail panel (replaces tbh-open-detail event)
+  const { detailItem, openDetail: openTaskDetail, closeDetail: closeTaskDetail } = useDetailFromUrl({ itemType: 'task', basePath: '/tasks' });
+
+  // URL-driven filters (replaces tbh-nav-filter event)
+  const urlFilters = useFiltersFromUrl();
+
   const VIEW_MODE_LS_KEY = 'tbh-tasks-view-mode';
-  const [viewMode, setViewMode] = useState<ViewMode>(() => { try { return (localStorage.getItem(VIEW_MODE_LS_KEY) || 'board') as ViewMode; } catch { return 'board'; } });
-  useEffect(() => { try { localStorage.setItem(VIEW_MODE_LS_KEY, viewMode); } catch {} }, [viewMode]);
-  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<ViewMode>(() => { try { return (localStorage.getItem(VIEW_MODE_LS_KEY) || 'board') as ViewMode; } catch (e) { handleError(e, { module: 'Tasks', operation: 'READ_VIEW_MODE', severity: 'debug' }); return 'board'; } });
+  useEffect(() => { try { localStorage.setItem(VIEW_MODE_LS_KEY, viewMode); } catch (e) { handleError(e, { module: 'Tasks', operation: 'SAVE_VIEW_MODE', severity: 'debug' }); } }, [viewMode]);
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => urlFilters.statuses || new Set());
   const [selectedPriorities, setSelectedPriorities] = useState<Set<string>>(new Set());
   const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
-  const [selectedPersons, setSelectedPersons] = useState<Set<string>>(new Set());
-  const [timeFilter, setTimeFilter] = useState('all');
+  const [selectedPersons, setSelectedPersons] = useState<Set<string>>(() => urlFilters.persons ? new Set(urlFilters.persons) : new Set());
+  const [timeFilter, setTimeFilter] = useState(() => urlFilters.timeFilter || 'all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Apply URL filter params on mount (one-time, for statuses/persons that may not have been in initial state)
+  useEffect(() => {
+    if (urlFilters.statuses && urlFilters.statuses.size > 0) setSelectedStatuses(urlFilters.statuses);
+    if (urlFilters.timeFilter) setTimeFilter(urlFilters.timeFilter);
+    if (urlFilters.persons && urlFilters.persons.length > 0) setSelectedPersons(new Set(urlFilters.persons));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [groupByDate, setGroupByDate] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
-  const [detailItem, setDetailItem] = useState<{ type: 'task'; id: string } | null>(null);
+  // Adapter: sub-views pass { type, id } objects; we route to URL
+  const setDetailItem = useCallback((item: { type: 'task'; id: string } | null) => {
+    if (item) openTaskDetail(item.id);
+    else closeTaskDetail();
+  }, [openTaskDetail, closeTaskDetail]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
   const [showPersonPicker, setShowPersonPicker] = useState(false);
@@ -60,11 +81,11 @@ export default function Tasks() {
   const [batchStatus, setBatchStatus] = useState('');
   const [batchLeader, setBatchLeader] = useState('');
   const KANBAN_LS_KEY = 'tbh-tasks-kanban';
-  const [kanbanCustomMode, setKanbanCustomMode] = useState(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).customMode || false; } catch { return false; } });
-  const [customColumns, setCustomColumns] = useState<string[]>(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).columns || ['待处理', '进行中', '已完成']; } catch { return ['待处理', '进行中', '已完成']; } });
-  const [kanbanGroupBy, setKanbanGroupBy] = useState<KanbanGroupBy>(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).groupBy || 'status'; } catch { return 'status'; } });
+  const [kanbanCustomMode, setKanbanCustomMode] = useState(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).customMode || false; } catch (e) { handleError(e, { module: 'Tasks', operation: 'READ_KANBAN', severity: 'debug' }); return false; } });
+  const [customColumns, setCustomColumns] = useState<string[]>(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).columns || ['待处理', '进行中', '已完成']; } catch (e) { handleError(e, { module: 'Tasks', operation: 'READ_KANBAN', severity: 'debug' }); return ['待处理', '进行中', '已完成']; } });
+  const [kanbanGroupBy, setKanbanGroupBy] = useState<KanbanGroupBy>(() => { try { return (JSON.parse(localStorage.getItem(KANBAN_LS_KEY) || '{}')).groupBy || 'status'; } catch (e) { handleError(e, { module: 'Tasks', operation: 'READ_KANBAN', severity: 'debug' }); return 'status'; } });
   const [newColName, setNewColName] = useState('');
-  const [fromTemplate, setFromTemplate] = useState(false);  useEffect(() => { try { localStorage.setItem(KANBAN_LS_KEY, JSON.stringify({ customMode: kanbanCustomMode, columns: customColumns, groupBy: kanbanGroupBy })); } catch {} }, [kanbanCustomMode, customColumns, kanbanGroupBy]);
+  const [fromTemplate, setFromTemplate] = useState(false);  useEffect(() => { try { localStorage.setItem(KANBAN_LS_KEY, JSON.stringify({ customMode: kanbanCustomMode, columns: customColumns, groupBy: kanbanGroupBy })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'SAVE_KANBAN', severity: 'debug' }); } }, [kanbanCustomMode, customColumns, kanbanGroupBy]);
 
   const { getName, getAvatar } = useMemberLookup();
   const { getProjectTitle: getProjectTitleFn, getTaskTitle } = useItemLookupMaps();
@@ -107,15 +128,13 @@ export default function Tasks() {
     }
   }, [filteredTasks, focusedId]);
 
-  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d && d.itemType === 'task') setDetailItem({ type: 'task', id: d.itemId }); }; window.addEventListener('tbh-open-detail', h); return () => window.removeEventListener('tbh-open-detail', h); }, []);
-  useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (!d || d.page !== 'tasks') return; if (d.statuses) setSelectedStatuses(new Set(d.statuses as string[])); if (d.timeFilter) setTimeFilter(d.timeFilter as string); if (d.persons) setSelectedPersons(new Set(d.persons as string[])); }; window.addEventListener('tbh-nav-filter', h); return () => window.removeEventListener('tbh-nav-filter', h); }, []);
   // Keyboard event handlers for j/k/e/d/x navigation
   useEffect(() => {
     const getFilteredIds = () => filteredTasks.map(t => t.id);
     const onNavDown = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : -1; setFocusedId(ids[Math.min(idx + 1, ids.length - 1)]); };
     const onNavUp = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : 0; setFocusedId(ids[Math.max(idx - 1, 0)]); };
-    const onEdit = () => { if (focusedId) setDetailItem({ type: 'task', id: focusedId }); };
-    const onOpen = () => { if (focusedId) setDetailItem({ type: 'task', id: focusedId }); };
+    const onEdit = () => { if (focusedId) openTaskDetail(focusedId); };
+    const onOpen = () => { if (focusedId) openTaskDetail(focusedId); };
     const onDelete = () => { if (focusedId && can('task_delete')) dispatch({ type: 'DELETE_TASK', payload: focusedId }); };
     const onComplete = () => { if (focusedId) { const task = state.tasks.find(t => t.id === focusedId); if (task) { const oldStatus = task.status; const newStatus = task.status === 'done' ? 'todo' : 'done'; dispatch({ type: 'UPDATE_TASK', payload: { id: focusedId, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'task', entityId: focusedId, field: 'status', oldValue: oldStatus, newValue: newStatus }); } } };
     const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
@@ -146,7 +165,7 @@ export default function Tasks() {
   const sortedTasks = useMemo(() => {
     const arr = [...filteredTasks];
     arr.sort((a, b) => {
-      let va: any = a[sortField as keyof Task]; let vb: any = b[sortField as keyof Task];
+      let va: string | number | boolean | string[] | null | undefined = a[sortField as keyof Task] as string | number | boolean | string[] | null | undefined; let vb: string | number | boolean | string[] | null | undefined = b[sortField as keyof Task] as string | number | boolean | string[] | null | undefined;
       if (sortField === 'leaderId') { va = getName(a.leaderId); vb = getName(b.leaderId); }
       if (va == null) va = ''; if (vb == null) vb = '';
       if (va < vb) return sortDir === 'asc' ? -1 : 1;
@@ -199,7 +218,8 @@ export default function Tasks() {
     try {
       const data = JSON.parse(tpl.content);
       dispatch({ type: 'ADD_TASK', payload: { title: data.title || tpl.title, description: data.description || '', projectId: data.projectId || null, goalId: data.goalId || null, parentId: null, status: 'todo' as TaskStatus, priority: (data.priority || 'medium') as TaskPriority, leaderId: data.leaderId || state.currentUser?.id || '', supporterIds: data.supporterIds || [], tags: data.tags || [], category: data.category || '', startDate: data.startDate || null, dueDate: data.dueDate || null, reminderDate: data.reminderDate || null, completedAt: null, subtasks: data.subtasks || [], attachments: [], trackingRecords: [], repeatCycle: data.repeatCycle || 'none', summary: '' } });
-    } catch {
+    } catch (e) {
+      handleError(e, { module: 'Tasks', operation: 'PARSE_TEMPLATE', severity: 'warn' });
       dispatch({ type: 'ADD_TASK', payload: { title: tpl.title, description: tpl.description, projectId: null, goalId: null, parentId: null, status: 'todo' as TaskStatus, priority: 'medium' as TaskPriority, leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], category: '', startDate: null, dueDate: null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', summary: '' } });
     }
     setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate('');
@@ -486,8 +506,8 @@ export default function Tasks() {
     else setSelectedIds(new Set(filteredTasks.map(t => t.id)));
   }, [selectedIds.size, filteredTasks]);
 
-  const batchDelete = useCallback(() => { if (!can('delete_tasks')) return; if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return; const c = selectedIds.size; selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id })); setSelectedIds(new Set()); setBatchMode(false); try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已删除 ${c} 个任务`, type: 'success' } })); } catch {} }, [selectedIds, dispatch]);
-  const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_tasks')) return; if (!status) return; const c = selectedIds.size; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${c} 个任务状态`, type: 'success' } })); } catch {} }, [selectedIds, dispatch]);
+  const batchDelete = useCallback(() => { if (!can('delete_tasks')) return; if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return; const c = selectedIds.size; selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id })); setSelectedIds(new Set()); setBatchMode(false); try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已删除 ${c} 个任务`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_DELETE', severity: 'debug' }); } }, [selectedIds, dispatch]);
+  const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_tasks')) return; if (!status) return; const c = selectedIds.size; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${c} 个任务状态`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_UPDATE', severity: 'debug' }); } }, [selectedIds, dispatch]);
   const batchAssign = useCallback((leaderId: string) => { if (!can('edit_tasks')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
 
   function closeCreateDialog() { setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate(''); setNewTags(new Set()); setNewSupporters(new Set()); }
@@ -610,7 +630,7 @@ export default function Tasks() {
         </div>
       )}
 
-      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
+      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={closeTaskDetail} itemType={detailItem.type} itemId={detailItem.id} />}
       {showMatchPanel && <AIMatchPanel onClose={() => setShowMatchPanel(false)} />}
     </div>
   );

@@ -3,6 +3,7 @@
 // 当前仅支持手动发送每日摘要 + 测试通道
 
 import { getSupabaseClient } from './client';
+import { handleError } from '@/lib/errorHandler';
 
 const WECHAT_CONFIG_KEY = 'tbh-wechat-config';
 
@@ -38,12 +39,12 @@ export function loadWeChatConfig(): WeChatConfig {
       }
       return { ...defaultWeChatConfig, ...parsed };
     }
-  } catch { /* ignore */ }
+  } catch (e) { handleError(e, { module: 'wechat', operation: 'LOAD_CONFIG', severity: 'warn' }); }
   return defaultWeChatConfig;
 }
 
 export function saveWeChatConfig(config: WeChatConfig): void {
-  try { localStorage.setItem(WECHAT_CONFIG_KEY, JSON.stringify(config)); } catch {}
+  try { localStorage.setItem(WECHAT_CONFIG_KEY, JSON.stringify(config)); } catch (e) { handleError(e, { module: 'wechat', operation: 'SAVE_CONFIG', severity: 'warn' }); }
 }
 
 export function isWeChatEnabled(): boolean {
@@ -166,10 +167,10 @@ export async function testChannel(channel: NotifyChannel, config: WeChatConfig):
 
 // 获取/设置最后一次错误（用于UI展示）
 export function getLastTestError(): string {
-  try { return localStorage.getItem('tbh-wechat-last-error') || ''; } catch { return ''; }
+  try { return localStorage.getItem('tbh-wechat-last-error') || ''; } catch (e) { handleError(e, { module: 'wechat', operation: 'GET_LAST_ERROR', severity: 'debug' }); return ''; }
 }
 export function setLastTestError(msg: string) {
-  try { localStorage.setItem('tbh-wechat-last-error', msg); } catch {}
+  try { localStorage.setItem('tbh-wechat-last-error', msg); } catch (e) { handleError(e, { module: 'wechat', operation: 'SET_LAST_ERROR', severity: 'debug' }); }
 }
 
 // ==================== 格式化消息 ====================

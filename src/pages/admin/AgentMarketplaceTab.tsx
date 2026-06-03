@@ -3,6 +3,7 @@
  * Phase 3-2: Agent 市场
  */
 import { useState, useMemo, useCallback } from 'react';
+import { handleError } from '@/lib/errorHandler';
 import {
   Bot,
   Search,
@@ -250,7 +251,7 @@ function loadInstalled(): Set<string> {
   try {
     const s = localStorage.getItem(STORAGE_KEY);
     if (s) return new Set(JSON.parse(s));
-  } catch {}
+  } catch (e) { handleError(e, { module: 'AgentMarketplaceTab', operation: 'LOAD_INSTALLED', severity: 'debug' }); }
   // Default: core agents are installed
   return new Set(['tbh-core', 'tbh-risk', 'tbh-ai-review']);
 }
@@ -258,7 +259,7 @@ function loadInstalled(): Set<string> {
 function saveInstalled(ids: Set<string>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
-  } catch {}
+  } catch (e) { handleError(e, { module: 'AgentMarketplaceTab', operation: 'SAVE_INSTALLED', severity: 'debug' }); }
 }
 
 // ===== 子组件 =====

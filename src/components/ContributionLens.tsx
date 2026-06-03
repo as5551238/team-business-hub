@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { Award, ChevronDown, ChevronUp, BarChart3, RefreshCw } from 'lucide-react';
+import { handleError } from '@/lib/errorHandler';
 
 interface ContributionData {
   userId: string;
@@ -61,7 +62,7 @@ function ContributionBar({ memberId }: { memberId: string }) {
         p_days: 30,
       });
       if (!error && result) setData(result as ContributionData);
-    } catch {}
+    } catch (e) { handleError(e, { module: 'ContributionLens', operation: 'FETCH_DATA', severity: 'warn' }); }
     setLoading(false);
   }, [memberId]);
 

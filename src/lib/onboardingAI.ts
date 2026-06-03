@@ -6,6 +6,7 @@
  */
 
 import type { Task, Goal } from '@/types';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 行业模板库 =====
 
@@ -141,9 +142,9 @@ export function recommendConfig(industry: string, teamSize: string, focus: strin
 
 /** 生成 Onboarding 状态标记 */
 export function isOnboarded(): boolean {
-  try { return localStorage.getItem('tbh-onboarded') === 'true'; } catch { return false; }
+  try { return localStorage.getItem('tbh-onboarded') === 'true'; } catch (e) { handleError(e, { module: 'onboardingAI', operation: 'IS_ONBOARDED', severity: 'debug' }); return false; }
 }
 
 export function markOnboarded() {
-  try { localStorage.setItem('tbh-onboarded', 'true'); } catch {}
+  try { localStorage.setItem('tbh-onboarded', 'true'); } catch (e) { handleError(e, { module: 'onboardingAI', operation: 'MARK_ONBOARDED', severity: 'debug' }); }
 }

@@ -4,6 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { Download, X, Smartphone } from 'lucide-react';
+import { handleError } from '@/lib/errorHandler';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -20,14 +21,14 @@ export function PWAInstallPrompt() {
   useEffect(() => {
     // Check if already installed (standalone mode)
     const standalone = window.matchMedia('(display-mode: standalone)').matches
-      || (navigator as any).standalone === true;
+      || (navigator as Record<string, unknown>).standalone === true;
     setIsStandalone(standalone);
     if (standalone) return;
 
     // Check if dismissed
     try {
       if (localStorage.getItem(DISMISS_KEY) === '1') return;
-    } catch {}
+    } catch (e) { handleError(e, { module: 'PWAInstallPrompt', operation: 'CHECK_DISMISSED', severity: 'info' }); }
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -52,7 +53,7 @@ export function PWAInstallPrompt() {
 
   const handleDismiss = () => {
     setShowBanner(false);
-    try { localStorage.setItem(DISMISS_KEY, '1'); } catch {}
+    try { localStorage.setItem(DISMISS_KEY, '1'); } catch (e) { handleError(e, { module: 'PWAInstallPrompt', operation: 'SAVE_DISMISS', severity: 'debug' }); }
   };
 
   if (isStandalone || !showBanner) return null;
@@ -67,16 +68,10 @@ export function PWAInstallPrompt() {
           <p className="text-sm font-medium">安装到桌面</p>
           <p className="text-xs text-muted-foreground mt-0.5">离线可用，随时打开无需浏览器</p>
           <div className="flex items-center gap-2 mt-2">
-            <button
-              onClick={handleInstall}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-            >
+            <button onClick={handleInstall} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
               <Download size={12} /> 立即安装
             </button>
-            <button
-              onClick={handleDismiss}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
+            <button onClick={handleDismiss} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               暂不需要
             </button>
           </div>

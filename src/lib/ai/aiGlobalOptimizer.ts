@@ -15,6 +15,7 @@ import { callLLM } from './llmService';
 import { loadAIConfig } from './types';
 import { buildAIContext, type AIProjectContext } from './aiContextEngine';
 import { buildTeamCapabilityLocal, type CapabilityVector, DIMENSION_LABELS } from './aiTeamCapability';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型 =====
 
@@ -154,8 +155,8 @@ export async function optimizeGlobalAllocationDeep(state: AppState): Promise<Glo
     const prompt = `你是全局资源优化专家。团队全局健康指数${local.globalMetrics.globalHealthIndex}，目标分配:${goalSummary}。瓶颈:${local.bottlenecks.map(b => b.description).join('；') || '无'}。请给出跨目标的协调优化和战略性建议，输出JSON:{"crossGoalOptimizations":[{"fromGoal":"","toGoal":"","action":"","expectedGain":""}],"strategicRecommendations":["建议1"],"riskMitigations":[{"risk":"","mitigation":""}]}`;
     const raw = await callLLM(prompt, config);
     if (!raw) return local;
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch { const m = raw.match(/\{[\s\S]*\}/); if (m) try { parsed = JSON.parse(m[0]); } catch {} }
+    let parsed: { strategicRecommendations?: unknown[]; crossGoalOptimizations?: Array<{ fromGoal?: string; action?: string; toGoal?: string; expectedGain?: string }> } | null = null;
+    try { parsed = JSON.parse(raw); } catch (e) { handleError(e, { module: 'aiGlobalOptimizer', operation: 'PARSE_LLM_JSON', severity: 'warn' }); const m = raw.match(/\{[\s\S]*\}/); if (m) try { parsed = JSON.parse(m[0]); } catch (e2) { handleError(e2, { module: 'aiGlobalOptimizer', operation: 'PARSE_LLM_JSON_FALLBACK', severity: 'warn' }); } }
     if (!parsed) return local;
     if (Array.isArray(parsed.strategicRecommendations)) {
       local.globalRecommendations.push(...parsed.strategicRecommendations.map(String).slice(0, 3));

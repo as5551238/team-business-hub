@@ -4,6 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Target, FolderKanban, ListTodo, Plus, Users, Zap, Globe, Search, Edit2, Trash2, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { handleError } from '@/lib/errorHandler';
 
 import { useBookmarks } from '@/store/hooks';
 import { actionLabels, useFilteredData } from './shared';
@@ -16,10 +17,10 @@ const DEFAULT_CATEGORIES = ['全部', '工作', '学习', '工具', '参考'];
 const BOOKMARK_LS_KEY = 'tbh-bookmarks-list';
 
 function loadBookmarksFromLS(): BookmarkType[] {
-  try { const r = localStorage.getItem(BOOKMARK_LS_KEY); return r ? JSON.parse(r) : []; } catch { return []; }
+  try { const r = localStorage.getItem(BOOKMARK_LS_KEY); return r ? JSON.parse(r) : []; } catch (e) { handleError(e, { module: 'OtherTab', operation: 'LOAD_BOOKMARKS', severity: 'debug' }); return []; }
 }
 function saveBookmarksToLS(bms: BookmarkType[]) {
-  try { localStorage.setItem(BOOKMARK_LS_KEY, JSON.stringify(bms)); } catch {}
+  try { localStorage.setItem(BOOKMARK_LS_KEY, JSON.stringify(bms)); } catch (e) { handleError(e, { module: 'OtherTab', operation: 'SAVE_BOOKMARKS', severity: 'debug' }); }
 }
 
 // ── 书签 Widget ──

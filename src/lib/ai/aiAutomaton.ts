@@ -13,6 +13,7 @@
  */
 import type { AppState, Action } from '@/store/reducer';
 import { AI_ACTION_MAP } from './aiActions';
+import { handleError } from '@/lib/errorHandler';
 
 export interface AutomatonRule {
   id: string;
@@ -64,7 +65,7 @@ export const BUILTIN_AUTOMATON_RULES: AutomatonRule[] = [
       const topMember = scanResult.items[0];
       const todoTask = state.tasks.find(t => t.leaderId === topMember.id && t.status === 'todo');
       if (!todoTask) return null;
-      return aiAction.execute(state, { taskId: todoTask.id }) as Action;
+      return (aiAction.execute(state, { taskId: todoTask.id }) as Action);
     },
   },
   {
@@ -129,7 +130,7 @@ export const BUILTIN_AUTOMATON_RULES: AutomatonRule[] = [
           read: false,
           createdAt: new Date().toISOString(),
         },
-      } as any;
+      };
     },
   },
   {
@@ -170,7 +171,7 @@ export const BUILTIN_AUTOMATON_RULES: AutomatonRule[] = [
           read: false,
           createdAt: new Date().toISOString(),
         },
-      } as any;
+      };
     },
   },
   {
@@ -204,7 +205,7 @@ export const BUILTIN_AUTOMATON_RULES: AutomatonRule[] = [
           read: false,
           createdAt: new Date().toISOString(),
         },
-      } as any;
+      };
     },
   },
 ];
@@ -253,8 +254,9 @@ export function runAutomatonOnce(getState: () => AppState, dispatch: (action: Ac
         if (action) { dispatch(action); actionTaken = true; }
       }
       results.push({ rule, result: scanResult, actionTaken });
-    } catch {
+    } catch (e) {
       results.push({ rule, result: null, actionTaken: false });
+      handleError(e, { module: 'aiAutomaton', operation: 'RUN_ONCE', severity: 'info' });
     }
   }
   return results;
@@ -268,12 +270,12 @@ function loadAutomatonConfig(): Record<string, boolean> {
   try {
     const raw = localStorage.getItem(AUTOMATON_CONFIG_KEY);
     if (raw) return JSON.parse(raw);
-  } catch {}
+  } catch (e) { handleError(e, { module: 'aiAutomaton', operation: 'LOAD_CONFIG', severity: 'debug' }); }
   return {};
 }
 
 function saveAutomatonConfig(config: Record<string, boolean>) {
-  try { localStorage.setItem(AUTOMATON_CONFIG_KEY, JSON.stringify(config)); } catch {}
+  try { localStorage.setItem(AUTOMATON_CONFIG_KEY, JSON.stringify(config)); } catch (e) { handleError(e, { module: 'aiAutomaton', operation: 'SAVE_CONFIG', severity: 'debug' }); }
 }
 
 /** Initialize enabled state from localStorage */

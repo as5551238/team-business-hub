@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
+import type { Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Plus, CheckCircle2, Circle, ArrowRight, Trash2 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
+import { handleError } from '@/lib/errorHandler';
 import type { ReviewPeriod, ReviewEntry } from '@/types';
 import { periodLabels } from './constants';
 
@@ -63,7 +65,8 @@ export function RetroTrackingTab() {
         toImprove: parsed.toImprove || '',
         actions: parsed.actions || [],
       };
-    } catch {
+    } catch (e) {
+      handleError(e, { module: 'RetroTrackingTab', operation: 'PARSE_REVIEW', severity: 'warn' });
       return { wentWell: content, toImprove: '', actions: [] };
     }
   }
@@ -106,7 +109,7 @@ export function RetroTrackingTab() {
   function handleConvertActionToTask(idx: number) {
     const action = form.actions[idx];
     if (!action.text.trim()) return;
-    const taskPayload: any = {
+    const taskPayload: Omit<Task, 'id' | 'createdAt' | 'updatedAt'> = {
       title: action.text,
       description: `由复盘行动项创建（周期: ${periodLabels[form.period] || form.period}）`,
       projectId: null,

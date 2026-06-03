@@ -3,6 +3,7 @@ import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete } from './supabase';
 import { genId } from './utils';
 import { reducerCanDelete, needMutate, tsNow, markPendingDelete } from './shared';
+import { cascadeDeleteTag, cascadeDeleteCategory } from './cascadeHandlers';
 
 export function tagCategoryReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
@@ -27,21 +28,7 @@ export function tagCategoryReducer(state: AppState, action: Action): AppState | 
       const now = tsNow();
       const s = needMutate(state, ['tags', 'goals', 'projects', 'tasks']);
       markPendingDelete(tid);
-      s.goals.forEach(g => {
-        const prevLen = g.tags?.length ?? 0;
-        g.tags = (g.tags ?? []).filter(id => id !== tid);
-        if (g.tags.length !== prevLen) { g.updatedAt = now; supabaseUpdate('goals', g.id, { tags: g.tags, updated_at: now }); }
-      });
-      s.projects.forEach(p => {
-        const prevLen = p.tags?.length ?? 0;
-        p.tags = (p.tags ?? []).filter(id => id !== tid);
-        if (p.tags.length !== prevLen) { p.updatedAt = now; supabaseUpdate('projects', p.id, { tags: p.tags, updated_at: now }); }
-      });
-      s.tasks.forEach(t => {
-        const prevLen = t.tags?.length ?? 0;
-        t.tags = (t.tags ?? []).filter(id => id !== tid);
-        if (t.tags.length !== prevLen) { t.updatedAt = now; supabaseUpdate('tasks', t.id, { tags: t.tags, updated_at: now }); }
-      });
+      cascadeDeleteTag(s, tid, now);
       s.tags = s.tags.filter(t => t.id !== tid);
       supabaseDelete('tags', tid);
       return s;
@@ -66,9 +53,7 @@ export function tagCategoryReducer(state: AppState, action: Action): AppState | 
       const now = tsNow();
       const s = needMutate(state, ['categories', 'goals', 'projects', 'tasks']);
       markPendingDelete(cid);
-      s.goals.forEach(g => { if (g.category === cid) { g.category = ''; g.updatedAt = now; supabaseUpdate('goals', g.id, { category: '', updated_at: now }); } });
-      s.projects.forEach(p => { if (p.category === cid) { p.category = ''; p.updatedAt = now; supabaseUpdate('projects', p.id, { category: '', updated_at: now }); } });
-      s.tasks.forEach(t => { if (t.category === cid) { t.category = ''; t.updatedAt = now; supabaseUpdate('tasks', t.id, { category: '', updated_at: now }); } });
+      cascadeDeleteCategory(s, cid, now);
       s.categories = s.categories.filter(c => c.id !== cid);
       supabaseDelete('categories', cid);
       return s;

@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { CloudOff, RefreshCw, Wifi } from 'lucide-react';
 import { getSupabaseClient } from '@/supabase/client';
+import { handleError } from '@/lib/errorHandler';
 
 export function DegradedBanner() {
   const [degraded, setDegraded] = useState(false);
@@ -36,7 +37,7 @@ export function DegradedBanner() {
           window.location.reload();
         }
       }
-    } catch {}
+    } catch (e) { handleError(e, { module: 'DegradedMode', operation: 'RETRY_BANNER', severity: 'warn' }); }
     setChecking(false);
   };
 
@@ -73,7 +74,7 @@ export function DegradedPage() {
           return;
         }
       }
-    } catch {}
+    } catch (e) { handleError(e, { module: 'DegradedMode', operation: 'RETRY_PAGE', severity: 'warn' }); }
     setRetrying(false);
   };
 

@@ -1,8 +1,9 @@
 import type { AppState } from '@/types';
 import { isSupabaseConfigured } from '@/supabase/client';
 import type { Action } from './types';
-import { supabaseUpsert, supabaseUpdate } from './supabase';
+import { supabaseUpsert, supabaseUpdate, supabaseInsert, supabaseDelete } from './supabase';
 import { needMutate } from './shared';
+import { genId } from './utils';
 
 export function notificationReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
@@ -22,9 +23,29 @@ export function notificationReducer(state: AppState, action: Action): AppState |
     }
     case 'ADD_NOTIFICATION': {
       const s = needMutate(state, ['notifications']);
-      const n = { ...action.payload, read: action.payload.read ?? false };
+      const n = { ...action.payload, read: action.payload.read ?? false, level: action.payload.level || 'normal' };
       if (n.id && s.notifications.some(x => x.id === n.id)) return state;
+      // Check mute: if member has muted this item, skip non-urgent notifications
+      if (n.level !== 'urgent' && s.notificationPreferences) {
+        const pref = s.notificationPreferences.find(p => p.itemId === n.relatedId && p.itemType === n.relatedType && p.memberId === n.memberId && p.muted);
+        if (pref) return state; // muted — skip
+      }
       s.notifications.unshift(n);
+      return s;
+    }
+    case 'TOGGLE_NOTIFICATION_MUTE': {
+      const s = needMutate(state, ['notificationPreferences']);
+      const { itemId, itemType, memberId } = action.payload;
+      const existing = s.notificationPreferences?.find(p => p.itemId === itemId && p.itemType === itemType && p.memberId === memberId);
+      if (existing) {
+        existing.muted = !existing.muted;
+        supabaseUpdate('notification_preferences', existing.id, { muted: existing.muted });
+      } else {
+        const pref = { id: genId('np'), itemId, itemType, memberId, muted: true, createdAt: new Date().toISOString() };
+        if (!s.notificationPreferences) s.notificationPreferences = [];
+        s.notificationPreferences.push(pref);
+        supabaseInsert('notification_preferences', pref);
+      }
       return s;
     }
   }

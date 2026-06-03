@@ -1,12 +1,13 @@
-import type { AppState, Goal, Project, Task, Permission, PermissionModule, PermissionAction, MemberRole, AutomationRule, StatusFlowRule } from '@/types';
+import { handleError } from '@/lib/errorHandler';
+import type { AppState, Goal, Project, Task, Permission, PermissionModule, PermissionAction, MemberRole, AutomationRule, StatusFlowRule, Action, DualTrackSummary } from '@/types';
 import { genId } from './utils';
 import { supabaseUpdate } from './supabase';
 import { calcDualTrack, calcKpiKrScore } from '@/lib/kpiScoring';
 import { getFactoryRules } from './factoryRules';
 
 // Late-injected dispatch bridge for ai_action (avoids circular dependency with useStore)
-let _asyncDispatch: ((action: any) => void) | null = null;
-export function setAsyncDispatch(fn: (action: any) => void) { _asyncDispatch = fn; }
+let _asyncDispatch: ((action: Action) => void) | null = null;
+export function setAsyncDispatch(fn: (action: Action) => void) { _asyncDispatch = fn; }
 
 // AI_ACTION_MAP imported directly (no circular dependency — aiActions only imports types)
 import { AI_ACTION_MAP } from '@/lib/ai/aiActions';
@@ -24,7 +25,7 @@ export function deletedTasks(tasks: Task[]): Task[] { return tasks.filter(t => t
 // ==================== 企微通知桥接 ====================
 let _wechatNotify: ((title: string, message: string) => void) | null = null;
 export function setWeChatNotify(fn: (title: string, message: string) => void) { _wechatNotify = fn; }
-function fireWeChatNotify(title: string, message: string) { try { _wechatNotify?.(title, message); } catch {} }
+function fireWeChatNotify(title: string, message: string) { try { _wechatNotify?.(title, message); } catch (e) { handleError(e, { module: 'store', operation: 'WECHAT_NOTIFY', severity: 'debug' }); } }
 
 // ==================== 自动化执行锁（防循环触发） ====================
 let _executingRuleIds: Set<string> = new Set();
@@ -124,7 +125,7 @@ export function notifyAssigned(
   }
 }
 
-export function matchCondition(operator: string, fieldValue: any, condValue: string): boolean {
+export function matchCondition(operator: string, fieldValue: unknown, condValue: string): boolean {
   switch (operator) {
     case 'eq': return fieldValue === condValue;
     case 'neq': return fieldValue !== condValue;
@@ -167,7 +168,7 @@ export function fireAutomationRules(
       if (matchCondition(condOp, fieldValue, condVal)) {
         executeAutomationActions(s, rule, itemId, itemType, itemTitle);
       }
-    } catch (e) { console.warn(`${trigger} automation failed:`, e); }
+    } catch (e) { handleError(e, { module: 'store', operation: 'AUTOMATION_MATCH', severity: 'warn' }); }
   }
   // P3#4 fix: prune stale _dueArriveLastFired entries (older than cooldown)
   const pruneThreshold = Date.now() - DUE_ARRIVE_COOLDOWN_MS * 2;
@@ -188,7 +189,7 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
           const nMsg = act.config.message ?? `自动化规则已触发：${itemTitle}`;
           s.notifications.unshift({ id: genId('n'), type: 'sync', title: nTitle, message: nMsg, relatedId: itemId, relatedType: itemType, memberId: targetId, read: false, createdAt: new Date().toISOString() });
           // D2: 操作反馈 toast
-          try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: nTitle, type: 'info' } })); } catch {}
+          try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: nTitle, type: 'info' } })); } catch (e) { handleError(e, { module: 'store', operation: 'TOAST_DISPATCH', severity: 'debug' }); }
           fireWeChatNotify(nTitle, nMsg);
         } else if (act.type === 'escalation') {
           const admins = s.members.filter(m => (m.role === 'admin' || m.role === 'manager') && m.status === 'active');
@@ -256,7 +257,7 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
             const aiAction = AI_ACTION_MAP.get(actionId);
             if (!aiAction) { console.warn(`ai_action: unknown actionId "${actionId}"`); continue; }
             // Build params from config
-            const params: Record<string, any> = {};
+            const params: Record<string, unknown> = {};
             for (const [k, v] of Object.entries(act.config)) {
               if (k === 'actionId') continue;
               params[k] = v;
@@ -275,11 +276,11 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
               }
             }
           } catch (e) {
-            console.warn('ai_action execution error:', e);
+            handleError(e, { module: 'store', operation: 'AI_ACTION_EXEC', severity: 'warn' });
           }
         }
       } catch (e) {
-        console.warn('Automation action failed:', act.type, e);
+        handleError(e, { module: 'store', operation: 'AUTOMATION_ACTION', severity: 'warn', data: { actionType: act.type } });
       }
     }
   } finally {
@@ -357,41 +358,67 @@ export function calcGoalLevel(goals: Goal[], goalId: string, parentId: string | 
   return calcGoalLevel(goals, parent.id, parent.parentId, visitedSet) + 1;
 }
 
-export function calcGoalProgress(goals: Goal[], goalId: string, visited?: Set<string>): number {
+/** Pure computation result for goal progress — no input mutations */
+export interface GoalProgressInfo {
+  progress: number;
+  dualTrack: DualTrackSummary | undefined;
+  krUpdates: Array<{ idx: number; kpiScore: number }>;
+}
+
+/** Pure: compute goal progress, dualTrack, and KR score updates without mutating inputs */
+export function computeGoalProgressInfo(goals: Goal[], goalId: string, visited?: Set<string>): GoalProgressInfo {
+  const empty: GoalProgressInfo = { progress: 0, dualTrack: undefined, krUpdates: [] };
   const visitedSet = visited || new Set<string>();
-  if (visitedSet.has(goalId)) return 0;
+  if (visitedSet.has(goalId)) return empty;
   visitedSet.add(goalId);
   const goal = goals.find(g => g.id === goalId);
-  if (!goal) return 0;
+  if (!goal) return empty;
   const allKrs = goal.keyResults ?? [];
   if (allKrs.length > 0) {
-    // 只计算 selected 的 KR，未选中的不参与进度计算
     const krs = allKrs.filter(kr => kr.selected !== false);
-    // D6: 回写 KPI 评分到每个 KR 的 kpiScore 字段
-    for (const kr of allKrs) {
+    // Compute KPI scores (no mutation)
+    const krUpdates: GoalProgressInfo['krUpdates'] = [];
+    for (let i = 0; i < allKrs.length; i++) {
+      const kr = allKrs[i];
       if (kr.track === 'kpi' || kr.track === 'both') {
-        kr.kpiScore = calcKpiKrScore(kr).score;
+        krUpdates.push({ idx: i, kpiScore: calcKpiKrScore(kr).score });
       }
     }
+    const dualTrack = calcDualTrack(allKrs) ?? undefined;
     if (krs.length > 0) {
-      // 权重归一化 + 加权平均（KR 的 weight 字段已定义但之前未使用）
       const totalWeight = krs.reduce((sum, kr) => sum + (kr.weight ?? 1), 0);
       const progress = Math.round(krs.reduce((sum, kr) => {
         const completion = kr.targetValue > 0 ? Math.min(100, (kr.currentValue / kr.targetValue) * 100) : 0;
         const normalizedWeight = (kr.weight ?? 1) / totalWeight;
         return sum + completion * normalizedWeight;
       }, 0));
-      // P3#31 fix: dualTrack mutation — safe only inside reducer; callers outside reducer must not rely on this mutation
-      // When called outside reducer, React won't detect the change; use the returned progress + separate dualTrack calculation
-      goal.dualTrack = calcDualTrack(allKrs) ?? undefined;
-      return progress;
+      return { progress, dualTrack, krUpdates };
     }
-    goal.dualTrack = calcDualTrack(allKrs) ?? undefined;
-    return 0;
+    return { progress: 0, dualTrack, krUpdates };
   }
   const children = goals.filter(g => g.parentId === goalId);
-  if (children.length > 0) return Math.round(children.reduce((s, c) => s + calcGoalProgress(goals, c.id, visitedSet), 0) / children.length);
-  return 0;
+  if (children.length > 0) {
+    const progress = Math.round(children.reduce((s, c) => s + computeGoalProgressInfo(goals, c.id, visitedSet).progress, 0) / children.length);
+    return { progress, dualTrack: undefined, krUpdates: [] };
+  }
+  return empty;
+}
+
+/** Apply GoalProgressInfo side effects to goal + KR objects (for Immer reducer context) */
+export function applyGoalProgressInfo(goal: Goal, info: GoalProgressInfo): void {
+  goal.dualTrack = info.dualTrack;
+  for (const { idx, kpiScore } of info.krUpdates) {
+    const kr = goal.keyResults?.[idx];
+    if (kr) kr.kpiScore = kpiScore;
+  }
+}
+
+/** Convenience wrapper: compute + apply mutations + return progress number */
+export function calcGoalProgress(goals: Goal[], goalId: string, visited?: Set<string>): number {
+  const info = computeGoalProgressInfo(goals, goalId, visited);
+  const goal = goals.find(g => g.id === goalId);
+  if (goal) applyGoalProgressInfo(goal, info);
+  return info.progress;
 }
 
 export function calcProjectProgress(tasks: Task[], projectId: string): number {
@@ -454,7 +481,7 @@ function ensurePendingDeletesLoaded() {
         }
       }
     }
-  } catch {}
+  } catch (e) { handleError(e, { module: 'store', operation: 'LS_LOAD_PENDING_DELETES', severity: 'debug' }); }
 }
 
 function persistPendingDeletes() {
@@ -465,13 +492,13 @@ function persistPendingDeletes() {
       if (now < expiry) obj[id] = expiry;
     }
     localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify(obj));
-  } catch {}
+  } catch (e) { handleError(e, { module: 'store', operation: 'LS_PERSIST_PENDING_DELETES', severity: 'debug' }); }
 }
 
 export function markPendingDelete(id: string) {
   ensurePendingDeletesLoaded();
   let ttl = 120_000; // P3#6 fix: online TTL increased from 60s to 120s to match fallbackPoll interval
-  try { if (localStorage.getItem('tbh-went-offline-at')) ttl = 10 * 60_000; } catch {}
+  try { if (localStorage.getItem('tbh-went-offline-at')) ttl = 10 * 60_000; } catch (e) { handleError(e, { module: 'store', operation: 'LS_READ_OFFLINE', severity: 'debug' }); }
   pendingDeletes.set(id, Date.now() + ttl);
   persistPendingDeletes();
 }

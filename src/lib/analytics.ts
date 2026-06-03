@@ -1,3 +1,5 @@
+import { handleError } from '@/lib/errorHandler';
+
 const STORAGE_KEY = 'tbh-funnel-analytics';
 
 interface FunnelEvent {
@@ -17,14 +19,14 @@ function getSessions(): FunnelSession[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  } catch (e) { handleError(e, { module: 'analytics', operation: 'LOAD_SESSIONS', severity: 'debug' }); return []; }
 }
 
 function saveSessions(sessions: FunnelSession[]) {
   try {
     if (sessions.length > 50) sessions = sessions.slice(-50);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-  } catch {}
+  } catch (e) { handleError(e, { module: 'analytics', operation: 'SAVE_SESSIONS', severity: 'debug' }); }
 }
 
 let currentSession: FunnelSession | null = null;

@@ -7,7 +7,9 @@
  * - 与现有 AutomationRule 系统协同
  */
 import { pushNotification, triggerZapierWebhook, getPushConfigs, formatTaskNotification } from './pushConnector';
+import { handleError } from '@/lib/errorHandler';
 import type { PushMessage } from './pushConnector';
+import type { Task, Goal } from '@/store/types';
 
 import { fireAutomationRules } from '@/store/shared';
 
@@ -68,14 +70,14 @@ export function loadPushEventConfigs(): Record<PushEventType, PushEventConfig> {
   try {
     const stored = localStorage.getItem(PUSH_CONFIG_KEY);
     if (stored) return { ...DEFAULT_EVENT_CONFIG, ...JSON.parse(stored) };
-  } catch {}
+  } catch (e) { handleError(e, { module: 'pushEventEngine', operation: 'LOAD_CONFIG', severity: 'debug' }); }
   return { ...DEFAULT_EVENT_CONFIG };
 }
 
 export function savePushEventConfigs(configs: Record<PushEventType, PushEventConfig>) {
   try {
     localStorage.setItem(PUSH_CONFIG_KEY, JSON.stringify(configs));
-  } catch {}
+  } catch (e) { handleError(e, { module: 'pushEventEngine', operation: 'SAVE_CONFIG', severity: 'debug' }); }
 }
 
 // ===== 去重机制 =====
@@ -135,7 +137,7 @@ export async function dispatchPushEvent(event: PushEvent): Promise<void> {
   if (pushConfigs.length > 0) {
     try {
       await pushNotification(msg);
-    } catch {}
+    } catch (e) { handleError(e, { module: 'pushEventEngine', operation: 'PUSH_NOTIFICATION', severity: 'warn' }); }
   }
 
   // Zapier/n8n 推送
@@ -144,7 +146,7 @@ export async function dispatchPushEvent(event: PushEvent): Promise<void> {
       type: event.type,
       data: event.data || {},
     });
-  } catch {}
+  } catch (e) { handleError(e, { module: 'pushEventEngine', operation: 'TRIGGER_WEBHOOK', severity: 'warn' }); }
 }
 
 // ===== 预设快捷函数 =====
@@ -213,7 +215,7 @@ function sendSwPush(title: string, body: string, url?: string): void {
       type: 'PUSH_NOTIFICATION',
       payload: { title, body, url },
     });
-  } catch {}
+  } catch (e) { handleError(e, { module: 'pushEventEngine', operation: 'SW_PUSH', severity: 'warn' }); }
 }
 
 function isSwAvailable(): boolean {
@@ -278,8 +280,8 @@ const AI_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 每5分钟扫描一次
 
 /** 启动AI主动推送扫描（登录后调用） */
 export function startAiPushScan(
-  getTasks: () => any[],
-  getGoals: () => any[],
+  getTasks: () => Task[],
+  getGoals: () => Goal[],
   getUserId: () => string | null,
 ) {
   stopAiPushScan();
@@ -342,8 +344,8 @@ export function startAiPushScan(
           });
           // Fire kr_lag automation trigger for goal-level rules
           try {
-            fireAutomationRules({ goals, tasks } as any, g.id, 'goal', g.title, 'kr_lag', { updatedAt: g.updatedAt }, g as any);
-          } catch {}
+            fireAutomationRules({ goals, tasks } as unknown as Parameters<typeof fireAutomationRules>[0], g.id, 'goal', g.title, 'kr_lag', { updatedAt: g.updatedAt }, g as unknown as Record<string, unknown>);
+          } catch (e) { handleError(e, { module: 'pushEventEngine', operation: 'FIRE_AUTOMATION', severity: 'warn' }); }
         }
       }
     }

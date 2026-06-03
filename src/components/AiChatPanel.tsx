@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
+import type { Action } from '@/store/types';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Send, Lightbulb, Target, AlertTriangle, UserCheck, Bot, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -79,7 +80,7 @@ export function AiChatPanel({ itemId, itemType, itemTitle, itemDescription }: Ai
 
           if (action && !('error' in action)) {
             // Dispatch the action
-            dispatch(action as any);
+            dispatch(action as Action);
             const aiMsg: ChatMessage = {
               role: 'assistant',
               content: `✅ ${description}`,

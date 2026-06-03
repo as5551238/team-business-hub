@@ -7,6 +7,11 @@
 import type { AppState, TaskStatus, TaskPriority, GoalStatus, ItemType } from '@/types';
 import type { Action } from '@/store/types';
 
+export interface AiAnalysisAction {
+  type: '__AI_ANALYSIS__';
+  payload: { analysisType: string; [key: string]: unknown };
+}
+
 // ==================== Action Definitions ====================
 
 export interface AiActionDef {
@@ -16,7 +21,7 @@ export interface AiActionDef {
   category: 'create' | 'update' | 'delete' | 'analyze' | 'workflow';
   params: { key: string; type: 'string' | 'number' | 'boolean' | 'enum'; required: boolean; enum?: string[]; description: string }[];
   /** Returns dispatch payload if valid, or error string if invalid */
-  execute: (state: AppState, params: Record<string, any>) => Action | { error: string };
+  execute: (state: AppState, params: Record<string, string | undefined>) => Action | AiAnalysisAction | { error: string };
 }
 
 // ==================== Create Actions ====================
@@ -223,7 +228,7 @@ const getOverdueTasks: AiActionDef = {
     const now = new Date().toISOString();
     const overdue = state.tasks.filter(t => !t.deletedAt && t.status !== 'done' && t.dueDate && t.dueDate < now);
     const filtered = p.memberId ? overdue.filter(t => t.leaderId === p.memberId) : overdue;
-    return { type: '__AI_ANALYSIS__', payload: { analysisType: 'overdue_tasks', count: filtered.length, items: filtered.map(t => ({ id: t.id, title: t.title, dueDate: t.dueDate, status: t.status })) } } as any;
+    return { type: '__AI_ANALYSIS__', payload: { analysisType: 'overdue_tasks', count: filtered.length, items: filtered.map(t => ({ id: t.id, title: t.title, dueDate: t.dueDate, status: t.status })) } };
   },
 };
 
@@ -240,7 +245,7 @@ const getTeamLoad: AiActionDef = {
       const inProgress = state.tasks.filter(t => !t.deletedAt && t.leaderId === m.id && t.status === 'in_progress').length;
       return { id: m.id, name: m.name, todo, inProgress, total: todo + inProgress };
     });
-    return { type: '__AI_ANALYSIS__', payload: { analysisType: 'team_load', members: loads } } as any;
+    return { type: '__AI_ANALYSIS__', payload: { analysisType: 'team_load', members: loads } };
   },
 };
 
@@ -254,7 +259,7 @@ const getGoalProgress: AiActionDef = {
   ],
   execute: (state, p) => {
     const goals = p.goalId ? state.goals.filter(g => g.id === p.goalId) : state.goals.filter(g => !g.deletedAt && g.status !== 'done');
-    return { type: '__AI_ANALYSIS__', payload: { analysisType: 'goal_progress', goals: goals.map(g => ({ id: g.id, title: g.title, progress: g.progress, status: g.status, krCount: g.keyResults.length })) } } as any;
+    return { type: '__AI_ANALYSIS__', payload: { analysisType: 'goal_progress', goals: goals.map(g => ({ id: g.id, title: g.title, progress: g.progress, status: g.status, krCount: g.keyResults.length })) } };
   },
 };
 
@@ -269,7 +274,7 @@ const getRiskItems: AiActionDef = {
     const blocked = state.tasks.filter(t => !t.deletedAt && t.status === 'blocked');
     const overdue = state.tasks.filter(t => !t.deletedAt && t.status !== 'done' && t.dueDate && t.dueDate < now);
     const stalled = state.goals.filter(g => !g.deletedAt && g.status === 'in_progress' && g.progress < 20);
-    return { type: '__AI_ANALYSIS__', payload: { analysisType: 'risk_items', blocked: blocked.length, overdue: overdue.length, stalledGoals: stalled.length } } as any;
+    return { type: '__AI_ANALYSIS__', payload: { analysisType: 'risk_items', blocked: blocked.length, overdue: overdue.length, stalledGoals: stalled.length } };
   },
 };
 

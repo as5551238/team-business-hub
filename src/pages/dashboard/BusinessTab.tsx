@@ -14,9 +14,12 @@ import TeamDiagnosticsPanel from '@/components/TeamDiagnosticsPanel';
 import ContributionLens from '@/components/ContributionLens';
 import IndustryAdapter from '@/components/IndustryAdapter';
 import PredictiveInsights from '@/components/PredictiveInsights';
+import { useAppNavigate } from '@/lib/routes';
+import type { Page } from '@/components/layout/Layout';
 
 export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTabProps) {
   const { state, memberGoals, memberTasks, memberProjects, todayStr, getMemberName, commentCountMap } = useFilteredData();
+  const { goToPage, goWithFilter } = useAppNavigate();
 
   const stats = useMemo(() => {
     const activeGoals = memberGoals.filter(g => g.status === 'in_progress');
@@ -107,10 +110,10 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
 
       {/* 4 统计卡片 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={<Target size={20} className="text-blue-600" />} label="进行中目标" value={stats.activeGoals} sub={`平均进度 ${stats.overallGoalProgress}%`} color="bg-blue-50" onClick={() => { onPageChange('goals'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'goals', statuses: ['in_progress'] } })), 100); }} />
-        <StatCard icon={<FolderKanban size={20} className="text-emerald-600" />} label="活跃项目" value={stats.activeProjects} color="bg-emerald-50" onClick={() => { onPageChange('projects'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'projects', statuses: ['in_progress'] } })), 100); }} />
-        <StatCard icon={<Clock size={20} className="text-orange-600" />} label="我的待办" value={stats.myTasks} sub={`今日 ${stats.todayTodos.length} 项`} color="bg-orange-50" onClick={() => { onPageChange('tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'tasks', statuses: ['todo', 'in_progress'] } })), 100); }} />
-        <StatCard icon={<AlertTriangle size={20} className="text-red-600" />} label="已逾期" value={stats.overdueTasks} color="bg-red-50" onClick={() => { onPageChange('tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-filter', { detail: { page: 'tasks', timeFilter: 'overdue' } })), 100); }} />
+        <StatCard icon={<Target size={20} className="text-blue-600" />} label="进行中目标" value={stats.activeGoals} sub={`平均进度 ${stats.overallGoalProgress}%`} color="bg-blue-50" onClick={() => goWithFilter('goals', { statuses: 'in_progress' })} />
+        <StatCard icon={<FolderKanban size={20} className="text-emerald-600" />} label="活跃项目" value={stats.activeProjects} color="bg-emerald-50" onClick={() => goWithFilter('projects', { statuses: 'in_progress' })} />
+        <StatCard icon={<Clock size={20} className="text-orange-600" />} label="我的待办" value={stats.myTasks} sub={`今日 ${stats.todayTodos.length} 项`} color="bg-orange-50" onClick={() => goWithFilter('tasks', { statuses: 'todo,in_progress' })} />
+        <StatCard icon={<AlertTriangle size={20} className="text-red-600" />} label="已逾期" value={stats.overdueTasks} color="bg-red-50" onClick={() => goWithFilter('tasks', { timeFilter: 'overdue' })} />
       </div>
 
       {/* P0: 行为画像 — 管理员可见当前用户画像 */}
@@ -138,11 +141,11 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
 
       {/* 饼图行：状态分布 + 优先级分布 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-card rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => onPageChange('tasks')}>
+        <div className="bg-card rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => goToPage('tasks')}>
           <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold text-muted-foreground">任务状态分布</span><BarChart3 size={14} className="text-muted-foreground/50" /></div>
           <div className="h-[120px]">{taskStatusData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={taskStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>{taskStatusData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={(v: number, n: string) => [`${v} 项`, n]} /></PieChart></ResponsiveContainer>) : (<div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>)}</div>
         </div>
-        <div className="bg-card rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => onPageChange('tasks')}>
+        <div className="bg-card rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => goToPage('tasks')}>
           <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold text-muted-foreground">优先级分布</span><BarChart3 size={14} className="text-muted-foreground/50" /></div>
           <div className="h-[120px]">{taskPriorityData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={taskPriorityData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>{taskPriorityData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={(v: number, n: string) => [`${v} 项`, n]} /></PieChart></ResponsiveContainer>) : (<div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>)}</div>
         </div>

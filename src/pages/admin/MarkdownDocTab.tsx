@@ -4,6 +4,7 @@ import { Plus, Trash2, Edit2, FileText, Link2, Eye, Code } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
+import { handleError } from '@/lib/errorHandler';
 
 type DocItem = { id: string; title: string; content: string; linkedItemId: string | null; linkedItemType: 'goal' | 'project' | 'task' | null; updatedAt: string };
 
@@ -14,45 +15,45 @@ marked.setOptions({
 });
 
 const mdRenderer = {
-  heading(this: any, text: string, level: number): string {
+  heading(text: string, level: number): string {
     const sizes = { 1: 'text-lg font-bold mt-4 mb-2', 2: 'text-base font-semibold mt-4 mb-1', 3: 'text-sm font-semibold mt-3 mb-1' };
     const cls = sizes[level as keyof typeof sizes] || 'text-sm font-semibold mt-2 mb-1';
     return `<h${level} class="${cls}">${text}</h${level}>`;
   },
-  code(this: any, code: string, lang: string | undefined): string {
+  code(code: string, lang: string | undefined): string {
     const langAttr = lang ? ` class="language-${lang}"` : '';
     return `<pre class="bg-gray-50 border border-border rounded-lg p-3 my-2 overflow-x-auto text-xs"><code${langAttr}>${code}</code></pre>`;
   },
-  codespan(this: any, code: string): string {
+  codespan(code: string): string {
     return `<code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-primary">${code}</code>`;
   },
-  table(this: any, header: string, body: string): string {
+  table(header: string, body: string): string {
     return `<div class="overflow-x-auto my-2"><table class="w-full text-xs border border-border rounded-lg"><thead class="bg-muted/50">${header}</thead><tbody>${body}</tbody></table></div>`;
   },
-  tablerow(this: any, content: string): string {
+  tablerow(content: string): string {
     return `<tr class="border-b border-border/50">${content}</tr>`;
   },
-  tablecell(this: any, content: string, flags: { header: boolean; align: string | null }): string {
+  tablecell(content: string, flags: { header: boolean; align: string | null }): string {
     const tag = flags.header ? 'th' : 'td';
     const align = flags.align ? ` style="text-align:${flags.align}"` : '';
     return `<${tag} class="px-3 py-1.5 border-r border-border/30 last:border-0"${align}>${content}</${tag}>`;
   },
-  blockquote(this: any, quote: string): string {
+  blockquote(quote: string): string {
     return `<blockquote class="border-l-4 border-primary/30 pl-3 my-2 text-sm text-muted-foreground italic">${quote}</blockquote>`;
   },
-  list(this: any, body: string, ordered: boolean, start: number): string {
+  list(body: string, ordered: boolean, start: number): string {
     const tag = ordered ? 'ol' : 'ul';
     const startAttr = (start !== 1) ? ` start="${start}"` : '';
     return `<${tag} class="ml-4 my-1 space-y-0.5 text-sm list-${ordered ? 'decimal' : 'disc'}"${startAttr}>${body}</${tag}>`;
   },
-  hr(this: any): string {
+  hr(): string {
     return '<hr class="my-3 border-border" />';
   },
-  link(this: any, href: string, title: string | null | undefined, text: string): string {
+  link(href: string, title: string | null | undefined, text: string): string {
     const titleAttr = title ? ` title="${title}"` : '';
     return `<a href="${href}"${titleAttr} class="text-primary underline hover:text-primary/80" target="_blank" rel="noopener noreferrer">${text}</a>`;
   },
-  image(this: any, href: string, title: string | null | undefined, text: string): string {
+  image(href: string, title: string | null | undefined, text: string): string {
     return `<img src="${href}" alt="${text}" class="max-w-full rounded-lg my-2 border border-border" loading="lazy" />`;
   },
 };
@@ -63,7 +64,8 @@ export function renderMarkdown(md: string): string {
   try {
     const raw = marked.parse(md) as string;
     return DOMPurify.sanitize(raw, { ADD_ATTR: ['target', 'start', 'loading'], ADD_TAGS: ['img'] });
-  } catch {
+  } catch (e) {
+    handleError(e, { module: 'MarkdownDocTab', operation: 'RENDER_MD', severity: 'warn' });
     return DOMPurify.sanitize(md);
   }
 }
@@ -103,7 +105,7 @@ export function MarkdownDocTab() {
       setSelectedId(id);
       setEditTitle(doc.title);
       setEditContent(doc.content);
-      setEditLinkedItem(doc.linkedItemId ? { id: doc.linkedItemId, type: (doc.linkedItemType as any) ?? 'task' } : null);
+      setEditLinkedItem(doc.linkedItemId ? { id: doc.linkedItemId, type: doc.linkedItemType ?? 'task' } : null);
       setMode('edit');
     }
   }

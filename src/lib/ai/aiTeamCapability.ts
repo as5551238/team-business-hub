@@ -16,6 +16,7 @@ import type { AppState, Member, Goal, Project, Task } from '@/types';
 import { callLLM } from './llmService';
 import { loadAIConfig } from './types';
 import { buildAIContext, type AIProjectContext } from './aiContextEngine';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型 =====
 
@@ -297,10 +298,10 @@ export async function buildTeamCapabilityDeep(state: AppState): Promise<TeamCapa
     const raw = await callLLM(prompt, config);
     if (!raw) return localResult;
 
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch {
+    let parsed: { members?: Array<{ memberId?: string; memberName?: string; hiddenstrengths?: unknown[] }> } | null = null;
+    try { parsed = JSON.parse(raw); } catch (e) { handleError(e, { module: 'aiTeamCapability', operation: 'PARSE_LLM_JSON', severity: 'warn' });
       const match = raw.match(/\{[\s\S]*"members"[\s\S]*\}/);
-      if (match) try { parsed = JSON.parse(match[0]); } catch {}
+      if (match) try { parsed = JSON.parse(match[0]); } catch (e2) { handleError(e2, { module: 'aiTeamCapability', operation: 'PARSE_LLM_JSON_FALLBACK', severity: 'warn' }); }
     }
     if (!parsed) return localResult;
 

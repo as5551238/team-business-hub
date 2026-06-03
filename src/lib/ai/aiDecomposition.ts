@@ -10,6 +10,7 @@ import type { AppState } from '@/types';
 import { callLLM } from './llmService';
 import { loadAIConfig } from './types';
 import { buildAIContext } from './aiContextEngine';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型 =====
 
@@ -44,6 +45,14 @@ export interface DecompositionResult {
   methodologySuggestion: string;
   /** 是否来自 LLM */
   fromLLM: boolean;
+}
+
+interface LLMDecompositionResponse {
+  keyResults?: Array<{ title?: string; targetValue?: number; unit?: string; confidence?: number }>;
+  projects?: Array<{ title?: string; description?: string; tasks?: Array<{ title?: string; priority?: string; estimatedDays?: number; tags?: string[]; dependsOn?: number[] }> }>;
+  standaloneTasks?: Array<{ title?: string; priority?: string; estimatedDays?: number; tags?: string[]; dependsOn?: number[] }>;
+  estimatedTotalDays?: number;
+  methodologySuggestion?: string;
 }
 
 // ===== 确定性拆解（模板化建议） =====
@@ -159,28 +168,28 @@ export async function generateDeepDecomposition(state: AppState, goalTitle: stri
     if (!raw) return local;
 
     // 解析 JSON
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch {
+    let parsed: LLMDecompositionResponse | null = null;
+    try { parsed = JSON.parse(raw); } catch (e) { handleError(e, { module: 'aiDecomposition', operation: 'PARSE_LLM_JSON', severity: 'warn' });
       const match = raw.match(/\{[\s\S]*"keyResults"[\s\S]*\}/);
-      if (match) try { parsed = JSON.parse(match[0]); } catch {}
+      if (match) try { parsed = JSON.parse(match[0]); } catch (e2) { handleError(e2, { module: 'aiDecomposition', operation: 'PARSE_LLM_JSON_FALLBACK', severity: 'warn' }); }
     }
     if (!parsed?.keyResults) return local;
 
     return {
       goalTitle,
-      keyResults: (parsed.keyResults || []).map((kr: any) => ({
+      keyResults: (parsed.keyResults || []).map(kr => ({
         title: kr.title || '', targetValue: Number(kr.targetValue) || 0, unit: kr.unit || '个', confidence: Number(kr.confidence) || 5,
       })),
-      projects: (parsed.projects || []).map((p: any) => ({
+      projects: (parsed.projects || []).map(p => ({
         title: p.title || '', description: p.description || '',
-        tasks: (p.tasks || []).map((t: any, idx: number) => ({
-          title: t.title || '', priority: ['urgent', 'high', 'medium', 'low'].includes(t.priority) ? t.priority : 'medium',
+        tasks: (p.tasks || []).map((t, idx) => ({
+          title: t.title || '', priority: ['urgent', 'high', 'medium', 'low'].includes(t.priority ?? '') ? t.priority as TaskDraft['priority'] : 'medium',
           estimatedDays: Number(t.estimatedDays) || 3, tags: Array.isArray(t.tags) ? t.tags : [],
-          dependsOn: Array.isArray(t.dependsOn) ? t.dependsOn.map(Number).filter((n: number) => n > 0 && n !== idx + 1) : [],
+          dependsOn: Array.isArray(t.dependsOn) ? t.dependsOn.map(Number).filter(n => n > 0 && n !== idx + 1) : [],
         })),
       })),
-      standaloneTasks: (parsed.standaloneTasks || []).map((t: any) => ({
-        title: t.title || '', priority: ['urgent', 'high', 'medium', 'low'].includes(t.priority) ? t.priority : 'medium',
+      standaloneTasks: (parsed.standaloneTasks || []).map(t => ({
+        title: t.title || '', priority: ['urgent', 'high', 'medium', 'low'].includes(t.priority ?? '') ? t.priority as TaskDraft['priority'] : 'medium',
         estimatedDays: Number(t.estimatedDays) || 1, tags: Array.isArray(t.tags) ? t.tags : [], dependsOn: [],
       })),
       estimatedTotalDays: Number(parsed.estimatedTotalDays) || local.estimatedTotalDays,

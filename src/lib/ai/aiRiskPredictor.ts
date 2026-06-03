@@ -16,6 +16,7 @@ import type { AppState } from '@/types';
 import { callLLM } from './llmService';
 import { loadAIConfig } from './types';
 import { buildAIContext, type AIProjectContext, type ItemContext } from './aiContextEngine';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型 =====
 
@@ -93,6 +94,12 @@ export interface RiskPredictionResult {
   fromLLM: boolean;
   /** 预测时间 */
   predictedAt: string;
+}
+
+interface LLMRiskResponse {
+  risks?: Array<{ category?: string; probability?: string; impact?: string; timeframe?: string; estimatedDays?: number; title?: string; description?: string; affectedItems?: Array<{ id?: string; type?: string; title?: string }>; mitigations?: Array<{ action?: string; priority?: string; effort?: string }> }>;
+  overallRiskScore?: number;
+  [key: string]: unknown;
 }
 
 // ===== 内部工具 =====
@@ -486,10 +493,9 @@ export async function predictRisksDeep(state: AppState): Promise<RiskPredictionR
     const raw = await callLLM(prompt, config);
     if (!raw) return localResult;
 
-    let parsed: any = null;
-    try { parsed = JSON.parse(raw); } catch {
+    let parsed: LLMRiskResponse | null = null;    try { parsed = JSON.parse(raw); } catch (e) { handleError(e, { module: 'aiRiskPredictor', operation: 'PARSE_LLM_JSON', severity: 'warn' });
       const match = raw.match(/\{[\s\S]*"risks"[\s\S]*\}/);
-      if (match) try { parsed = JSON.parse(match[0]); } catch {}
+      if (match) try { parsed = JSON.parse(match[0]); } catch (e2) { handleError(e2, { module: 'aiRiskPredictor', operation: 'PARSE_LLM_JSON_FALLBACK', severity: 'warn' }); }
     }
     if (!parsed?.risks) return localResult;
 
@@ -500,20 +506,20 @@ export async function predictRisksDeep(state: AppState): Promise<RiskPredictionR
     const validPriorities = ['urgent', 'high', 'medium'];
     const validEfforts = ['low', 'medium', 'high'];
 
-    const llmRisks: PredictedRisk[] = (parsed.risks as any[]).map((r: any) => ({
+    const llmRisks: PredictedRisk[] = (parsed.risks ?? []).map(r => ({
       id: nextPredictedRiskId(),
-      category: validCategories.includes(r.category) ? r.category : 'schedule',
-      probability: validProbs.includes(r.probability) ? r.probability : 'medium',
-      impact: validImpacts.includes(r.impact) ? r.impact : 'moderate',
-      timeframe: validTimeframes.includes(r.timeframe) ? r.timeframe : 'medium_term',
+      category: validCategories.includes(r.category ?? '') ? r.category as PredictedRisk['category'] : 'schedule',
+      probability: validProbs.includes(r.probability ?? '') ? r.probability as RiskProbability : 'medium',
+      impact: validImpacts.includes(r.impact ?? '') ? r.impact as PredictedRisk['impact'] : 'moderate',
+      timeframe: validTimeframes.includes(r.timeframe ?? '') ? r.timeframe as RiskTimeframe : 'medium_term',
       estimatedDays: Number(r.estimatedDays) || 7,
       title: String(r.title || '未知风险').slice(0, 100),
       description: String(r.description || '').slice(0, 500),
-      affectedItems: Array.isArray(r.affectedItems) ? r.affectedItems.slice(0, 5).map((a: any) => ({
-        id: String(a.id || ''), type: a.type === 'goal' || a.type === 'project' ? a.type : 'task', title: String(a.title || ''),
+      affectedItems: Array.isArray(r.affectedItems) ? r.affectedItems.slice(0, 5).map(a => ({
+        id: String(a.id || ''), type: (a.type === 'goal' || a.type === 'project' ? a.type : 'task') as 'goal' | 'project' | 'task', title: String(a.title || ''),
       })) : [],
-      mitigations: Array.isArray(r.mitigations) ? r.mitigations.slice(0, 3).map((m: any) => ({
-        action: String(m.action || ''), priority: validPriorities.includes(m.priority) ? m.priority : 'medium', effort: validEfforts.includes(m.effort) ? m.effort : 'medium',
+      mitigations: Array.isArray(r.mitigations) ? r.mitigations.slice(0, 3).map(m => ({
+        action: String(m.action || ''), priority: validPriorities.includes(m.priority ?? '') ? m.priority as 'urgent' | 'high' | 'medium' : 'medium', effort: validEfforts.includes(m.effort ?? '') ? m.effort as 'low' | 'medium' | 'high' : 'medium',
       })) : [],
       fromLLM: true,
     }));

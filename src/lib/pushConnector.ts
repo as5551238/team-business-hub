@@ -8,6 +8,7 @@
  */
 
 import { getSupabaseClient } from '@/supabase/client';
+import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型定义 =====
 
@@ -43,7 +44,7 @@ const PUSH_CONFIG_KEY = 'tbh-push-configs';
 export function getPushConfigs(): PushConfig[] {
   try {
     return JSON.parse(localStorage.getItem(PUSH_CONFIG_KEY) || '[]');
-  } catch { return []; }
+  } catch (e) { handleError(e, { module: 'pushConnector', operation: 'LOAD_CONFIGS', severity: 'debug' }); return []; }
 }
 
 export function savePushConfigs(configs: PushConfig[]) {
@@ -196,7 +197,7 @@ export async function triggerZapierWebhook(event: {
       body: JSON.stringify({ event: event.type, data: event.data, timestamp: new Date().toISOString(), source: 'team-business-hub' }),
     });
     return resp.ok;
-  } catch {
+  } catch (e) { handleError(e, { module: 'pushConnector', operation: 'TRIGGER_WEBHOOK', severity: 'warn' });
     return false;
   }
 }
