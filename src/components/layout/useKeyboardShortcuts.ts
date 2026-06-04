@@ -49,6 +49,10 @@ export function useKeyboardShortcuts({
       if (mod && e.key === 'f') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-focus-filter')); return; }
       if (mod && e.key === 's') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-save-current')); return; }
       if (mod && e.key === ',') { e.preventDefault(); goToPage('admin'); return; }
+      // S3-2a: Ctrl+D = duplicate/clone selected item
+      if (mod && e.key === 'd') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-duplicate-selected')); return; }
+      // S3-2c: Ctrl+E = archive (soft-delete) selected item
+      if (mod && e.key === 'e') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-archive-selected')); return; }
 
       // --- g-prefix (Vim-style navigation) — check BEFORE single-key shortcuts to avoid conflicts ---
       if (keyBufferRef.current === 'g') {
@@ -62,8 +66,8 @@ export function useKeyboardShortcuts({
       }
 
       // --- Single key shortcuts ---
-      // Escape: close dropdowns / command palette
-      if (e.key === 'Escape') { closeAllDropdowns(); setCommandPaletteOpen(false); return; }
+      // Escape: close dropdowns / command palette / detail panel
+      if (e.key === 'Escape') { closeAllDropdowns(); setCommandPaletteOpen(false); window.dispatchEvent(new CustomEvent('tbh-close-detail-panel')); return; }
 
       // / : focus search
       if (e.key === '/') { e.preventDefault(); searchInputRef.current?.focus(); return; }
@@ -74,6 +78,10 @@ export function useKeyboardShortcuts({
       // [ / ] : sidebar toggle
       if (e.key === '[') { e.preventDefault(); cycleSidebarMode(); return; }
       if (e.key === ']') { e.preventDefault(); cycleSidebarMode(); return; }
+
+      // S3-2a: ArrowUp/Down for list navigation (in addition to j/k)
+      if (e.key === 'ArrowDown') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-nav-down')); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); window.dispatchEvent(new CustomEvent('tbh-nav-up')); return; }
 
       // 1-7: quick navigation
       const navMap: Record<string, Page> = { '1': 'dashboard', '2': 'goals', '3': 'projects', '4': 'tasks', '5': 'insight', '6': 'knowledge', '7': 'admin' };

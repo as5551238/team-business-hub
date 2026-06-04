@@ -31,6 +31,10 @@ export function QuickCreateModal({ open, onClose, initialType = 'task' }: QuickC
   useEffect(() => { if (open) { setTitle(''); setType(initialType); setLeaderId(state.currentUser?.id || ''); setDueDate(''); setPriority('medium'); setTimeout(() => titleRef.current?.focus(), 50); } }, [open, initialType]);
   useEffect(() => { if (open) { setType(initialType); } }, [initialType]);
 
+  // S3-2b: Smart defaults — auto-set dueDate to tomorrow for tasks
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const smartDueDate = type === 'task' && !dueDate ? tomorrow : dueDate;
+
   if (!open) return null;
 
   const activeMembers = state.members.filter(m => m.status === 'active');
@@ -39,7 +43,9 @@ export function QuickCreateModal({ open, onClose, initialType = 'task' }: QuickC
     if (!title.trim()) return;
     const now = new Date().toISOString();
     if (type === 'task') {
-      dispatch({ type: 'ADD_TASK', payload: { title: title.trim(), description: '', projectId: null, goalId: null, parentId: null, status: 'todo' as TaskStatus, priority, leaderId, supporterIds: [], tags: [], category: '', startDate: dueDate || null, dueDate: dueDate || null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', summary: '' } });
+      // S3-2b: Use smartDueDate (tomorrow) if user didn't set a specific dueDate
+      const taskDueDate = dueDate || smartDueDate;
+      dispatch({ type: 'ADD_TASK', payload: { title: title.trim(), description: '', projectId: null, goalId: null, parentId: null, status: 'todo' as TaskStatus, priority, leaderId, supporterIds: [], tags: [], category: '', startDate: taskDueDate || null, dueDate: taskDueDate || null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', summary: '' } });
     } else if (type === 'goal') {
       dispatch({ type: 'ADD_GOAL', payload: { title: title.trim(), description: '', type: 'okr' as GoalType, status: 'todo' as TaskStatus, priority, parentId: null, level: 0, category: '', startDate: dueDate || '', endDate: dueDate || '', leaderId, supporterIds: [], tags: [], keyResults: [], selectedKRIds: [], attachments: [], trackingRecords: [], repeatCycle: 'none', progress: 0, summary: '' } });
     } else {

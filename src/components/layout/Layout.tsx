@@ -240,6 +240,22 @@ export default function Layout({ children, currentUser }: LayoutProps) {
     });
   }, []);
 
+  // S3-2a: Esc closes detail panel (navigate to base page path)
+  useEffect(() => {
+    const handler = () => {
+      const loc = window.location.pathname;
+      const baseMap: Record<string, string> = { '/goals': '/goals', '/projects': '/projects', '/tasks': '/tasks', '/insight': '/insight', '/knowledge': '/knowledge' };
+      for (const [prefix, base] of Object.entries(baseMap)) {
+        if (loc.startsWith(prefix + '/') && loc !== prefix) {
+          navigate(base);
+          return;
+        }
+      }
+    };
+    window.addEventListener('tbh-close-detail-panel', handler);
+    return () => window.removeEventListener('tbh-close-detail-panel', handler);
+  }, [navigate]);
+
   // When new notifications arrive while page is hidden, show browser notification
   const prevNotificationCountRef = useRef(state.notifications.length);
   useEffect(() => {

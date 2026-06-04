@@ -141,6 +141,9 @@ export default function Tasks() {
     const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (mode === 'table' || mode === 'board' || mode === 'list' || mode === 'timeline' || mode === 'matrix') setViewMode(mode as ViewMode); };
     const onToggleBatch = () => { batchSel.toggleBatchMode(); };
     const onSelectAll = () => { selectAll(filteredTasks.map(t => t.id)); };
+    // S3-2c: Ctrl+D duplicate / Ctrl+E archive
+    const onDuplicate = () => { if (!focusedId) return; const task = state.tasks.find(t => t.id === focusedId); if (!task) return; dispatch({ type: 'ADD_TASK', payload: { title: task.title + ' (副本)', description: task.description || '', projectId: task.projectId || null, goalId: task.goalId || null, priority: task.priority, leaderId: task.leaderId || '', supporterIds: task.supporterIds || [], dueDate: task.dueDate || null, tags: task.tags || [], category: task.category || '' } }); };
+    const onArchive = () => { if (focusedId && can('task_delete')) dispatch({ type: 'DELETE_TASK', payload: focusedId }); };
     window.addEventListener('tbh-nav-down', onNavDown);
     window.addEventListener('tbh-nav-up', onNavUp);
     window.addEventListener('tbh-edit-selected', onEdit);
@@ -151,6 +154,8 @@ export default function Tasks() {
     window.addEventListener('tbh-switch-view', onViewSwitch);
     window.addEventListener('tbh-toggle-batch', onToggleBatch);
     window.addEventListener('tbh-select-all', onSelectAll);
+    window.addEventListener('tbh-duplicate-selected', onDuplicate);
+    window.addEventListener('tbh-archive-selected', onArchive);
     return () => {
       window.removeEventListener('tbh-nav-down', onNavDown);
       window.removeEventListener('tbh-nav-up', onNavUp);
@@ -162,6 +167,8 @@ export default function Tasks() {
       window.removeEventListener('tbh-switch-view', onViewSwitch);
       window.removeEventListener('tbh-toggle-batch', onToggleBatch);
       window.removeEventListener('tbh-select-all', onSelectAll);
+      window.removeEventListener('tbh-duplicate-selected', onDuplicate);
+      window.removeEventListener('tbh-archive-selected', onArchive);
     };
   }, [focusedId, filteredTasks, can, dispatch, batchSel]);
 
