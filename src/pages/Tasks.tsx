@@ -538,7 +538,7 @@ export default function Tasks() {
       return { type: 'UPDATE_TASK' as const, payload: { id, updates: { status: t?.status || 'todo' } } };
     });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } }));
-    pushBatchUndo(inverses, '批量修改任务状态');
+    pushBatchUndo(inverses, undefined, '批量修改任务状态');
     clearSelection();
     try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${selectedIds.size} 个任务状态`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_UPDATE', severity: 'debug' }); }
   }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
@@ -551,7 +551,7 @@ export default function Tasks() {
       return { type: 'UPDATE_TASK' as const, payload: { id, updates: { leaderId: t?.leaderId || '' } } };
     });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } }));
-    pushBatchUndo(inverses, '批量分配任务');
+    pushBatchUndo(inverses, undefined, '批量分配任务');
     clearSelection();
     try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已分配 ${selectedIds.size} 个任务`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_ASSIGN', severity: 'debug' }); }
   }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
@@ -563,7 +563,7 @@ export default function Tasks() {
       return { type: 'UPDATE_TASK' as const, payload: { id, updates: { priority: t?.priority || 'medium' } } };
     });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { priority: priority as TaskPriority } } }));
-    pushBatchUndo(inverses, '批量修改优先级');
+    pushBatchUndo(inverses, undefined, '批量修改优先级');
     clearSelection();
     try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${selectedIds.size} 个任务优先级`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_PRIORITY', severity: 'debug' }); }
   }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
@@ -581,7 +581,7 @@ export default function Tasks() {
         dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { tags: merged } } });
       }
     });
-    pushBatchUndo(inverses, '批量添加标签');
+    pushBatchUndo(inverses, undefined, '批量添加标签');
     clearSelection();
     try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已为 ${selectedIds.size} 个任务添加标签`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_ADD_TAGS', severity: 'debug' }); }
   }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
@@ -599,7 +599,7 @@ export default function Tasks() {
         dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { tags: filtered } } });
       }
     });
-    pushBatchUndo(inverses, '批量移除标签');
+    pushBatchUndo(inverses, undefined, '批量移除标签');
     clearSelection();
     try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已移除 ${selectedIds.size} 个任务的标签`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_REMOVE_TAGS', severity: 'debug' }); }
   }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
@@ -612,7 +612,7 @@ export default function Tasks() {
       return { type: 'UPDATE_TASK' as const, payload: { id, updates: { [field]: oldVal || null } } };
     });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { [field]: value || null } } }));
-    pushBatchUndo(inverses, '批量设置日期');
+    pushBatchUndo(inverses, undefined, '批量设置日期');
     clearSelection();
     try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已设置 ${selectedIds.size} 个任务日期`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_DATE', severity: 'debug' }); }
   }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
@@ -624,7 +624,7 @@ export default function Tasks() {
       return { type: 'UPDATE_TASK' as const, payload: { id, updates: { projectId: t?.projectId || null } } };
     });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { projectId } } }));
-    pushBatchUndo(inverses, '批量移动到项目');
+    pushBatchUndo(inverses, undefined, '批量移动到项目');
     clearSelection();
     const proj = state.projects.find(p => p.id === projectId);
     try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已移动 ${selectedIds.size} 个任务到 ${proj?.title || '项目'}`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_MOVE', severity: 'debug' }); }

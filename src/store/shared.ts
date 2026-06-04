@@ -258,14 +258,15 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
             const { allowed: flowOk } = validateStatusFlow(s, itemId, itemType, oldValue as string, act.config.value);
             if (!flowOk) continue;
           }
+          const oldUpdatedAt = item.updatedAt as string;
           item[act.config.field] = act.config.value;
           item.updatedAt = new Date().toISOString();
           const tableName = itemType === 'goal' ? 'goals' : itemType === 'project' ? 'projects' : 'tasks';
           const snakeField = act.config.field.replace(/([A-Z])/g, '_$1').toLowerCase();
-          supabaseUpdate(tableName, itemId, { [snakeField]: act.config.value, updated_at: new Date().toISOString() });
+          supabaseUpdate(tableName, itemId, { [snakeField]: act.config.value, updated_at: new Date().toISOString() }, oldUpdatedAt);
           if (act.config.field === 'status' && act.config.value === 'done') {
             item.completedAt = new Date().toISOString();
-            supabaseUpdate(tableName, itemId, { completed_at: new Date().toISOString() });
+            supabaseUpdate(tableName, itemId, { completed_at: new Date().toISOString() }, oldUpdatedAt);
           }
         } else if (act.type === 'create_subtask') {
           if (itemType !== 'task' || !act.config.title) continue;
@@ -273,9 +274,10 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
           if (!parentTask) continue;
           if (!parentTask.subtasks) parentTask.subtasks = [];
           const subtask = { id: genId('sub'), title: act.config.title, completed: false, priority: act.config.priority ?? parentTask.priority ?? 'medium', dueDate: act.config.dueDate ?? null, leaderId: act.config.memberId ?? parentTask.leaderId ?? '', createdAt: new Date().toISOString() };
+          const oldParentUpdatedAt = parentTask.updatedAt as string;
           parentTask.subtasks = [...parentTask.subtasks, subtask];
           parentTask.updatedAt = new Date().toISOString();
-          supabaseUpdate('tasks', itemId, { subtasks: parentTask.subtasks, updated_at: parentTask.updatedAt });
+          supabaseUpdate('tasks', itemId, { subtasks: parentTask.subtasks, updated_at: parentTask.updatedAt }, oldParentUpdatedAt);
           if (subtask.leaderId && subtask.leaderId !== s.currentUser?.id) {
             s.notifications.unshift({ id: genId('n'), type: 'assigned', title: '你被自动分配了子任务', message: `自动化规则在「${itemTitle}」下创建了子任务「${subtask.title}」`, relatedId: itemId, relatedType: 'task', memberId: subtask.leaderId, read: false, createdAt: new Date().toISOString() });
           }
@@ -288,10 +290,11 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
           if (oldLeaderId === act.config.memberId) continue;
           const targetMember = s.members.find(m => m.id === act.config.memberId && m.status === 'active');
           if (!targetMember) continue;
+          const oldAssignUpdatedAt = item.updatedAt as string;
           item.leaderId = act.config.memberId;
           item.updatedAt = new Date().toISOString();
           const tableName = itemType === 'goal' ? 'goals' : itemType === 'project' ? 'projects' : 'tasks';
-          supabaseUpdate(tableName, itemId, { leader_id: act.config.memberId, updated_at: new Date().toISOString() });
+          supabaseUpdate(tableName, itemId, { leader_id: act.config.memberId, updated_at: new Date().toISOString() }, oldAssignUpdatedAt);
           if (act.config.memberId !== s.currentUser?.id) {
             s.notifications.unshift({ id: genId('n'), type: 'assigned', title: '你被自动指派了新事项', message: `自动化规则将你指派为「${itemTitle}」的负责人`, relatedId: itemId, relatedType: itemType, memberId: act.config.memberId, read: false, createdAt: new Date().toISOString() });
           }

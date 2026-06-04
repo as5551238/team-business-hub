@@ -16,7 +16,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 import { toCamel } from './types';
 import { reducer, hasPermission } from './reducer';
 import { pushUndo, pushBatchUndo, popUndo, popRedo, canUndo, canRedo, getUndoLabel, getRedoLabel, clearUndoStack } from './undo';
-import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError, setCurrentTeamId } from './supabase';
+import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError, setOnConflict, setCurrentTeamId } from './supabase';
 import { setRLSContext } from '@/supabase/client';
 import { CURRENT_USER_KEY } from './types';
 import { generateAllData } from '@/data/dataGenerator';
@@ -170,7 +170,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setOnWriteError((msg: string) => {
       dispatch({ type: 'ADD_NOTIFICATION', payload: { id: `err-${Date.now()}`, type: 'error', title: '同步失败', message: msg, read: false, createdAt: new Date().toISOString() } });
     });
-    return () => { setOnWriteError(() => {}); };
+    // S3-1a: Auto-rollback on optimistic lock conflict — fetch latest version & dispatch REALTIME_UPSERT
+    setOnConflict((table: string, id: string) => {
+      const sb = getSupabaseClient();
+      if (!sb) return;
+      sb.from(table).select('*').eq('id', id).single().then(({ data }) => {
+        if (data) {
+          const camelItem = toCamel(data);
+          dispatch({ type: 'REALTIME_UPSERT', payload: { table, item: camelItem } });
+        }
+      }).catch((e: unknown) => { handleError(e, { module: 'store', operation: 'CONFLICT_FETCH', severity: 'warn' }); });
+    });
+    return () => { setOnWriteError(() => {}); setOnConflict(() => {}); };
   }, [dispatch]);
 
   // Bridge collab dispatch (used by collab.ts + ai_action pipeline)

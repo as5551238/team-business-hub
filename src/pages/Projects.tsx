@@ -161,7 +161,7 @@ export default function Projects() {
       return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { status: p?.status || 'todo' } } };
     });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { status: status as ProjectStatus } } }));
-    pushBatchUndo(inverses, '批量修改项目状态'); clearSelection();
+    pushBatchUndo(inverses, undefined, '批量修改项目状态'); clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.projects]);
   const batchAssign = useCallback((leaderId: string) => {
     if (!can('edit_projects')) return; if (!leaderId) return;
@@ -170,7 +170,7 @@ export default function Projects() {
       return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { leaderId: p?.leaderId || '' } } };
     });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { leaderId } } }));
-    pushBatchUndo(inverses, '批量分配项目'); clearSelection();
+    pushBatchUndo(inverses, undefined, '批量分配项目'); clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.projects]);
   const batchUpdatePriority = useCallback((priority: string) => {
     if (!can('edit_projects')) return;
@@ -179,7 +179,7 @@ export default function Projects() {
       return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { priority: p?.priority || 'medium' } } };
     });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { priority: priority as TaskPriority } } }));
-    pushBatchUndo(inverses, '批量修改项目优先级'); clearSelection();
+    pushBatchUndo(inverses, undefined, '批量修改项目优先级'); clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.projects]);
   const batchAddTags = useCallback((newTags: string[]) => {
     if (!can('edit_projects')) return;
@@ -191,7 +191,7 @@ export default function Projects() {
       const p = state.projects.find(x => x.id === id);
       if (p) { const merged = [...new Set([...(p.tags || []), ...newTags])]; dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { tags: merged } } }); }
     });
-    pushBatchUndo(inverses, '批量添加项目标签'); clearSelection();
+    pushBatchUndo(inverses, undefined, '批量添加项目标签'); clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.projects]);
   const batchRemoveTags = useCallback((removeTags: string[]) => {
     if (!can('edit_projects')) return;
@@ -203,7 +203,7 @@ export default function Projects() {
       const p = state.projects.find(x => x.id === id);
       if (p) { const filtered = (p.tags || []).filter(t => !removeTags.includes(t)); dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { tags: filtered } } }); }
     });
-    pushBatchUndo(inverses, '批量移除项目标签'); clearSelection();
+    pushBatchUndo(inverses, undefined, '批量移除项目标签'); clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.projects]);
   const batchSetDate = useCallback((field: string, value: string) => {
     if (!can('edit_projects')) return;
@@ -213,7 +213,7 @@ export default function Projects() {
       return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { [field]: oldVal || '' } } };
     });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { [field]: value || '' } } }));
-    pushBatchUndo(inverses, '批量设置项目日期'); clearSelection();
+    pushBatchUndo(inverses, undefined, '批量设置项目日期'); clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.projects]);
   const batchMoveToGoal = useCallback((goalId: string) => {
     if (!can('edit_projects')) return;
@@ -222,7 +222,7 @@ export default function Projects() {
       return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { goalId: p?.goalId || null } } };
     });
     selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { goalId } } }));
-    pushBatchUndo(inverses, '批量移动到目标'); clearSelection();
+    pushBatchUndo(inverses, undefined, '批量移动到目标'); clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.projects]);
 
   function handleCreate() {

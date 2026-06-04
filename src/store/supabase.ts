@@ -148,15 +148,41 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
 let _onWriteError: ((msg: string) => void) | null = null;
 export function setOnWriteError(cb: (msg: string) => void) { _onWriteError = cb; }
 
+// S3-1a: Conflict callback — set by StoreProvider to fetch latest & dispatch REALTIME_UPSERT
+let _onConflict: ((table: string, id: string) => void) | null = null;
+export function setOnConflict(cb: (table: string, id: string) => void) { _onConflict = cb; }
+
 // Failed write queue — persisted to localStorage so tab close doesn't lose data.
-interface PendingWrite { fn: () => Promise<unknown>; label: string; addedAt: number; version: number; serialized?: string; }
+// S3-1c: SerializedWriteOp for cross-page replay
+interface SerializedWriteOp {
+  op: 'update' | 'insert' | 'delete' | 'upsert';
+  table: string;
+  id?: string;           // for update/delete
+  data?: Record<string, unknown>;  // for update/insert
+  dataArray?: Record<string, unknown>[];  // for upsert (batch)
+  oldUpdatedAt?: string;  // for optimistic lock replay
+}
+interface PendingWrite { fn: () => Promise<unknown>; label: string; addedAt: number; version: number; serialized?: SerializedWriteOp; }
 const failedWrites: PendingWrite[] = [];
 const PENDING_WRITES_KEY = 'tbh-pending-writes';
 const MAX_PENDING_WRITES = 100;
 let _writeVersion = 0;
 export function bumpWriteVersion() { _writeVersion++; }
 
+// S3-1c: Auto-retry interval (30s)
+let _retryIntervalId: ReturnType<typeof setInterval> | null = null;
+export function startAutoRetry() {
+  if (_retryIntervalId) return;
+  _retryIntervalId = setInterval(() => {
+    if (failedWrites.length > 0) replayFailedWrites();
+  }, 30000);
+}
+export function stopAutoRetry() {
+  if (_retryIntervalId) { clearInterval(_retryIntervalId); _retryIntervalId = null; }
+}
+
 // Persist pending writes metadata to localStorage (for crash/tab-close resilience)
+// S3-1c: includes serialized op for cross-page replay
 function persistPendingMeta() {
   try {
     const meta = failedWrites.map(w => ({ label: w.label, addedAt: w.addedAt, version: w.version, serialized: w.serialized }));
@@ -169,26 +195,65 @@ function loadPendingMeta() {
     if (!raw) return;
     const meta = JSON.parse(raw);
     if (!Array.isArray(meta)) return;
-    // Note: fn callbacks can't be serialized — these are informational only
-    // Actual replay only works within the same session; persisted items serve as audit trail
+    // S3-1c: Reconstruct fn from serialized op for cross-page replay
     for (const m of meta) {
-      if (failedWrites.length < MAX_PENDING_WRITES) {
-        failedWrites.push({ fn: async () => {}, label: m.label, addedAt: m.addedAt, version: m.version, serialized: m.serialized });
-      }
+      if (failedWrites.length >= MAX_PENDING_WRITES) break;
+      const fn = reconstructFn(m.serialized);
+      failedWrites.push({ fn, label: m.label || 'unknown', addedAt: m.addedAt || Date.now(), version: m.version || 0, serialized: m.serialized });
     }
+    // Auto-start retry if there are pending writes
+    if (failedWrites.length > 0) startAutoRetry();
   } catch (e) { handleError(e, { module: 'store', operation: 'LS_LOAD_PENDING', severity: 'debug' }); }
+}
+
+/** S3-1c: Reconstruct a Supabase write function from a serialized operation */
+function reconstructFn(sop: SerializedWriteOp | undefined): () => Promise<unknown> {
+  if (!sop) return async () => {};
+  const sb = getSupabaseClient();
+  if (!sb) return async () => {};
+  switch (sop.op) {
+    case 'update':
+      return async () => {
+        let q = sb.from(sop.table).update(filterColumns(sop.table, sop.data || {}), { count: 'exact' }).eq('id', sop.id || '');
+        if (sop.oldUpdatedAt) q = q.eq('updated_at', sop.oldUpdatedAt);
+        const res = await q;
+        if (res.error) throw res.error;
+      };
+    case 'insert':
+      return async () => {
+        const res = await sb.from(sop.table).upsert(filterColumns(sop.table, toSnake(sop.data || {})), { onConflict: 'id' });
+        if (res.error) throw res.error;
+      };
+    case 'delete':
+      return async () => {
+        const res = await sb.from(sop.table).delete().eq('id', sop.id || '');
+        if (res.error) throw res.error;
+      };
+    case 'upsert':
+      return async () => {
+        const snakeData = (sop.dataArray || []).map(d => filterColumns(sop.table, toSnake(d)));
+        for (let i = 0; i < snakeData.length; i += 100) {
+          const res = await sb.from(sop.table).upsert(snakeData.slice(i, i + 100), { onConflict: 'id' });
+          if (res.error) throw res.error;
+        }
+      };
+    default:
+      return async () => {};
+  }
 }
 loadPendingMeta();
 
-async function withRetry(fn: () => Promise<unknown>, retries = 2, label = 'write'): Promise<void> {
+async function withRetry(fn: () => Promise<unknown>, retries = 2, label = 'write', serialized?: SerializedWriteOp): Promise<void> {
   for (let i = 0; i <= retries; i++) {
     try { await fn(); _writeVersion++; return; } catch (e: unknown) {
       if (i === retries) {
         handleError(e, { module: 'store', operation: `DB_WRITE_${label.toUpperCase()}` as 'DB_WRITE_GOALS', severity: 'error' });
         // Queue for replay on reconnect instead of silently losing data
         if (failedWrites.length < MAX_PENDING_WRITES) {
-          failedWrites.push({ fn, label, addedAt: Date.now(), version: _writeVersion });
+          failedWrites.push({ fn, label, addedAt: Date.now(), version: _writeVersion, serialized });
           persistPendingMeta();
+          // S3-1c: auto-start retry timer
+          startAutoRetry();
         }
         _onWriteError?.('数据同步失败，已自动重试。请检查网络后刷新页面。');
         return;
@@ -198,7 +263,7 @@ async function withRetry(fn: () => Promise<unknown>, retries = 2, label = 'write
   }
 }
 
-/** Replay all queued failed writes — called when connection is restored */
+/** Replay all queued failed writes — called when connection is restored or by auto-retry timer */
 export async function replayFailedWrites(): Promise<void> {
   if (failedWrites.length === 0) return;
   const batch = failedWrites.splice(0, failedWrites.length);
@@ -210,7 +275,7 @@ export async function replayFailedWrites(): Promise<void> {
       if (import.meta.env.DEV) console.log(`[Supabase] Skipping stale write for ${pw.label} (v${pw.version} < v${_writeVersion})`);
       continue;
     }
-    try { await pw.fn(); } catch (e) {
+    try { await pw.fn(); _writeVersion++; } catch (e) {
       handleError(e, { module: 'store', operation: 'DB_WRITE_REPLAY', severity: 'error' });
       if (failedWrites.length < MAX_PENDING_WRITES) {
         failedWrites.push({ ...pw, addedAt: Date.now(), version: _writeVersion });
@@ -218,6 +283,8 @@ export async function replayFailedWrites(): Promise<void> {
       }
     }
   }
+  // S3-1c: stop auto-retry if queue is now empty
+  if (failedWrites.length === 0) stopAutoRetry();
 }
 
 /** Whitelist of DB columns per table — prevents sending unknown columns that cause 400 errors */
@@ -269,17 +336,21 @@ export async function supabaseUpsert(table: string, data: Record<string, unknown
   if (!sb) return;
   const arr = Array.isArray(data) ? data : [data];
   const snakeData = arr.map(d => filterColumns(table, toSnake(d)));
+  // S3-1c: serialize write intent for cross-page replay
+  const serialized: SerializedWriteOp = { op: 'upsert', table, dataArray: arr };
   await withRetry(async () => {
     for (let i = 0; i < snakeData.length; i += 100) {
       const res = await sb.from(table).upsert(snakeData.slice(i, i + 100), { onConflict: 'id' });
       if (res.error) throw res.error;
     }
-  });
+  }, 2, `upsert_${table}`, serialized);
 }
 
 export async function supabaseUpdate(table: string, id: string, data: Record<string, unknown>, oldUpdatedAt?: string) {
   const sb = getSupabaseClient();
   if (!sb) return;
+  // S3-1c: serialize write intent for cross-page replay
+  const serialized: SerializedWriteOp = { op: 'update', table, id, data, oldUpdatedAt };
   await withRetry(async () => {
     let q = sb.from(table).update(filterColumns(table, toSnake(data)), { count: 'exact' }).eq('id', id);
     // Optimistic locking (DAT-01): only apply if record hasn't changed since last read
@@ -289,27 +360,33 @@ export async function supabaseUpdate(table: string, id: string, data: Record<str
     // If optimistic lock was specified but no rows affected, data was modified elsewhere
     if (oldUpdatedAt && res.count === 0) {
       console.warn(`[supabaseUpdate] optimistic lock conflict: ${table}/${id}`);
-      _onWriteError?.('数据已被其他人修改，请刷新页面后重试。');
+      _onWriteError?.('数据已被其他人修改，正在刷新最新数据…');
+      // S3-1a: Auto-rollback — fetch latest version and notify store
+      _onConflict?.(table, id);
     }
-  });
+  }, 2, `update_${table}`, serialized);
 }
 
 export async function supabaseInsert(table: string, data: Record<string, unknown>) {
   const sb = getSupabaseClient();
   if (!sb) return;
+  // S3-1c: serialize write intent for cross-page replay
+  const serialized: SerializedWriteOp = { op: 'insert', table, data };
   await withRetry(async () => {
     const res = await sb.from(table).upsert(filterColumns(table, toSnake(data)), { onConflict: 'id' });
     if (res.error) throw res.error;
-  });
+  }, 2, `insert_${table}`, serialized);
 }
 
 export async function supabaseDelete(table: string, id: string) {
   const sb = getSupabaseClient();
   if (!sb) return;
+  // S3-1c: serialize write intent for cross-page replay
+  const serialized: SerializedWriteOp = { op: 'delete', table, id };
   await withRetry(async () => {
     const res = await sb.from(table).delete().eq('id', id);
     if (res.error) throw res.error;
-  });
+  }, 2, `delete_${table}`, serialized);
 }
 
 /** Audit log: fire-and-forget write to activities table (SEC-06).

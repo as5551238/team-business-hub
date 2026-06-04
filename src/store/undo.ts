@@ -5,11 +5,16 @@
  *
  * 设计原则: 只入栈有完整逆操作的 action,避免栈卡死
  * 批量UPDATE: 通过 pushBatchUndo 捕获旧值快照,一次入栈多步逆操作
+ *
+ * S3-1b: 持久化到 localStorage + 修复批量 Redo + 扩展可撤销操作(ADD/UPDATE)
  */
 
 import type { Action } from './types';
+import { handleError } from '@/lib/errorHandler';
 
 const MAX_UNDO_STACK = 50;
+const UNDO_LS_KEY = 'tbh-undo-stack';
+const REDO_LS_KEY = 'tbh-redo-stack';
 
 interface UndoEntry {
   action: Action;
@@ -20,7 +25,8 @@ interface UndoEntry {
 
 /** 批量逆操作组 — 一次批量操作的多个撤销步骤 */
 interface BatchUndoGroup {
-  actions: Action[];
+  actions: Action[];         // 逆操作列表
+  originalActions: Action[]; // S3-1b: 原始操作列表,用于重做
   label: string;
   timestamp: number;
 }
@@ -28,8 +34,10 @@ interface BatchUndoGroup {
 let undoStack: (UndoEntry | BatchUndoGroup)[] = [];
 let redoStack: (UndoEntry | BatchUndoGroup)[] = [];
 
-// 可撤销的 action 类型 — 仅包含有完整逆操作的类型
+// 可撤销的 action 类型 — S3-1b: 扩展包含 ADD/DELETE/RESTORE/TOGGLE
 const UNDOABLE_ACTIONS = new Set([
+  // ADD → DELETE (创建后可撤销删除)
+  'ADD_GOAL', 'ADD_PROJECT', 'ADD_TASK',
   // DELETE ↔ RESTORE (双方向)
   'DELETE_GOAL', 'RESTORE_GOAL',
   'DELETE_PROJECT', 'RESTORE_PROJECT',
@@ -94,12 +102,14 @@ export function pushUndo(action: Action): boolean {
   if (undoStack.length > MAX_UNDO_STACK) undoStack.shift();
   // 新操作清空redo栈
   redoStack = [];
+  persistStacks();
   return true;
 }
 
 /**
  * 批量操作入栈 — 用于批量 UPDATE操作
  * @param inverseActions 逆操作列表(还原所有修改的旧值)
+ * @param originalActions 原始操作列表(用于重做, S3-1b)
  * @param label 操作描述
  * @example
  *   // 在批量操作前收集旧值
@@ -107,14 +117,18 @@ export function pushUndo(action: Action): boolean {
  *     const item = state.tasks.find(t => t.id === id);
  *     return { type: 'UPDATE_TASK', payload: { id, updates: { tags: item.tags } } };
  *   });
- *   pushBatchUndo(inverses, '批量添加标签');
+ *   const originals = selectedIds.map(id => {
+ *     return { type: 'UPDATE_TASK', payload: { id, updates: { tags: newTags } } };
+ *   });
+ *   pushBatchUndo(inverses, originals, '批量添加标签');
  *   // 然后执行批量更新
  */
-export function pushBatchUndo(inverseActions: Action[], label: string): boolean {
+export function pushBatchUndo(inverseActions: Action[], originalActions: Action[] | undefined, label: string): boolean {
   if (inverseActions.length === 0) return false;
-  undoStack.push({ actions: inverseActions, label, timestamp: Date.now() });
+  undoStack.push({ actions: inverseActions, originalActions: originalActions || inverseActions, label, timestamp: Date.now() });
   if (undoStack.length > MAX_UNDO_STACK) undoStack.shift();
   redoStack = [];
+  persistStacks();
   return true;
 }
 
@@ -131,6 +145,7 @@ export function popUndo(): Action | Action[] | null {
   const entry = undoStack.pop()!;
   redoStack.push(entry);
   if (redoStack.length > MAX_UNDO_STACK) redoStack.shift();
+  persistStacks();
   if (isBatchGroup(entry)) {
     return entry.actions;
   }
@@ -141,10 +156,10 @@ export function popRedo(): Action | Action[] | null {
   if (redoStack.length === 0) return null;
   const entry = redoStack.pop()!;
   undoStack.push(entry);
+  persistStacks();
   if (isBatchGroup(entry)) {
-    // 批量重做: 需要保存原始操作 — 但BatchUndoGroup只有逆操作
-    // 重做时返回空(简化: 批量操作暂不支持重做)
-    return null;
+    // S3-1b: 返回原始操作完成重做
+    return entry.originalActions;
   }
   return (entry as UndoEntry).action;
 }
@@ -159,4 +174,85 @@ export function getRedoLabel(): string | null {
 
 export function getUndoStackSize() { return undoStack.length; }
 export function getRedoStackSize() { return redoStack.length; }
-export function clearUndoStack() { undoStack = []; redoStack = []; }
+export function clearUndoStack() { undoStack = []; redoStack = []; persistStacks(); }
+
+// ==================== S3-1b: localStorage 持久化 ====================
+
+/** Serialize a stack entry to a JSON-safe format */
+function serializeEntry(entry: UndoEntry | BatchUndoGroup): unknown {
+  if (isBatchGroup(entry)) {
+    return { actions: entry.actions, originalActions: entry.originalActions, label: entry.label, timestamp: entry.timestamp, _type: 'batch' };
+  }
+  const e = entry as UndoEntry;
+  return { action: e.action, inverseAction: e.inverseAction, label: e.label, timestamp: e.timestamp, _type: 'single' };
+}
+
+/** Deserialize a stack entry from localStorage */
+function deserializeEntry(raw: Record<string, unknown>): UndoEntry | BatchUndoGroup | null {
+  try {
+    if (raw._type === 'batch') {
+      return {
+        actions: (raw.actions || []) as Action[],
+        originalActions: (raw.originalActions || []) as Action[],
+        label: (raw.label as string) || '批量操作',
+        timestamp: (raw.timestamp as number) || Date.now(),
+      };
+    }
+    return {
+      action: raw.action as Action,
+      inverseAction: raw.inverseAction as Action,
+      label: (raw.label as string) || '操作',
+      timestamp: (raw.timestamp as number) || Date.now(),
+    };
+  } catch (e) {
+    handleError(e, { module: 'store', operation: 'UNDO_DESERIALIZE', severity: 'debug' });
+    return null;
+  }
+}
+
+/** Persist both stacks to localStorage (debounced internally) */
+let _persistTimer: ReturnType<typeof setTimeout> | null = null;
+function persistStacks() {
+  if (_persistTimer) clearTimeout(_persistTimer);
+  _persistTimer = setTimeout(() => {
+    try {
+      // Limit: only persist last 20 entries per stack to control size
+      const undoSlice = undoStack.slice(-20).map(serializeEntry);
+      const redoSlice = redoStack.slice(-20).map(serializeEntry);
+      localStorage.setItem(UNDO_LS_KEY, JSON.stringify(undoSlice));
+      localStorage.setItem(REDO_LS_KEY, JSON.stringify(redoSlice));
+    } catch (e) {
+      handleError(e, { module: 'store', operation: 'LS_PERSIST_UNDO', severity: 'debug' });
+    }
+    _persistTimer = null;
+  }, 500);
+}
+
+/** Load stacks from localStorage on module init */
+function loadStacks() {
+  try {
+    const undoRaw = localStorage.getItem(UNDO_LS_KEY);
+    if (undoRaw) {
+      const parsed = JSON.parse(undoRaw);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          const entry = deserializeEntry(item);
+          if (entry) undoStack.push(entry);
+        }
+      }
+    }
+    const redoRaw = localStorage.getItem(REDO_LS_KEY);
+    if (redoRaw) {
+      const parsed = JSON.parse(redoRaw);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          const entry = deserializeEntry(item);
+          if (entry) redoStack.push(entry);
+        }
+      }
+    }
+  } catch (e) {
+    handleError(e, { module: 'store', operation: 'LS_LOAD_UNDO', severity: 'debug' });
+  }
+}
+loadStacks();

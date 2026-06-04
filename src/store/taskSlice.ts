@@ -157,9 +157,10 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
       const now = tsNow();
       const t = s.tasks.find(t => t.id === tid);
       if (t) {
+        const oldUpdatedAt = t.updatedAt;
         t.deletedAt = now;
         t.updatedAt = now;
-        supabaseUpdate('tasks', tid, { deleted_at: now, updated_at: now });
+        supabaseUpdate('tasks', tid, { deleted_at: now, updated_at: now }, oldUpdatedAt);
       }
       logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '任务', targetId: tid, targetTitle: t?.title || '' });
       return s;
@@ -169,9 +170,10 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
       const s = needMutate(state, ['tasks']);
       const t = s.tasks.find(t => t.id === tid);
       if (t) {
+        const oldUpdatedAt = t.updatedAt;
         t.deletedAt = undefined;
         t.updatedAt = tsNow();
-        supabaseUpdate('tasks', tid, { deleted_at: null, updated_at: t.updatedAt });
+        supabaseUpdate('tasks', tid, { deleted_at: null, updated_at: t.updatedAt }, oldUpdatedAt);
       }
       return s;
     }
@@ -181,11 +183,12 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
       const now = tsNow();
       const tIdx = s.tasks.findIndex(t => t.id === action.payload.taskId);
       if (tIdx !== -1) {
+        const oldUpdatedAt = s.tasks[tIdx].updatedAt;
         s.tasks[tIdx].subtasks = s.tasks[tIdx].subtasks.map(st =>
           st.id === action.payload.subtaskId ? { ...st, completed: !st.completed } : st
         );
         s.tasks[tIdx].updatedAt = now;
-        supabaseUpdate('tasks', action.payload.taskId, { subtasks: s.tasks[tIdx].subtasks, updated_at: now });
+        supabaseUpdate('tasks', action.payload.taskId, { subtasks: s.tasks[tIdx].subtasks, updated_at: now }, oldUpdatedAt);
         cascadeToggleSubtask(s, s.tasks[tIdx]);
       }
       return s;
@@ -196,6 +199,7 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
       const now = tsNow();
       const tIdx = s.tasks.findIndex(t => t.id === action.payload.taskId);
       if (tIdx !== -1) {
+        const oldUpdatedAt = s.tasks[tIdx].updatedAt;
         const subPayload = action.payload.subtask;
         const newSub: SubTask = {
           ...subPayload,
@@ -211,7 +215,7 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
         };
         s.tasks[tIdx].subtasks.push(newSub);
         s.tasks[tIdx].updatedAt = now;
-        supabaseUpdate('tasks', action.payload.taskId, { subtasks: s.tasks[tIdx].subtasks, updated_at: now });
+        supabaseUpdate('tasks', action.payload.taskId, { subtasks: s.tasks[tIdx].subtasks, updated_at: now }, oldUpdatedAt);
       }
       return s;
     }

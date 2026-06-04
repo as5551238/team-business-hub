@@ -203,7 +203,7 @@ export default function Goals() {
       dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: status as GoalStatus } } });
       broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: '', newValue: status });
     });
-    pushBatchUndo(inverses, '批量修改目标状态');
+    pushBatchUndo(inverses, undefined, '批量修改目标状态');
     clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.goals]);
 
@@ -216,7 +216,7 @@ export default function Goals() {
     ids.forEach(id => {
       dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { leaderId: assigneeId } } });
     });
-    pushBatchUndo(inverses, '批量分配目标');
+    pushBatchUndo(inverses, undefined, '批量分配目标');
     clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.goals]);
 
@@ -227,7 +227,7 @@ export default function Goals() {
       return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { priority: g?.priority || 'medium' } } };
     });
     ids.forEach(id => dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { priority: priority as TaskPriority } } }));
-    pushBatchUndo(inverses, '批量修改目标优先级');
+    pushBatchUndo(inverses, undefined, '批量修改目标优先级');
     clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.goals]);
 
@@ -244,7 +244,7 @@ export default function Goals() {
         dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { tags: merged } } });
       }
     });
-    pushBatchUndo(inverses, '批量添加目标标签');
+    pushBatchUndo(inverses, undefined, '批量添加目标标签');
     clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.goals]);
 
@@ -261,7 +261,7 @@ export default function Goals() {
         dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { tags: filtered } } });
       }
     });
-    pushBatchUndo(inverses, '批量移除目标标签');
+    pushBatchUndo(inverses, undefined, '批量移除目标标签');
     clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.goals]);
 
@@ -273,7 +273,7 @@ export default function Goals() {
       return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { [field]: oldVal || '' } } };
     });
     ids.forEach(id => dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { [field]: value || '' } } }));
-    pushBatchUndo(inverses, '批量设置目标日期');
+    pushBatchUndo(inverses, undefined, '批量设置目标日期');
     clearSelection();
   }, [selectedIds, dispatch, can, clearSelection, state.goals]);
 

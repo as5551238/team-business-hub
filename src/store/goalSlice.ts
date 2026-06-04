@@ -100,9 +100,10 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const now = tsNow();
       const deletedGoal = s.goals.find(g => g.id === gid);
       if (deletedGoal) {
+        const oldUpdatedAt = deletedGoal.updatedAt;
         deletedGoal.deletedAt = now;
         deletedGoal.updatedAt = now;
-        supabaseUpdate('goals', gid, { deleted_at: now, updated_at: now });
+        supabaseUpdate('goals', gid, { deleted_at: now, updated_at: now }, oldUpdatedAt);
       }
       return s;
     }
@@ -111,9 +112,10 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const s = needMutate(state, ['goals']);
       const goal = s.goals.find(g => g.id === gid);
       if (goal) {
+        const oldUpdatedAt = goal.updatedAt;
         goal.deletedAt = undefined;
         goal.updatedAt = tsNow();
-        supabaseUpdate('goals', gid, { deleted_at: null, updated_at: goal.updatedAt });
+        supabaseUpdate('goals', gid, { deleted_at: null, updated_at: goal.updatedAt }, oldUpdatedAt);
       }
       return s;
     }
@@ -124,6 +126,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       if (action.payload.newParentId === action.payload.goalId) return state;
       const idx = s.goals.findIndex(g => g.id === action.payload.goalId);
       if (idx !== -1) {
+        const oldUpdatedAt = s.goals[idx].updatedAt;
         s.goals[idx].parentId = action.payload.newParentId;
         s.goals[idx].level = calcGoalLevel(s.goals, action.payload.goalId, action.payload.newParentId);
         s.goals[idx].updatedAt = now;
@@ -137,7 +140,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
           });
         }
         recalcDescendants(action.payload.goalId);
-        supabaseUpdate('goals', action.payload.goalId, { parent_id: action.payload.newParentId, level: s.goals[idx].level, updated_at: now });
+        supabaseUpdate('goals', action.payload.goalId, { parent_id: action.payload.newParentId, level: s.goals[idx].level, updated_at: now }, oldUpdatedAt);
       }
       return s;
     }
@@ -148,6 +151,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const idx = s.goals.findIndex(g => g.id === action.payload.goalId);
       if (idx !== -1) {
         const g = s.goals[idx];
+        const oldUpdatedAt = g.updatedAt;
         g.keyResults = g.keyResults.map(kr => kr.id === action.payload.krId ? { ...kr, currentValue: action.payload.value } : kr);
         const krInfo = computeGoalProgressInfo(s.goals, action.payload.goalId);
         applyGoalProgressInfo(g, krInfo);
@@ -155,7 +159,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
         g.updatedAt = now;
         // Cross-slice: update parent goal progress
         cascadeGoalProgressUpdate(s, action.payload.goalId, now);
-        supabaseUpdate('goals', action.payload.goalId, { key_results: g.keyResults, progress: g.progress, updated_at: now });
+        supabaseUpdate('goals', action.payload.goalId, { key_results: g.keyResults, progress: g.progress, updated_at: now }, oldUpdatedAt);
       }
       return s;
     }
@@ -165,10 +169,11 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const g = s.goals.find(g => g.id === action.payload);
       if (!g) return state;
       const now = tsNow();
+      const oldUpdatedAt = g.updatedAt;
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'pending', updatedAt: now };
       s.approvalAudits.push({ id: genId('aa'), goalId: g.id, action: 'submit', actorId: s.currentUser?.id ?? '', comment: '', createdAt: now });
-      supabaseUpdate('goals', g.id, { approval_status: 'pending', updated_at: now });
+      supabaseUpdate('goals', g.id, { approval_status: 'pending', updated_at: now }, oldUpdatedAt);
       return s;
     }
 
@@ -177,10 +182,11 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const g = s.goals.find(g => g.id === action.payload.id);
       if (!g || g.approvalStatus !== 'pending') return state;
       const now = tsNow();
+      const oldUpdatedAt = g.updatedAt;
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'approved', updatedAt: now };
       s.approvalAudits.push({ id: genId('aa'), goalId: g.id, action: 'approve', actorId: s.currentUser?.id ?? '', comment: action.payload.comment, createdAt: now });
-      supabaseUpdate('goals', g.id, { approval_status: 'approved', updated_at: now });
+      supabaseUpdate('goals', g.id, { approval_status: 'approved', updated_at: now }, oldUpdatedAt);
       return s;
     }
 
@@ -189,10 +195,11 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const g = s.goals.find(g => g.id === action.payload.id);
       if (!g || g.approvalStatus !== 'pending') return state;
       const now = tsNow();
+      const oldUpdatedAt = g.updatedAt;
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'rejected', updatedAt: now };
       s.approvalAudits.push({ id: genId('aa'), goalId: g.id, action: 'reject', actorId: s.currentUser?.id ?? '', comment: action.payload.comment, createdAt: now });
-      supabaseUpdate('goals', g.id, { approval_status: 'rejected', updated_at: now });
+      supabaseUpdate('goals', g.id, { approval_status: 'rejected', updated_at: now }, oldUpdatedAt);
       return s;
     }
 
@@ -201,10 +208,11 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const g = s.goals.find(g => g.id === action.payload);
       if (!g || g.approvalStatus !== 'pending') return state;
       const now = tsNow();
+      const oldUpdatedAt = g.updatedAt;
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'draft', updatedAt: now };
       s.approvalAudits.push({ id: genId('aa'), goalId: g.id, action: 'recall', actorId: s.currentUser?.id ?? '', comment: '', createdAt: now });
-      supabaseUpdate('goals', g.id, { approval_status: 'draft', updated_at: now });
+      supabaseUpdate('goals', g.id, { approval_status: 'draft', updated_at: now }, oldUpdatedAt);
       return s;
     }
 

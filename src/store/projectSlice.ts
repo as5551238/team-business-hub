@@ -94,9 +94,10 @@ export function projectReducer(state: AppState, action: Action): AppState | null
       const now = tsNow();
       const deletedProject = s.projects.find(p => p.id === pid);
       if (deletedProject) {
+        const oldUpdatedAt = deletedProject.updatedAt;
         deletedProject.deletedAt = now;
         deletedProject.updatedAt = now;
-        supabaseUpdate('projects', pid, { deleted_at: now, updated_at: now });
+        supabaseUpdate('projects', pid, { deleted_at: now, updated_at: now }, oldUpdatedAt);
       }
       logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '项目', targetId: pid, targetTitle: deletedProject?.title || '' });
       return s;
@@ -106,9 +107,10 @@ export function projectReducer(state: AppState, action: Action): AppState | null
       const s = needMutate(state, ['projects']);
       const project = s.projects.find(p => p.id === pid);
       if (project) {
+        const oldUpdatedAt = project.updatedAt;
         project.deletedAt = undefined;
         project.updatedAt = tsNow();
-        supabaseUpdate('projects', pid, { deleted_at: null, updated_at: project.updatedAt });
+        supabaseUpdate('projects', pid, { deleted_at: null, updated_at: project.updatedAt }, oldUpdatedAt);
       }
       return s;
     }

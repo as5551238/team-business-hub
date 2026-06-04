@@ -63,10 +63,11 @@ export function cascadeUpdateTaskDone(
       if (allDone) {
         const { allowed: parentAutoOk } = validateStatusFlow(s, parentTask.id, 'task', parentTask.status, 'done');
         if (parentAutoOk) {
+          const oldParentUpdatedAt = parentTask.updatedAt;
           parentTask.status = 'done';
           parentTask.completedAt = now;
           parentTask.updatedAt = now;
-          supabaseUpdate('tasks', parentTask.id, { status: 'done', completed_at: parentTask.completedAt, updated_at: now });
+          supabaseUpdate('tasks', parentTask.id, { status: 'done', completed_at: parentTask.completedAt, updated_at: now }, oldParentUpdatedAt);
           s.notifications.unshift({ id: genId('n'), type: 'sync', title: '任务自动完成', message: `「${parentTask.title}」的所有子任务已完成，已自动标记为完成`, relatedId: parentTask.id, relatedType: 'task', memberId: parentTask.leaderId || currentUserId || '', read: false, createdAt: now });
         }
       }
@@ -80,9 +81,10 @@ export function cascadeUpdateTaskDone(
       const goal = s.goals[gIdx];
       const allKRsMet = (goal.keyResults ?? []).length > 0 && goal.keyResults.every(kr => kr.targetValue > 0 && kr.currentValue >= kr.targetValue);
       if (allKRsMet && goal.progress < 100) {
+        const oldGoalUpdatedAt = s.goals[gIdx].updatedAt;
         s.goals[gIdx].progress = 100;
         s.goals[gIdx].updatedAt = now;
-        supabaseUpdate('goals', goal.id, { progress: 100, updated_at: now });
+        supabaseUpdate('goals', goal.id, { progress: 100, updated_at: now }, oldGoalUpdatedAt);
         s.notifications.unshift({ id: genId('n'), type: 'sync', title: '目标自动达成', message: `「${goal.title}」的所有关键结果已达标，进度自动更新为100%`, relatedId: goal.id, relatedType: 'goal', memberId: goal.leaderId || currentUserId || '', read: false, createdAt: now });
       }
     }
@@ -168,7 +170,7 @@ export function cascadeDeleteMember(
     const prevLen = g.supporterIds?.length ?? 0;
     g.supporterIds = (g.supporterIds ?? []).filter(id => id !== memberId);
     if (g.supporterIds.length !== prevLen) changed = true;
-    if (changed) { g.updatedAt = now; supabaseUpdate('goals', g.id, { leader_id: g.leaderId, supporter_ids: g.supporterIds, updated_at: now }); }
+    if (changed) { const oldGUpdatedAt = g.updatedAt; g.updatedAt = now; supabaseUpdate('goals', g.id, { leader_id: g.leaderId, supporter_ids: g.supporterIds, updated_at: now }, oldGUpdatedAt); }
   });
   s.projects.forEach(p => {
     let changed = false;
@@ -176,7 +178,7 @@ export function cascadeDeleteMember(
     const prevLen = p.supporterIds?.length ?? 0;
     p.supporterIds = (p.supporterIds ?? []).filter(id => id !== memberId);
     if (p.supporterIds.length !== prevLen) changed = true;
-    if (changed) { p.updatedAt = now; supabaseUpdate('projects', p.id, { leader_id: p.leaderId, supporter_ids: p.supporterIds, updated_at: now }); }
+    if (changed) { const oldPUUpdatedAt = p.updatedAt; p.updatedAt = now; supabaseUpdate('projects', p.id, { leader_id: p.leaderId, supporter_ids: p.supporterIds, updated_at: now }, oldPUUpdatedAt); }
   });
   s.tasks.forEach(t => {
     let changed = false;
@@ -184,7 +186,7 @@ export function cascadeDeleteMember(
     const prevLen = t.supporterIds?.length ?? 0;
     t.supporterIds = (t.supporterIds ?? []).filter(id => id !== memberId);
     if (t.supporterIds.length !== prevLen) changed = true;
-    if (changed) { t.updatedAt = now; supabaseUpdate('tasks', t.id, { leader_id: t.leaderId, supporter_ids: t.supporterIds, updated_at: now }); }
+    if (changed) { const oldTUpdatedAt = t.updatedAt; t.updatedAt = now; supabaseUpdate('tasks', t.id, { leader_id: t.leaderId, supporter_ids: t.supporterIds, updated_at: now }, oldTUpdatedAt); }
   });
   s.comments.forEach(c => {
     if (c.memberId === memberId) { c.memberId = null; supabaseUpdate('comments', c.id, { member_id: null }); }
@@ -201,23 +203,26 @@ export function cascadeGoalStatusChange(
   const cascadeStatus = newStatus === 'done' ? 'done' : newStatus === 'blocked' ? 'blocked' : 'cancelled';
   s.projects.filter(p => p.goalId === goalId && !p.deletedAt).forEach(p => {
     if (p.status !== cascadeStatus) {
+      const oldPUUpdatedAt = p.updatedAt;
       const pIdx = s.projects.indexOf(p);
       s.projects[pIdx] = { ...p, status: cascadeStatus, updatedAt: now };
-      supabaseUpdate('projects', p.id, { status: cascadeStatus, updated_at: now });
+      supabaseUpdate('projects', p.id, { status: cascadeStatus, updated_at: now }, oldPUUpdatedAt);
       s.tasks.filter(t => t.projectId === p.id && !t.deletedAt).forEach(t => {
         if (t.status !== cascadeStatus) {
+          const oldTUpdatedAt = t.updatedAt;
           const tIdx = s.tasks.indexOf(t);
           s.tasks[tIdx] = { ...t, status: cascadeStatus, updatedAt: now, ...(cascadeStatus === 'done' ? { completedAt: now } : { completedAt: null }) };
-          supabaseUpdate('tasks', t.id, { status: cascadeStatus, updated_at: now, ...(cascadeStatus === 'done' ? { completed_at: now } : { completed_at: null }) });
+          supabaseUpdate('tasks', t.id, { status: cascadeStatus, updated_at: now, ...(cascadeStatus === 'done' ? { completed_at: now } : { completed_at: null }) }, oldTUpdatedAt);
         }
       });
     }
   });
   s.tasks.filter(t => t.goalId === goalId && !t.projectId && !t.deletedAt).forEach(t => {
     if (t.status !== cascadeStatus) {
+      const oldTUpdatedAt = t.updatedAt;
       const tIdx = s.tasks.indexOf(t);
       s.tasks[tIdx] = { ...t, status: cascadeStatus, updatedAt: now, ...(cascadeStatus === 'done' ? { completedAt: now } : { completedAt: null }) };
-      supabaseUpdate('tasks', t.id, { status: cascadeStatus, updated_at: now, ...(cascadeStatus === 'done' ? { completed_at: now } : { completed_at: null }) });
+      supabaseUpdate('tasks', t.id, { status: cascadeStatus, updated_at: now, ...(cascadeStatus === 'done' ? { completed_at: now } : { completed_at: null }) }, oldTUpdatedAt);
     }
   });
 }
@@ -238,18 +243,20 @@ export function cascadeGoalProgressUpdate(
     if (pIdx !== -1) {
       const pInfo = computeGoalProgressInfo(s.goals, goal.parentId);
       applyGoalProgressInfo(s.goals[pIdx], pInfo);
+      const oldPUpdatedAt = s.goals[pIdx].updatedAt;
       s.goals[pIdx].progress = pInfo.progress;
       s.goals[pIdx].updatedAt = now;
-      supabaseUpdate('goals', goal.parentId, { progress: s.goals[pIdx].progress, updated_at: now });
+      supabaseUpdate('goals', goal.parentId, { progress: s.goals[pIdx].progress, updated_at: now }, oldPUpdatedAt);
       let ancestorId = s.goals[pIdx].parentId;
       while (ancestorId) {
         const aIdx = s.goals.findIndex(g => g.id === ancestorId);
         if (aIdx === -1) break;
         const aInfo = computeGoalProgressInfo(s.goals, ancestorId);
         applyGoalProgressInfo(s.goals[aIdx], aInfo);
+        const oldAUpdatedAt = s.goals[aIdx].updatedAt;
         s.goals[aIdx].progress = aInfo.progress;
         s.goals[aIdx].updatedAt = now;
-        supabaseUpdate('goals', ancestorId, { progress: s.goals[aIdx].progress, updated_at: now });
+        supabaseUpdate('goals', ancestorId, { progress: s.goals[aIdx].progress, updated_at: now }, oldAUpdatedAt);
         ancestorId = s.goals[aIdx].parentId;
       }
     }
@@ -290,17 +297,17 @@ export function cascadeDeleteTag(
   s.goals.forEach(g => {
     const prevLen = g.tags?.length ?? 0;
     g.tags = (g.tags ?? []).filter(id => id !== tagId);
-    if (g.tags.length !== prevLen) { g.updatedAt = now; supabaseUpdate('goals', g.id, { tags: g.tags, updated_at: now }); }
+    if (g.tags.length !== prevLen) { const oldGUpdatedAt = g.updatedAt; g.updatedAt = now; supabaseUpdate('goals', g.id, { tags: g.tags, updated_at: now }, oldGUpdatedAt); }
   });
   s.projects.forEach(p => {
     const prevLen = p.tags?.length ?? 0;
     p.tags = (p.tags ?? []).filter(id => id !== tagId);
-    if (p.tags.length !== prevLen) { p.updatedAt = now; supabaseUpdate('projects', p.id, { tags: p.tags, updated_at: now }); }
+    if (p.tags.length !== prevLen) { const oldPUUpdatedAt = p.updatedAt; p.updatedAt = now; supabaseUpdate('projects', p.id, { tags: p.tags, updated_at: now }, oldPUUpdatedAt); }
   });
   s.tasks.forEach(t => {
     const prevLen = t.tags?.length ?? 0;
     t.tags = (t.tags ?? []).filter(id => id !== tagId);
-    if (t.tags.length !== prevLen) { t.updatedAt = now; supabaseUpdate('tasks', t.id, { tags: t.tags, updated_at: now }); }
+    if (t.tags.length !== prevLen) { const oldTUpdatedAt = t.updatedAt; t.updatedAt = now; supabaseUpdate('tasks', t.id, { tags: t.tags, updated_at: now }, oldTUpdatedAt); }
   });
 }
 
@@ -309,9 +316,9 @@ export function cascadeDeleteCategory(
   categoryId: string,
   now: string,
 ): void {
-  s.goals.forEach(g => { if (g.category === categoryId) { g.category = ''; g.updatedAt = now; supabaseUpdate('goals', g.id, { category: '', updated_at: now }); } });
-  s.projects.forEach(p => { if (p.category === categoryId) { p.category = ''; p.updatedAt = now; supabaseUpdate('projects', p.id, { category: '', updated_at: now }); } });
-  s.tasks.forEach(t => { if (t.category === categoryId) { t.category = ''; t.updatedAt = now; supabaseUpdate('tasks', t.id, { category: '', updated_at: now }); } });
+  s.goals.forEach(g => { if (g.category === categoryId) { const oldGUpdatedAt = g.updatedAt; g.category = ''; g.updatedAt = now; supabaseUpdate('goals', g.id, { category: '', updated_at: now }, oldGUpdatedAt); } });
+  s.projects.forEach(p => { if (p.category === categoryId) { const oldPUUpdatedAt = p.updatedAt; p.category = ''; p.updatedAt = now; supabaseUpdate('projects', p.id, { category: '', updated_at: now }, oldPUUpdatedAt); } });
+  s.tasks.forEach(t => { if (t.category === categoryId) { const oldTUpdatedAt = t.updatedAt; t.category = ''; t.updatedAt = now; supabaseUpdate('tasks', t.id, { category: '', updated_at: now }, oldTUpdatedAt); } });
 }
 
 export function cascadeDeleteSprint(
@@ -320,7 +327,7 @@ export function cascadeDeleteSprint(
   now: string,
 ): void {
   s.tasks.forEach(t => {
-    if (t.sprintId === sprintId) { t.sprintId = null; t.updatedAt = now; supabaseUpdate('tasks', t.id, { sprint_id: null, updated_at: now }); }
+    if (t.sprintId === sprintId) { const oldTUpdatedAt = t.updatedAt; t.sprintId = null; t.updatedAt = now; supabaseUpdate('tasks', t.id, { sprint_id: null, updated_at: now }, oldTUpdatedAt); }
   });
 }
 
@@ -369,16 +376,18 @@ function incrementKrOnTaskDone(s: AppState, task: Task, now: string, currentUser
   const gInfo = computeGoalProgressInfo(s.goals, goal.id);
   applyGoalProgressInfo(goal, gInfo);
   goal.progress = gInfo.progress;
+  const oldGoalUpdatedAt = goal.updatedAt;
   goal.updatedAt = now;
-  supabaseUpdate('goals', goal.id, { key_results: goal.keyResults, progress: goal.progress, updated_at: now });
+  supabaseUpdate('goals', goal.id, { key_results: goal.keyResults, progress: goal.progress, updated_at: now }, oldGoalUpdatedAt);
   if (goal.parentId) {
     const pIdx = s.goals.findIndex(g => g.id === goal.parentId);
     if (pIdx !== -1) {
       const pInfo = computeGoalProgressInfo(s.goals, goal.parentId);
       applyGoalProgressInfo(s.goals[pIdx], pInfo);
+      const oldPUpdatedAt = s.goals[pIdx].updatedAt;
       s.goals[pIdx].progress = pInfo.progress;
       s.goals[pIdx].updatedAt = now;
-      supabaseUpdate('goals', goal.parentId, { progress: s.goals[pIdx].progress, updated_at: now });
+      supabaseUpdate('goals', goal.parentId, { progress: s.goals[pIdx].progress, updated_at: now }, oldPUpdatedAt);
     }
   }
   s.notifications.unshift({ id: genId('n'), type: 'sync', title: 'KR 自动更新', message: `「${kr.title}」的当前值已更新为 ${newVal}/${kr.targetValue}`, relatedId: goal.id, relatedType: 'goal', memberId: task.leaderId || currentUserId || '', read: false, createdAt: now });
@@ -397,16 +406,18 @@ function decrementKrOnTaskUndone(s: AppState, oldTask: Task, now: string): void 
   const gInfo = computeGoalProgressInfo(s.goals, goal.id);
   applyGoalProgressInfo(goal, gInfo);
   goal.progress = gInfo.progress;
+  const oldGoalUpdatedAt2 = goal.updatedAt;
   goal.updatedAt = now;
-  supabaseUpdate('goals', goal.id, { key_results: goal.keyResults, progress: goal.progress, updated_at: now });
+  supabaseUpdate('goals', goal.id, { key_results: goal.keyResults, progress: goal.progress, updated_at: now }, oldGoalUpdatedAt2);
   if (goal.parentId) {
     const pIdx = s.goals.findIndex(g => g.id === goal.parentId);
     if (pIdx !== -1) {
       const pInfo = computeGoalProgressInfo(s.goals, goal.parentId);
       applyGoalProgressInfo(s.goals[pIdx], pInfo);
+      const oldPUpdatedAt2 = s.goals[pIdx].updatedAt;
       s.goals[pIdx].progress = pInfo.progress;
       s.goals[pIdx].updatedAt = now;
-      supabaseUpdate('goals', goal.parentId, { progress: s.goals[pIdx].progress, updated_at: now });
+      supabaseUpdate('goals', goal.parentId, { progress: s.goals[pIdx].progress, updated_at: now }, oldPUpdatedAt2);
     }
   }
 }
@@ -422,10 +433,11 @@ function unblockDependents(s: AppState, completedId: string, now: string, curren
       return !bt || bt.status !== 'done';
     });
     if (stillBlocked.length === 0) {
+      const oldUtUpdatedAt = ut.updatedAt;
       ut.status = 'todo';
       ut.updatedAt = now;
       const utIdx = s.tasks.findIndex(t => t.id === ut.id);
-      if (utIdx !== -1) supabaseUpdate('tasks', ut.id, { status: 'todo', updated_at: now });
+      if (utIdx !== -1) supabaseUpdate('tasks', ut.id, { status: 'todo', updated_at: now }, oldUtUpdatedAt);
       s.notifications.unshift({ id: genId('n'), type: 'sync', title: '任务已解除阻塞', message: `「${ut.title}」的前置任务已全部完成，可以开始执行`, relatedId: ut.id, relatedType: 'task', memberId: ut.leaderId || currentUserId || '', read: false, createdAt: now });
     }
   }
