@@ -10,6 +10,7 @@ import { goalReducer } from './goalSlice';
 import { projectReducer } from './projectSlice';
 import { taskReducer } from './taskSlice';
 import { coreReducer } from './coreSlice';
+import { outlookReducer } from './outlookSlice';
 
 // Re-export hasPermission for external consumers
 export { hasPermission } from './shared';
@@ -67,6 +68,8 @@ export function reducer(state: AppState, action: Action): AppState {
   if (taskResult !== null) return taskResult;
   const coreResult = coreReducer(state, action);
   if (coreResult !== null) return coreResult;
+  const outlookResult = outlookReducer(state, action);
+  if (outlookResult !== null) return outlookResult;
   switch (action.type) {
     case 'SET_STATE':
       return ensureAppStateDefaults(action.payload);

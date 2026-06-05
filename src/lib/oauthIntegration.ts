@@ -11,7 +11,7 @@ import { handleError } from '@/lib/errorHandler';
 
 // ===== 类型定义 =====
 
-export type OAuthProvider = 'feishu' | 'dingtalk' | 'wechat_work';
+export type OAuthProvider = 'feishu' | 'dingtalk' | 'wechat_work' | 'microsoft';
 
 export interface OAuthConfig {
   provider: OAuthProvider;
@@ -60,12 +60,21 @@ const OAUTH_CONFIGS: Record<OAuthProvider, OAuthConfig> = {
     tokenUrl: 'https://qyapi.weixin.qq.com/cgi-bin/service/getuserinfo3rd',
     scopes: ['snsapi_privateinfo'],
   },
+  microsoft: {
+    provider: 'microsoft',
+    clientId: '',
+    redirectUri: `${window.location.origin}/oauth/callback`,
+    authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+    tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+    scopes: ['Calendars.ReadWrite', 'Mail.Read', 'offline_access'],
+  },
 };
 
 const PROVIDER_LABELS: Record<OAuthProvider, { name: string; desc: string }> = {
   feishu: { name: '飞书', desc: '同步文档、日历、审批流' },
   dingtalk: { name: '钉钉', desc: '同步通讯录、审批、日志' },
   wechat_work: { name: '企业微信', desc: '同步通讯录、客户、消息' },
+  microsoft: { name: 'Microsoft Outlook', desc: '同步邮箱、日历' },
 };
 
 // ===== 状态管理 =====

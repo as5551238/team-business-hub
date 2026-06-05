@@ -5,13 +5,17 @@
 import { useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { usePermissions } from '@/store/hooks';
-import { Code, Globe, Webhook, Plus, Trash2, TestTube, CheckCircle2, Copy, ExternalLink, ChevronDown, ChevronRight, Key, Eye, EyeOff, MessageSquare, Send, Bell, Link2, Unlink, Activity } from 'lucide-react';
+import { Code, Globe, Webhook, Plus, Trash2, TestTube, CheckCircle2, Copy, ExternalLink, ChevronDown, ChevronRight, Key, Eye, EyeOff, MessageSquare, Send, Bell, Link2, Unlink, Activity, Mail, RefreshCw } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getApiTokens, createApiToken, revokeApiToken, ALL_PERMISSIONS, type ApiToken } from '@/lib/api';
 import { getPushConfigs, savePushConfigs, pushNotification, formatTaskNotification, type PushConfig, type PushChannel } from '@/lib/pushConnector';
 import { initiateOAuth, loadOAuthStatuses, getOAuthStatus, disconnectOAuth, PROVIDER_LABELS, type OAuthProvider } from '@/lib/oauthIntegration';
 import { IntegrationHealthTab } from './IntegrationHealthTab';
 import { handleError } from '@/lib/errorHandler';
+import { connectManualToken, clearToken, getConnectionStatus, type ManualTokenInput } from '@/lib/outlook/tokenManager';
+import { fetchCalendarEvents } from '@/lib/outlook/calendarSync';
+import { fetchMailSummary } from '@/lib/outlook/mailSync';
+import { GraphApiError } from '@/lib/outlook/graphClient';
 
 // ===== Types =====
 interface WebhookEndpoint {
@@ -218,10 +222,10 @@ function ApiTokenSection() {
             <code className="text-[11px] font-mono bg-gray-100 rounded px-2 py-0.5 flex-1 truncate">
               {showTokenId === t.id ? t.token : '••••••••••••'}
             </code>
-            <button onClick={() => setShowTokenId(showTokenId === t.id ? null : t.id)} className="p-1 hover:bg-muted rounded">
+            <button onClick={() => setShowTokenId(showTokenId === t.id ? null : t.id)} className="p-1 hover:bg-muted rounded" aria-label="显示/隐藏令牌">
               {showTokenId === t.id ? <EyeOff size={12} /> : <Eye size={12} />}
             </button>
-            <button onClick={() => navigator.clipboard.writeText(t.token)} className="p-1 hover:bg-muted rounded"><Copy size={12} /></button>
+            <button onClick={() => navigator.clipboard.writeText(t.token)} className="p-1 hover:bg-muted rounded" aria-label="复制令牌"><Copy size={12} /></button>
           </div>
           <div className="flex flex-wrap gap-1">
             {t.permissions.map(p => <span key={p} className="text-[9px] px-1.5 py-0.5 rounded bg-primary/5 text-primary border border-primary/20">{p}</span>)}
@@ -350,10 +354,10 @@ function WebhookSection() {
                   {!wh.active && <span className="text-[10px] text-muted-foreground">已暂停</span>}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => testWebhook(wh.id)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary" title="测试发送">
+                  <button onClick={() => testWebhook(wh.id)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary" title="测试发送" aria-label="测试发送">
                     {testResult[wh.id] === 'sending' ? <span className="text-xs animate-pulse">...</span> : testResult[wh.id] === 'ok' ? <CheckCircle2 size={14} className="text-green-500" /> : testResult[wh.id] === 'fail' ? <span className="text-xs text-red-500">x</span> : <TestTube size={14} />}
                   </button>
-                  {canManage && <button onClick={() => removeWebhook(wh.id)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"><Trash2 size={14} /></button>}
+                  {canManage && <button onClick={() => removeWebhook(wh.id)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive" aria-label="删除"><Trash2 size={14} /></button>}
                 </div>
               </div>
               <div className="flex flex-wrap gap-1">
@@ -496,10 +500,10 @@ function PushConnectorSection() {
                   {!c.enabled && <span className="text-[10px] text-muted-foreground">已暂停</span>}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => testPush(i)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary" title="测试推送">
+                  <button onClick={() => testPush(i)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary" title="测试推送" aria-label="测试推送">
                     {testResult[String(i)] === 'sending' ? <span className="text-xs animate-pulse">...</span> : testResult[String(i)] === 'ok' ? <CheckCircle2 size={14} className="text-green-500" /> : testResult[String(i)] === 'fail' ? <span className="text-xs text-red-500">x</span> : <Send size={14} />}
                   </button>
-                  <button onClick={() => removeConfig(i)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"><Trash2 size={14} /></button>
+                  <button onClick={() => removeConfig(i)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive" aria-label="删除"><Trash2 size={14} /></button>
                 </div>
               </div>
               <code className="text-[10px] font-mono text-muted-foreground block truncate">{c.webhookUrl}</code>
@@ -578,9 +582,196 @@ function OAuthSection() {
   );
 }
 
+// ===== Outlook 集成 =====
+function OutlookSection() {
+  const { state, dispatch } = useStore();
+  const [status, setStatus] = useState(getConnectionStatus());
+  const [tokenInput, setTokenInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [expiresInput, setExpiresInput] = useState('3600');
+  const [connecting, setConnecting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleConnect = useCallback(() => {
+    if (!tokenInput.trim()) return;
+    setConnecting(true);
+    setError('');
+    try {
+      const input: ManualTokenInput = {
+        accessToken: tokenInput.trim(),
+        expiresInSeconds: parseInt(expiresInput) || 3600,
+        email: emailInput.trim() || undefined,
+      };
+      connectManualToken(input);
+      setStatus(getConnectionStatus());
+      setTokenInput('');
+      setConnecting(false);
+    } catch (e) {
+      handleError(e, { module: 'IntegrationsTab', operation: 'OUTLOOK_CONNECT', severity: 'warning' });
+      setError('连接失败，请检查 Token 是否有效');
+      setConnecting(false);
+    }
+  }, [tokenInput, emailInput, expiresInput]);
+
+  const handleDisconnect = useCallback(() => {
+    if (!confirm('确认断开 Outlook 连接？日历和邮件缓存将被清除。')) return;
+    clearToken();
+    dispatch({ type: 'CLEAR_OUTLOOK_DATA' });
+    setStatus(getConnectionStatus());
+  }, [dispatch]);
+
+  const handleSync = useCallback(async () => {
+    if (!state.currentUser) return;
+    setSyncing(true);
+    setError('');
+    try {
+      const memberId = state.currentUser.id;
+      const [events, mails] = await Promise.all([
+        fetchCalendarEvents(memberId),
+        fetchMailSummary(memberId, 20),
+      ]);
+      dispatch({ type: 'SET_OUTLOOK_CALENDAR_EVENTS', payload: events });
+      dispatch({ type: 'SET_OUTLOOK_MAIL_SUMMARY', payload: mails });
+      const newStatus = getConnectionStatus();
+      setStatus(newStatus);
+    } catch (e) {
+      if (e instanceof GraphApiError && e.statusCode === 401) {
+        setError('Token 已失效，请重新输入');
+        clearToken();
+        setStatus(getConnectionStatus());
+      } else {
+        handleError(e, { module: 'IntegrationsTab', operation: 'OUTLOOK_SYNC', severity: 'warning' });
+        setError('同步失败，请稍后重试');
+      }
+    }
+    setSyncing(false);
+  }, [state.currentUser, dispatch]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <Mail size={16} className="text-primary" />
+        Microsoft Outlook
+      </div>
+      <p className="text-xs text-muted-foreground">连接 Outlook 账号，同步日历事件和邮件摘要到中台。当前支持手动 Token 输入模式（从 Graph Explorer 获取临时 Token）。</p>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
+          <p className="text-xs text-red-700">{error}</p>
+        </div>
+      )}
+
+      {status.connected ? (
+        /* 已连接状态 */
+        <div className="border rounded-lg p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-700 font-bold text-sm">Out</div>
+            <div>
+              <div className="text-sm font-medium">已连接 Outlook</div>
+              <div className="text-xs text-muted-foreground">{status.connectedEmail || '未知邮箱'}</div>
+            </div>
+            <CheckCircle2 size={16} className="text-green-500 ml-auto" />
+          </div>
+
+          <div className="flex items-center gap-3 text-xs text-muted-foreground bg-gray-50 rounded-lg px-3 py-2">
+            <span>Token 过期: {status.expiresAt ? new Date(status.expiresAt).toLocaleString('zh-CN') : '未知'}</span>
+            {status.isExpired && <span className="text-amber-600 font-medium">已过期</span>}
+          </div>
+
+          {/* 同步统计 */}
+          <div className="flex items-center gap-4 text-xs">
+            <span className="text-muted-foreground">日历事件: <strong className="text-foreground">{state.outlookCalendarEvents.length}</strong></span>
+            <span className="text-muted-foreground">邮件摘要: <strong className="text-foreground">{state.outlookMailSummary.length}</strong></span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button onClick={handleSync} disabled={syncing || status.isExpired} className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1.5">
+              <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} /> {syncing ? '同步中...' : '立即同步'}
+            </button>
+            <button onClick={handleDisconnect} className="text-xs px-3 py-1.5 border border-border rounded-lg hover:bg-muted text-muted-foreground hover:text-destructive">
+              断开连接
+            </button>
+          </div>
+
+          {status.isExpired && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+              <p className="text-[11px] text-amber-700"><strong>Token 已过期</strong>：手动模式不支持自动刷新，请断开后重新输入新的 Access Token。</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* 未连接 - 手动 Token 输入 */
+        <div className="border rounded-lg p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold">手动 Token 输入</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">临时方案</span>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            从 <a href="https://developer.microsoft.com/graph/graph-explorer" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Graph Explorer</a> 获取 Access Token 后粘贴到下方。
+            Token 有效期通常为 1 小时，过期后需重新获取。
+          </p>
+
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Access Token *</label>
+              <textarea
+                className="w-full text-xs border border-input rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-ring font-mono min-h-[80px]"
+                placeholder="粘贴从 Graph Explorer 复制的 Access Token..."
+                value={tokenInput}
+                onChange={e => setTokenInput(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-medium mb-1 block">邮箱（可选）</label>
+                <input
+                  type="email"
+                  className="w-full text-xs border border-input rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-ring"
+                  placeholder="you@company.com"
+                  value={emailInput}
+                  onChange={e => setEmailInput(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">有效期（秒）</label>
+                <input
+                  type="number"
+                  className="w-full text-xs border border-input rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-ring"
+                  value={expiresInput}
+                  onChange={e => setExpiresInput(e.target.value)}
+                  min="300"
+                  max="7200"
+                />
+              </div>
+            </div>
+          </div>
+
+          <button onClick={handleConnect} disabled={!tokenInput.trim() || connecting} className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+            {connecting ? '连接中...' : '连接 Outlook'}
+          </button>
+        </div>
+      )}
+
+      {/* 获取 Token 教程 */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+        <span className="text-xs font-medium text-blue-800">如何获取 Access Token</span>
+        <ol className="text-[11px] text-blue-700 space-y-1 list-decimal ml-4">
+          <li>打开 <a href="https://developer.microsoft.com/graph/graph-explorer" target="_blank" rel="noopener noreferrer" className="underline">Graph Explorer</a></li>
+          <li>登录你的 Microsoft 账号</li>
+          <li>在权限面板授权 <code className="bg-blue-100 px-1 rounded">Calendars.Read</code> 和 <code className="bg-blue-100 px-1 rounded">Mail.Read</code></li>
+          <li>点击「Access Token」栏旁的复制图标</li>
+          <li>粘贴到上方输入框即可</li>
+        </ol>
+      </div>
+    </div>
+  );
+}
+
 // ===== Main Component =====
 export function IntegrationsTab() {
-  const [section, setSection] = useState<'api' | 'webhook' | 'push' | 'oauth' | 'health'>('api');
+  const [section, setSection] = useState<'api' | 'webhook' | 'push' | 'oauth' | 'outlook' | 'health'>('api');
 
   return (
     <div className="space-y-4">
@@ -599,12 +790,15 @@ export function IntegrationsTab() {
         <button onClick={() => setSection('oauth')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'oauth' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Link2 size={14} /> OAuth
         </button>
+        <button onClick={() => setSection('outlook')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'outlook' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+          <Mail size={14} /> Outlook
+        </button>
         <button onClick={() => setSection('health')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === 'health' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
           <Activity size={14} /> 健康
         </button>
       </div>
 
-      {section === 'api' ? <OpenAPISection /> : section === 'webhook' ? <WebhookSection /> : section === 'push' ? <PushConnectorSection /> : section === 'oauth' ? <OAuthSection /> : <IntegrationHealthTab />}
+      {section === 'api' ? <OpenAPISection /> : section === 'webhook' ? <WebhookSection /> : section === 'push' ? <PushConnectorSection /> : section === 'oauth' ? <OAuthSection /> : section === 'outlook' ? <OutlookSection /> : <IntegrationHealthTab />}
     </div>
   );
 }

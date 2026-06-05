@@ -12,6 +12,7 @@ import {
   Users2,
 } from 'lucide-react';
 import { priorityColors, priorityLabels } from './shared';
+import { OutlookMailPanel } from './OutlookMailPanel';
 
 interface MyTodayTabProps {
   onOpenDetail: (id: string, type: 'goal' | 'project' | 'task') => void;
@@ -93,7 +94,7 @@ export default function MyTodayTab({ onOpenDetail, onPageChange }: MyTodayTabPro
     { label: '新建任务', icon: <Plus size={14} />, page: 'tasks' as const, color: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
     { label: '查看目标', icon: <Target size={14} />, page: 'goals' as const, color: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' },
     { label: '查看项目', icon: <FolderKanban size={14} />, page: 'projects' as const, color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
-    { label: 'AI助手', icon: <Sparkles size={14} />, page: 'dashboard' as const, color: 'bg-purple-50 text-purple-700 hover:bg-purple-100' },
+    { label: 'AI助手', icon: <Sparkles size={14} />, page: 'dashboard' as const, color: 'bg-purple-50 text-purple-700 hover:bg-purple-100', action: 'ai-chat' as const },
   ];
 
   const typeIcon = (type: string) => {
@@ -141,7 +142,7 @@ export default function MyTodayTab({ onOpenDetail, onPageChange }: MyTodayTabPro
             {quickActions.map(a => (
               <button
                 key={a.label}
-                onClick={() => onPageChange(a.page)}
+                onClick={() => { if (a.action === 'ai-chat') { window.dispatchEvent(new CustomEvent('tbh-open-ai-chat')); } else { onPageChange(a.page); } }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${a.color}`}
               >
                 {a.icon} {a.label}
@@ -288,14 +289,14 @@ export default function MyTodayTab({ onOpenDetail, onPageChange }: MyTodayTabPro
             </div>
             <div className="space-y-1.5">
               {unreadNotifs.map(n => (
-                <div key={n.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                <div key={n.id} onClick={() => { dispatch({ type: 'MARK_NOTIFICATION_READ', payload: n.id }); if (n.relatedId && n.relatedType) onOpenDetail(n.relatedId, (n.relatedType as 'task' | 'goal' | 'project') || 'task'); }} className="flex items-center gap-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10 cursor-pointer hover:border-primary/30 transition-colors">
                   <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                   <span className="text-sm truncate flex-1">{n.title || n.message}</span>
                   <span className="text-[10px] text-muted-foreground shrink-0">{n.createdAt ? new Date(n.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                 </div>
               ))}
               {recentActivity.map(a => (
-                <div key={a.id} className="flex items-center gap-3 p-2 rounded-lg bg-card border border-border">
+                <div key={a.id} onClick={() => { if (a.itemId && a.itemType) onOpenDetail(a.itemId, (a.itemType as 'task' | 'goal' | 'project') || 'task'); }} className="flex items-center gap-3 p-2 rounded-lg bg-card border border-border cursor-pointer hover:border-primary/30 transition-colors">
                   <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold shrink-0">
                     {a.memberName?.charAt(0) || '?'}
                   </div>
@@ -307,6 +308,9 @@ export default function MyTodayTab({ onOpenDetail, onPageChange }: MyTodayTabPro
           </section>
         ) : null;
       })()}
+
+      {/* ── Outlook 邮件面板 ── */}
+      <OutlookMailPanel />
 
       {/* ── 空状态 ── */}
       {dueToday.length === 0 && overdue.length === 0 && unreadMentions.length === 0 && myInProgress.length === 0 && (

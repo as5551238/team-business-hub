@@ -1,13 +1,15 @@
 import { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { useViewingMember, useScheduleEvents } from '@/store/hooks';
-import type { RepeatCycle } from '@/types';
+import type { RepeatCycle, OutlookCalendarEvent } from '@/types';
 import {
   Calendar, ChevronLeft, ChevronRight, Plus, Edit2, Trash2,
-  Clock, Tag, Link
+  Clock, Tag, Link, Mail
 } from 'lucide-react';
 import { inputCls, emptyEvtForm, getCalendarDays, repeatLabels, WEEKDAYS, PRESET_COLORS } from './constants';
 import type { EvtForm } from './constants';
+
+const OUTLOOK_EVENT_COLOR = '#F97316'; // orange-500 for Outlook events
 
 export function ScheduleTab() {
   const { state } = useStore();
@@ -24,6 +26,10 @@ export function ScheduleTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [form, setForm] = useState<EvtForm>(emptyEvtForm);
+  const [showOutlook, setShowOutlook] = useState(true);
+  const [selectedOutlookEvent, setSelectedOutlookEvent] = useState<string | null>(null);
+
+  const outlookEvents = state.outlookCalendarEvents || [];
 
   const calendarDays = useMemo(() => getCalendarDays(currentYear, currentMonth), [currentYear, currentMonth]);
   const eventsByDate = useMemo(() => {
@@ -37,6 +43,19 @@ export function ScheduleTab() {
     });
     return map;
   }, [events]);
+
+  const outlookEventsByDate = useMemo(() => {
+    if (!showOutlook) return {};
+    const map: Record<string, OutlookCalendarEvent[]> = {};
+    outlookEvents.forEach(evt => {
+      const start = evt.startTime.split('T')[0];
+      const end = evt.endTime.split('T')[0];
+      let d = new Date(start);
+      const endD = new Date(end);
+      while (d <= endD) { const key = d.toISOString().split('T')[0]; if (!map[key]) map[key] = []; map[key].push(evt); d.setDate(d.getDate() + 1); }
+    });
+    return map;
+  }, [outlookEvents, showOutlook]);
 
   function getMemberName(id: string) { return members.find(m => m.id === id)?.name || ''; }
   function getLinkedItemTitle(id: string, type: string | null) {
@@ -61,6 +80,7 @@ export function ScheduleTab() {
   function nextMonth() { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(y => y + 1); } else { setCurrentMonth(m => m + 1); } }
   function goToday() { const now = new Date(); setCurrentYear(now.getFullYear()); setCurrentMonth(now.getMonth()); }
   const selectedEvt = selectedEvent ? events.find(e => e.id === selectedEvent) : null;
+  const selectedOutlookEvt = selectedOutlookEvent ? outlookEvents.find(e => e.id === selectedOutlookEvent) : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -68,15 +88,20 @@ export function ScheduleTab() {
         <div><h2 className="text-lg font-bold">日程管理</h2><p className="text-sm text-muted-foreground mt-0.5">管理团队日程与重要事项</p></div>
         <div className="flex items-center gap-2">
           <button onClick={() => openAdd(new Date().toISOString().split('T')[0])} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90"><Plus size={16} /> 新建日程</button>
+          {outlookEvents.length > 0 && (
+            <button onClick={() => setShowOutlook(!showOutlook)} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${showOutlook ? 'border-orange-300 bg-orange-50 text-orange-700' : 'border-border text-muted-foreground hover:bg-muted'}`}>
+              <Mail size={14} /> Outlook 日程 ({outlookEvents.length})
+            </button>
+          )}
         </div>
       </div>
 
       <div className="bg-card rounded-xl border border-border shadow-sm p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <button className="p-1.5 rounded-lg hover:bg-muted" onClick={prevMonth}><ChevronLeft size={18} /></button>
+            <button className="p-1.5 rounded-lg hover:bg-muted" onClick={prevMonth} aria-label="上一月"><ChevronLeft size={18} /></button>
             <h3 className="text-base font-semibold min-w-[140px] text-center">{currentYear}年{currentMonth + 1}月</h3>
-            <button className="p-1.5 rounded-lg hover:bg-muted" onClick={nextMonth}><ChevronRight size={18} /></button>
+            <button className="p-1.5 rounded-lg hover:bg-muted" onClick={nextMonth} aria-label="下一月"><ChevronRight size={18} /></button>
           </div>
           <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-muted" onClick={goToday}><Calendar size={14} /> 今天</button>
         </div>
@@ -84,15 +109,22 @@ export function ScheduleTab() {
         <div className="grid grid-cols-7">
           {calendarDays.map((day, i) => {
             const dayEvents = eventsByDate[day.date] || [];
-            const isMultiple = dayEvents.length > 3;
+            const dayOutlookEvents = outlookEventsByDate[day.date] || [];
+            const allEventCount = dayEvents.length + dayOutlookEvents.length;
+            const isMultiple = allEventCount > 3;
             return (
               <div key={i} className={`min-h-[80px] md:min-h-[100px] border-b border-r border-border/50 p-1 cursor-pointer hover:bg-muted/30 transition-colors ${!day.isCurrentMonth ? 'bg-muted/20' : ''}`} onClick={() => openAdd(day.date)}>
                 <div className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${day.isToday ? 'bg-primary text-primary-foreground' : ''} ${!day.isCurrentMonth ? 'text-muted-foreground/40' : ''}`}>{day.day}</div>
                 <div className="space-y-0.5">
-                  {dayEvents.slice(0, 3).map(evt => (
-                    <div key={evt.id} className="text-[10px] leading-tight px-1 py-0.5 rounded truncate text-white" style={{ backgroundColor: evt.color }} onClick={e => { e.stopPropagation(); setSelectedEvent(evt.id); }}>{evt.title}</div>
+                  {dayEvents.slice(0, isMultiple ? 2 : 3).map(evt => (
+                    <div key={evt.id} className="text-[10px] leading-tight px-1 py-0.5 rounded truncate text-white" style={{ backgroundColor: evt.color }} onClick={e => { e.stopPropagation(); setSelectedEvent(evt.id); setSelectedOutlookEvent(null); }}>{evt.title}</div>
                   ))}
-                  {isMultiple && <div className="text-[10px] text-muted-foreground px-1">+{dayEvents.length - 3} 更多</div>}
+                  {showOutlook && dayOutlookEvents.slice(0, isMultiple ? 1 : 2).map(evt => (
+                    <div key={evt.id} className="text-[10px] leading-tight px-1 py-0.5 rounded truncate text-white flex items-center gap-0.5" style={{ backgroundColor: OUTLOOK_EVENT_COLOR }} onClick={e => { e.stopPropagation(); setSelectedOutlookEvent(evt.id); setSelectedEvent(null); }}>
+                      <Mail size={8} />{evt.subject}
+                    </div>
+                  ))}
+                  {isMultiple && <div className="text-[10px] text-muted-foreground px-1">+{allEventCount - 3} 更多</div>}
                 </div>
               </div>
             );
@@ -119,10 +151,35 @@ export function ScheduleTab() {
           {selectedEvt.linkedItemId && selectedEvt.linkedItemType && <div className="flex items-center gap-1 text-xs text-primary"><Link size={12} /> 关联{selectedEvt.linkedItemType === 'goal' ? '目标' : selectedEvt.linkedItemType === 'project' ? '项目' : '任务'}：{getLinkedItemTitle(selectedEvt.linkedItemId, selectedEvt.linkedItemType)}</div>}
         </div>
       )}
+      {selectedOutlookEvt && (
+        <div className="bg-card rounded-xl border border-border shadow-sm p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: OUTLOOK_EVENT_COLOR }} />
+              <Mail size={14} className="text-orange-500" />
+              <h3 className="font-semibold text-sm">{selectedOutlookEvt.subject}</h3>
+            </div>
+            <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSelectedOutlookEvent(null)}>X</button>
+          </div>
+          {selectedOutlookEvt.bodyPreview && <p className="text-sm text-muted-foreground truncate">{selectedOutlookEvt.bodyPreview}</p>}
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><Clock size={12} /> {selectedOutlookEvt.startTime.split('T')[0]} ~ {selectedOutlookEvt.endTime.split('T')[0]}</span>
+            {selectedOutlookEvt.isAllDay && <span>全天</span>}
+            {selectedOutlookEvt.location && <span>{selectedOutlookEvt.location}</span>}
+            {selectedOutlookEvt.isRecurring && <span className="text-orange-500">循环事件</span>}
+            {selectedOutlookEvt.sensitivity === 'private' && <span className="text-red-500">私密</span>}
+          </div>
+          {selectedOutlookEvt.outlookLink && (
+            <a href={selectedOutlookEvt.outlookLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+              <Link size={12} /> 在 Outlook 中打开
+            </a>
+          )}
+        </div>
+      )}
       {showDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowDialog(false)} />
-          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowDialog(false)} role="presentation" />
+          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="事件编辑">
             <div className="px-6 py-4 border-b border-border"><h3 className="font-semibold">{editingId ? '编辑日程' : '新建日程'}</h3></div>
             <div className="px-6 py-4 space-y-4">
               <div><label className="block text-sm font-medium mb-1">标题 *</label><input className={inputCls} placeholder="日程标题" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>

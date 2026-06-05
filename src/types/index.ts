@@ -90,6 +90,7 @@ export interface Member {
   joinDate: string;
   permissions: Permission[];
   teamId: string;
+  updatedAt: string;
 }
 
 // ==================== 目标 ====================
@@ -188,6 +189,7 @@ export interface Comment {
   parentId?: string;
   attachments: Attachment[];
   createdAt: string;
+  updatedAt: string;
 }
 
 // ==================== 任务 ====================
@@ -319,6 +321,7 @@ export interface Category {
   icon: string;
   appliesTo: ItemType[];
   createdAt: string;
+  updatedAt: string;
 }
 
 // ==================== 模板/工具库 ====================
@@ -363,6 +366,7 @@ export interface Bookmark {
   order: number;
   memberId?: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 // ==================== 个人知识库 ====================
@@ -406,6 +410,7 @@ export interface StatusFlowRule {
   autoActions?: StatusFlowAutoAction[];
   enabled?: boolean;
   name?: string;
+  updatedAt: string;
 }
 
 export interface StatusFlowAutoAction {
@@ -556,6 +561,56 @@ export interface ApprovalAudit {
   createdAt: string;
 }
 
+// ==================== Outlook 集成 ====================
+
+export interface OutlookCalendarEvent {
+  id: string;                       // Graph event ID
+  memberId: string;
+  subject: string;
+  bodyPreview: string;
+  startTime: string;                // ISO 8601
+  endTime: string;                  // ISO 8601
+  isAllDay: boolean;
+  location: string;
+  isRecurring: boolean;
+  seriesMasterId: string | null;
+  sensitivity: 'normal' | 'personal' | 'private' | 'confidential';
+  outlookLink: string | null;
+  linkedItemId: string | null;      // 关联的 TBH 任务/目标/项目 ID
+  linkedItemType: 'task' | 'goal' | 'project' | null;
+  etag: string | null;              // 增量同步用
+  lastSyncedAt: string;
+  createdAt: string;
+}
+
+export interface OutlookMailSummary {
+  id: string;                       // Graph message ID
+  memberId: string;
+  subject: string;
+  senderName: string;
+  senderEmail: string;
+  receivedAt: string;               // ISO 8601
+  isRead: boolean;
+  importance: 'low' | 'normal' | 'high';
+  hasAttachments: boolean;
+  outlookLink: string | null;
+  linkedItemId: string | null;
+  linkedItemType: 'task' | 'goal' | 'project' | null;
+  etag: string | null;
+  lastSyncedAt: string;
+}
+
+export interface OutlookTokenData {
+  provider: 'microsoft';
+  connectionMethod: 'manual' | 'oauth';  // 手动 token 输入 vs OAuth 流程
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: string;                // ISO 8601
+  scope: string;
+  providerAccountId: string | null; // 微软用户 OID
+  connectedEmail: string | null;
+}
+
 // ==================== 应用状态 ====================
 export interface AppState {
   members: Member[];
@@ -584,6 +639,8 @@ export interface AppState {
   teamMembers: TeamMember[];
   subscriptions: Subscription[];
   approvalAudits: ApprovalAudit[];
+  outlookCalendarEvents: OutlookCalendarEvent[];
+  outlookMailSummary: OutlookMailSummary[];
   currentUser: Member | null;
   viewingMemberId: string | null;
   currentTeamId: string | null;

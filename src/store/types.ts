@@ -97,7 +97,15 @@ export type Action =
   | { type: 'RECALL_GOAL_APPROVAL'; payload: string }
   | { type: 'UPDATE_SUBSCRIPTION'; payload: { teamId: string; updates: Partial<Subscription> } }
   | { type: 'REALTIME_UPSERT'; payload: { table: string; item: Record<string, unknown> } }
-  | { type: 'REALTIME_DELETE'; payload: { table: string; id: string } };
+  | { type: 'REALTIME_DELETE'; payload: { table: string; id: string } }
+  | { type: 'SET_OUTLOOK_CALENDAR_EVENTS'; payload: import('@/types').OutlookCalendarEvent[] }
+  | { type: 'MERGE_OUTLOOK_CALENDAR_EVENTS'; payload: import('@/types').OutlookCalendarEvent[] }
+  | { type: 'DELETE_OUTLOOK_CALENDAR_EVENTS'; payload: string[] }
+  | { type: 'LINK_OUTLOOK_CALENDAR_EVENT'; payload: { eventId: string; itemId: string; itemType: 'task' | 'goal' | 'project' } }
+  | { type: 'SET_OUTLOOK_MAIL_SUMMARY'; payload: import('@/types').OutlookMailSummary[] }
+  | { type: 'MERGE_OUTLOOK_MAIL_SUMMARY'; payload: import('@/types').OutlookMailSummary[] }
+  | { type: 'LINK_OUTLOOK_MAIL'; payload: { mailId: string; itemId: string; itemType: 'task' | 'goal' | 'project' } }
+  | { type: 'CLEAR_OUTLOOK_DATA' };
 
 export function toCamel(row: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
@@ -151,6 +159,8 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: Memb
     teamMembers: arr(data.teamMembers),
     subscriptions: arr(data.subscriptions),
     approvalAudits: arr(data.approvalAudits),
+    outlookCalendarEvents: arr(data.outlookCalendarEvents),
+    outlookMailSummary: arr(data.outlookMailSummary),
     currentTeamId: data.currentTeamId || null,
   };
   result.goals = result.goals.map((g: Goal) => ({
