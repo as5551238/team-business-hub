@@ -1,11 +1,11 @@
 /**
  * AIChatAgent — 对话式AI Agent面板
  *
- * 可嵌入任意页面，支持：
+ * 付费级特性：
  * - 多轮对话（上下文记忆）
  * - 流式输出（逐字显示）
  * - RAG知识库检索（自动从团队数据检索相关上下文）
- * - 一键执行（AI建议可直接写入store）
+ * - 一键执行（AI建议可直接操作store：更新任务状态/优先级/负责人）
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
@@ -13,7 +13,17 @@ import { callLLMStream } from '@/lib/ai/llmService';
 import { loadAIConfig } from '@/lib/ai/types';
 import { buildKnowledgeIndex, searchKnowledge, buildRAGContext, loadIndex, saveIndex, type KnowledgeChunk } from '@/lib/ai/knowledgeRAG';
 import { handleError } from '@/lib/errorHandler';
-import { Send, Bot, User, Sparkles, X, Trash2, Loader2 } from 'lucide-react';
+import { Send, Bot, User, Sparkles, X, Trash2, Play, Check } from 'lucide-react';
+
+/** AI 可执行的 action 类型 */
+interface AIAction {
+  type: 'UPDATE_TASK_STATUS' | 'UPDATE_TASK_PRIORITY' | 'UPDATE_TASK_ASSIGNEE' | 'UPDATE_GOAL_PROGRESS';
+  targetId: string;
+  targetType: 'task' | 'goal';
+  payload: Record<string, unknown>;
+  label: string;
+  executed?: boolean;
+}
 
 interface ChatMessage {
   id: string;
@@ -22,6 +32,7 @@ interface ChatMessage {
   timestamp: number;
   sources?: string[];
   streaming?: boolean;
+  actions?: AIAction[];
 }
 
 const SYSTEM_PROMPT = `你是团队管理中台的AI助手。你可以：
@@ -34,10 +45,35 @@ const SYSTEM_PROMPT = `你是团队管理中台的AI助手。你可以：
 - 基于提供的团队知识库数据回答，不编造事实
 - 给出具体可执行的建议，不要空泛
 - 如果数据不足，明确告知用户
-- 用中文回答，简洁专业`;
+- 用中文回答，简洁专业
+- 当你建议修改某个任务或目标时，在回答末尾用JSON格式附上可执行操作，格式如下：
+  <!-- ACTION: {"type":"UPDATE_TASK_STATUS","targetId":"任务ID","targetType":"task","payload":{"status":"in_progress"},"label":"将任务标记为进行中"} -->
+  支持的type：UPDATE_TASK_STATUS(payload:status), UPDATE_TASK_PRIORITY(payload:priority), UPDATE_TASK_ASSIGNEE(payload:assigneeId,assigneeName), UPDATE_GOAL_PROGRESS(payload:progress)
+  可以添加多个ACTION，每个单独一行。`;
+
+/** 从AI回复中解析可执行操作 */
+function parseActions(text: string): AIAction[] {
+  const actions: AIAction[] = [];
+  const regex = /<!--\s*ACTION:\s*(\{[^}]+\})\s*-->/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    try {
+      const action = JSON.parse(match[1]);
+      if (action.type && action.targetId && action.label) {
+        actions.push(action as AIAction);
+      }
+    } catch { /* skip malformed */ }
+  }
+  return actions;
+}
+
+/** 从AI回复中移除ACTION标记（用户不需要看到） */
+function stripActionTags(text: string): string {
+  return text.replace(/<!--\s*ACTION:\s*\{[^}]+\}\s*-->/g, '').trim();
+}
 
 export function AIChatAgent() {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'welcome', role: 'assistant', content: '你好，我是团队AI助手。可以问我任何关于团队目标、项目进展、任务分配的问题，我会基于团队实时数据为你分析。', timestamp: Date.now() },
   ]);
@@ -104,7 +140,7 @@ export function AIChatAgent() {
         setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + chunk } : m));
       }, { signal: abortRef.current.signal });
 
-      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: fullText, streaming: false } : m));
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: fullText, streaming: false, actions: parseActions(fullText) } : m));
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : '请求失败';
       setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: `抱歉，出错了：${errMsg}`, streaming: false } : m));
@@ -124,24 +160,41 @@ export function AIChatAgent() {
     setMessages([{ id: 'welcome', role: 'assistant', content: '对话已清空。有什么可以帮你的？', timestamp: Date.now() }]);
   }, []);
 
-  return (
-    <div className="flex flex-col h-full max-h-[600px] border rounded-xl bg-card">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-            <Sparkles size={12} className="text-primary" />
-          </div>
-          <span className="text-sm font-semibold">AI 助手</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">RAG</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button onClick={clearChat} className="p-1 rounded hover:bg-muted text-muted-foreground" title="清空对话">
-            <Trash2 size={14} />
-          </button>
-        </div>
-      </div>
+  /** 一键执行AI建议的action */
+  const executeAction = useCallback((msgId: string, actionIdx: number) => {
+    setMessages(prev => prev.map(m => {
+      if (m.id !== msgId || !m.actions) return m;
+      const action = m.actions[actionIdx];
+      if (!action || action.executed) return m;
+      // Dispatch to store
+      try {
+        switch (action.type) {
+          case 'UPDATE_TASK_STATUS':
+            dispatch({ type: 'UPDATE_TASK', payload: { id: action.targetId, status: action.payload.status } });
+            break;
+          case 'UPDATE_TASK_PRIORITY':
+            dispatch({ type: 'UPDATE_TASK', payload: { id: action.targetId, priority: action.payload.priority } });
+            break;
+          case 'UPDATE_TASK_ASSIGNEE':
+            dispatch({ type: 'UPDATE_TASK', payload: { id: action.targetId, assigneeId: action.payload.assigneeId, assigneeName: action.payload.assigneeName } });
+            break;
+          case 'UPDATE_GOAL_PROGRESS':
+            dispatch({ type: 'UPDATE_GOAL', payload: { id: action.targetId, progress: Number(action.payload.progress) } });
+            break;
+        }
+        // Mark as executed
+        const newActions = [...m.actions!];
+        newActions[actionIdx] = { ...action, executed: true };
+        return { ...m, actions: newActions };
+      } catch (err) {
+        handleError(err, { module: 'AIChatAgent', operation: 'EXECUTE_ACTION', severity: 'warn' });
+        return m;
+      }
+    }));
+  }, [dispatch]);
 
+  return (
+    <div className="flex flex-col h-full bg-card">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {messages.map(msg => (
@@ -152,11 +205,26 @@ export function AIChatAgent() {
               </div>
             )}
             <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : msg.role === 'system' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-muted'}`}>
-              <div className="whitespace-pre-wrap break-words">{msg.content}{msg.streaming && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5" />}</div>
+              <div className="whitespace-pre-wrap break-words">{stripActionTags(msg.content)}{msg.streaming && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5" />}</div>
               {msg.sources && msg.sources.length > 0 && !msg.streaming && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {msg.sources.map((s, i) => (
                     <span key={i} className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary">{s}</span>
+                  ))}
+                </div>
+              )}
+              {msg.actions && msg.actions.length > 0 && !msg.streaming && (
+                <div className="mt-2 space-y-1.5 border-t pt-2">
+                  {msg.actions.map((action, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => executeAction(msg.id, idx)}
+                      disabled={action.executed}
+                      className={`flex items-center gap-1.5 w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors ${action.executed ? 'bg-green-100 text-green-700 cursor-default' : 'bg-primary/5 text-primary hover:bg-primary/10 cursor-pointer border border-primary/20'}`}
+                    >
+                      {action.executed ? <Check size={12} /> : <Play size={12} />}
+                      <span>{action.executed ? '已执行' : action.label}</span>
+                    </button>
                   ))}
                 </div>
               )}
