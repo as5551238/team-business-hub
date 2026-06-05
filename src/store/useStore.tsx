@@ -66,51 +66,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // P3#9 fix: Realtime dedup — shared lastWriteAt map accessible to trackedDispatch
   const lastWriteAtRef = useRef<Record<string, number>>({});
-  const ACTION_TO_TABLE: Record<string, string> = {
-    ADD_GOAL: 'goals', UPDATE_GOAL: 'goals', DELETE_GOAL: 'goals',
-    ADD_PROJECT: 'projects', UPDATE_PROJECT: 'projects', DELETE_PROJECT: 'projects',
-    ADD_TASK: 'tasks', UPDATE_TASK: 'tasks', DELETE_TASK: 'tasks',
-    ADD_NOTIFICATION: 'notifications', UPDATE_NOTIFICATION: 'notifications', DELETE_NOTIFICATION: 'notifications',
-    TOGGLE_NOTIFICATION_MUTE: 'notification_preferences',
-    ADD_MEMBER: 'members', UPDATE_MEMBER: 'members', DELETE_MEMBER: 'members',
-    ADD_COMMENT: 'comments', UPDATE_COMMENT: 'comments', DELETE_COMMENT: 'comments',
-    ADD_NOTE: 'notes', UPDATE_NOTE: 'notes', DELETE_NOTE: 'notes',
-    ADD_CATEGORY: 'categories', UPDATE_CATEGORY: 'categories', DELETE_CATEGORY: 'categories',
-    ADD_TEMPLATE: 'templates', UPDATE_TEMPLATE: 'templates', DELETE_TEMPLATE: 'templates',
-    ADD_SCHEDULE_EVENT: 'schedule_events', UPDATE_SCHEDULE_EVENT: 'schedule_events', DELETE_SCHEDULE_EVENT: 'schedule_events',
-    ADD_BOOKMARK: 'bookmarks', UPDATE_BOOKMARK: 'bookmarks', DELETE_BOOKMARK: 'bookmarks', REORDER_BOOKMARKS: 'bookmarks',
-    ADD_SAVED_VIEW: 'saved_views', UPDATE_SAVED_VIEW: 'saved_views', DELETE_SAVED_VIEW: 'saved_views',
-    ADD_REVIEW: 'reviews', UPDATE_REVIEW: 'reviews', DELETE_REVIEW: 'reviews',
-    ADD_KNOWLEDGE: 'knowledge', UPDATE_KNOWLEDGE: 'knowledge', DELETE_KNOWLEDGE: 'knowledge',
-    ADD_TAG: 'tags', UPDATE_TAG: 'tags', DELETE_TAG: 'tags',
-    ADD_SPRINT: 'sprints', UPDATE_SPRINT: 'sprints', DELETE_SPRINT: 'sprints',
-    ADD_AUTOMATION_RULE: 'automation_rules', UPDATE_AUTOMATION_RULE: 'automation_rules', DELETE_AUTOMATION_RULE: 'automation_rules',
-    ADD_STATUS_FLOW_RULE: 'status_flow_rules', UPDATE_STATUS_FLOW_RULE: 'status_flow_rules', DELETE_STATUS_FLOW_RULE: 'status_flow_rules',
-    ADD_ITEM_LINK: 'item_links', DELETE_ITEM_LINK: 'item_links',
-    ADD_ACTIVITY: 'activities',
-  };
-  const ACTION_TO_EVENT: Record<string, string> = {
-    ADD_GOAL: 'INSERT', ADD_PROJECT: 'INSERT', ADD_TASK: 'INSERT',
-    ADD_NOTIFICATION: 'INSERT', ADD_MEMBER: 'INSERT', ADD_COMMENT: 'INSERT',
-    ADD_NOTE: 'INSERT', ADD_CATEGORY: 'INSERT', ADD_TEMPLATE: 'INSERT',
-    ADD_SCHEDULE_EVENT: 'INSERT', ADD_BOOKMARK: 'INSERT', ADD_SAVED_VIEW: 'INSERT',
-    ADD_REVIEW: 'INSERT', ADD_KNOWLEDGE: 'INSERT', ADD_TAG: 'INSERT',
-    ADD_SPRINT: 'INSERT', ADD_AUTOMATION_RULE: 'INSERT', ADD_STATUS_FLOW_RULE: 'INSERT',
-    ADD_ITEM_LINK: 'INSERT', ADD_ACTIVITY: 'INSERT',
-    UPDATE_GOAL: 'UPDATE', UPDATE_PROJECT: 'UPDATE', UPDATE_TASK: 'UPDATE',
-    UPDATE_NOTIFICATION: 'UPDATE', UPDATE_MEMBER: 'UPDATE', UPDATE_COMMENT: 'UPDATE',
-    UPDATE_NOTE: 'UPDATE', UPDATE_CATEGORY: 'UPDATE', UPDATE_TEMPLATE: 'UPDATE',
-    UPDATE_SCHEDULE_EVENT: 'UPDATE', UPDATE_BOOKMARK: 'UPDATE', UPDATE_SAVED_VIEW: 'UPDATE',
-    UPDATE_REVIEW: 'UPDATE', UPDATE_KNOWLEDGE: 'UPDATE', UPDATE_TAG: 'UPDATE',
-    UPDATE_SPRINT: 'UPDATE', UPDATE_AUTOMATION_RULE: 'UPDATE', UPDATE_STATUS_FLOW_RULE: 'UPDATE',
-    DELETE_GOAL: 'DELETE', DELETE_PROJECT: 'DELETE', DELETE_TASK: 'DELETE',
-    DELETE_NOTIFICATION: 'DELETE', DELETE_MEMBER: 'DELETE', DELETE_COMMENT: 'DELETE',
-    DELETE_NOTE: 'DELETE', DELETE_CATEGORY: 'DELETE', DELETE_TEMPLATE: 'DELETE',
-    DELETE_SCHEDULE_EVENT: 'DELETE', DELETE_BOOKMARK: 'DELETE', DELETE_SAVED_VIEW: 'DELETE',
-    DELETE_REVIEW: 'DELETE', DELETE_KNOWLEDGE: 'DELETE', DELETE_TAG: 'DELETE',
-    DELETE_SPRINT: 'DELETE', DELETE_AUTOMATION_RULE: 'DELETE', DELETE_STATUS_FLOW_RULE: 'DELETE',
-    DELETE_ITEM_LINK: 'DELETE',
-  };
 
   // Dispatch proxy that tracks offline writes for Layout.tsx badge + undo/redo
   const trackedDispatch = useCallback((action: Action) => {

@@ -366,6 +366,119 @@ export function useCollabBroadcast(userId: string) {
   return { broadcastOp, vectorClock: vectorClockRef.current };
 }
 
+// ===== 字段级编辑锁 Hook =====
+
+export interface FieldLock {
+  itemId: string;
+  itemType: string;
+  field: string;
+  userId: string;
+  userName: string;
+  color: string;
+  acquiredAt: number;
+}
+
+const FIELD_LOCK_TIMEOUT = 30000; // 30s自动释放
+
+export function useFieldEditLock(userId: string, userName: string) {
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const colorRef = useRef(PRESENCE_COLORS[Math.abs(hashCode(userId)) % PRESENCE_COLORS.length]);
+  const [fieldLocks, setFieldLocks] = useState<FieldLock[]>([]);
+  const myLocksRef = useRef<Set<string>>(new Set()); // track which locks I hold
+
+  useEffect(() => {
+    let mounted = true;
+    const setup = async () => {
+      try {
+        const sb = getSupabaseClient();
+        if (!sb || !mounted) return;
+        const channel = sb.channel('collab-field-locks', { config: { broadcast: { self: true } } });
+        channel.on('broadcast', { event: 'field-lock' }, (payload: { payload: FieldLock & { action: 'acquire' | 'release' } }) => {
+          if (!mounted) return;
+          const data = payload.payload;
+          const key = `${data.itemId}:${data.field}`;
+          if (data.action === 'acquire' && data.userId !== userId) {
+            setFieldLocks(prev => {
+              const filtered = prev.filter(l => !(l.itemId === data.itemId && l.field === data.field));
+              return [...filtered, { itemId: data.itemId, itemType: data.itemType, field: data.field, userId: data.userId, userName: data.userName, color: data.color, acquiredAt: data.acquiredAt }];
+            });
+          } else if (data.action === 'release') {
+            setFieldLocks(prev => prev.filter(l => !(l.itemId === data.itemId && l.field === data.field)));
+          }
+        });
+        channelRef.current = channel;
+        channel.subscribe();
+      } catch (e) { handleError(e, { module: 'collab', operation: 'SETUP_FIELD_LOCKS', severity: 'debug' }); }
+    };
+    setup();
+    // Auto-release my locks on unmount
+    return () => {
+      mounted = false;
+      myLocksRef.current.forEach(key => {
+        const [itemId, field] = key.split(':');
+        try { channelRef.current?.send({ type: 'broadcast', event: 'field-lock', payload: { itemId, itemType: '', field, userId, userName, color: colorRef.current, acquiredAt: Date.now(), action: 'release' as const } }); } catch (_) { /* noop */ }
+      });
+      myLocksRef.current.clear();
+      try { channelRef.current?.unsubscribe(); } catch (_) { /* noop */ }
+    };
+  }, [userId, userName]);
+
+  const acquireLock = useCallback((itemId: string, itemType: string, field: string) => {
+    const lock: FieldLock & { action: 'acquire' } = { itemId, itemType, field, userId, userName, color: colorRef.current, acquiredAt: Date.now(), action: 'acquire' };
+    channelRef.current?.send({ type: 'broadcast', event: 'field-lock', payload: lock });
+    myLocksRef.current.add(`${itemId}:${field}`);
+  }, [userId, userName]);
+
+  const releaseLock = useCallback((itemId: string, field: string) => {
+    channelRef.current?.send({ type: 'broadcast', event: 'field-lock', payload: { itemId, itemType: '', field, userId, userName, color: colorRef.current, acquiredAt: Date.now(), action: 'release' as const } });
+    myLocksRef.current.delete(`${itemId}:${field}`);
+  }, [userId, userName]);
+
+  const getFieldLock = useCallback((itemId: string, field: string): FieldLock | undefined => {
+    return fieldLocks.find(l => l.itemId === itemId && l.field === field && (Date.now() - l.acquiredAt < FIELD_LOCK_TIMEOUT));
+  }, [fieldLocks]);
+
+  const isFieldLockedByOther = useCallback((itemId: string, field: string): boolean => {
+    const lock = getFieldLock(itemId, field);
+    return lock !== undefined && lock.userId !== userId;
+  }, [getFieldLock, userId]);
+
+  return { fieldLocks, acquireLock, releaseLock, getFieldLock, isFieldLockedByOther };
+}
+
+// ===== 冲突历史管理 =====
+
+export interface ConflictRecord {
+  id: string;
+  entity: string;
+  entityId: string;
+  field: string;
+  localValue: string;
+  remoteValue: string;
+  resolvedValue: string;
+  strategy: 'lww' | 'merge' | 'manual';
+  remoteUser: string;
+  remoteUserId: string;
+  timestamp: number;
+}
+
+const MAX_CONFLICT_HISTORY = 100;
+let _conflictHistory: ConflictRecord[] = [];
+let _conflictListeners: Set<() => void> = new Set();
+
+export function recordConflict(record: Omit<ConflictRecord, 'id'>) {
+  const entry: ConflictRecord = { ...record, id: `cf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` };
+  _conflictHistory = [entry, ..._conflictHistory].slice(0, MAX_CONFLICT_HISTORY);
+  _conflictListeners.forEach(l => l());
+}
+
+export function getConflictHistory(): ConflictRecord[] { return _conflictHistory; }
+
+export function subscribeConflicts(listener: () => void): () => void {
+  _conflictListeners.add(listener);
+  return () => { _conflictListeners.delete(listener); };
+}
+
 // ===== 辅助函数 =====
 
 function hashCode(s: string): number {

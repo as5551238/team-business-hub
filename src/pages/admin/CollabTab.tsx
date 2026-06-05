@@ -2,9 +2,9 @@
  * CRDT 协作面板 — 实时协作状态可视化、冲突历史、在线用户
  * Phase 3-4: CRDT Collaboration
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useSyncExternalStore } from 'react';
 import { useStore } from '@/store/useStore';
-import { useCollabPresence, type CollabOperation, resolveConflict, type CollabUser } from '@/lib/collab';
+import { useCollabPresence, useFieldEditLock, resolveConflict, type CollabUser, type ConflictRecord, getConflictHistory, subscribeConflicts } from '@/lib/collab';
 import {
   Users,
   Radio,
@@ -19,25 +19,6 @@ import {
   Shield,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
-
-// ===== 模拟冲突历史（演示用） =====
-
-const DEMO_CONFLICTS: Array<{
-  id: string;
-  entity: string;
-  entityId: string;
-  field: string;
-  localValue: string;
-  remoteValue: string;
-  resolvedValue: string;
-  strategy: string;
-  remoteUser: string;
-  timestamp: string;
-}> = [
-  { id: 'cf-1', entity: 'task', entityId: 'task-abc', field: 'title', localValue: '完成前端重构', remoteValue: '完成前端重构V2', resolvedValue: '完成前端重构V2', strategy: 'lww', remoteUser: '张三', timestamp: '2026-05-30 14:23:05' },
-  { id: 'cf-2', entity: 'goal', entityId: 'goal-xyz', field: 'description', localValue: 'Q2目标', remoteValue: 'Q2目标（已调整）', resolvedValue: 'Q2目标（已调整）', strategy: 'lww', remoteUser: '李四', timestamp: '2026-05-30 10:15:22' },
-  { id: 'cf-3', entity: 'task', entityId: 'task-def', field: 'tags', localValue: '[前端, 重构]', remoteValue: '[重构, 紧急]', resolvedValue: '[前端, 重构, 紧急]', strategy: 'merge', remoteUser: '王五', timestamp: '2026-05-29 16:45:11' },
-];
 
 // ===== 子组件 =====
 
@@ -68,7 +49,9 @@ function OnlineUserCard({ user, isSelf }: { user: CollabUser; isSelf: boolean })
   );
 }
 
-function ConflictCard({ conflict }: { conflict: typeof DEMO_CONFLICTS[0] }) {
+// ===== 冲突记录卡片 =====
+
+function ConflictCardReal({ conflict }: { conflict: ConflictRecord }) {
   return (
     <div className="border rounded-lg p-3 space-y-2">
       <div className="flex items-center gap-2">
@@ -96,7 +79,7 @@ function ConflictCard({ conflict }: { conflict: typeof DEMO_CONFLICTS[0] }) {
         <span className="text-muted-foreground">已解决:</span>
         <span className="font-medium text-green-700">{conflict.resolvedValue}</span>
       </div>
-      <div className="text-[10px] text-muted-foreground">{conflict.timestamp}</div>
+      <div className="text-[10px] text-muted-foreground">{new Date(conflict.timestamp).toLocaleString('zh-CN')}</div>
     </div>
   );
 }
@@ -115,14 +98,17 @@ export function CollabTab() {
   const currentUserId = state.currentUser?.id || '';
   const currentUserName = state.currentUser?.name || '未知';
   const { onlineUsers, myColor } = useCollabPresence(currentUserId, currentUserName);
+  const { fieldLocks } = useFieldEditLock(currentUserId, currentUserName);
   const [subTab, setSubTab] = useState<'status' | 'conflicts' | 'architecture'>('status');
+  const conflictSnapshot = useSyncExternalStore(subscribeConflicts, getConflictHistory, getConflictHistory);
 
   const collabStats = useMemo(() => ({
     onlineCount: onlineUsers.length,
-    conflictCount: DEMO_CONFLICTS.length,
-    mergeCount: DEMO_CONFLICTS.filter(c => c.strategy === 'merge').length,
-    lwwCount: DEMO_CONFLICTS.filter(c => c.strategy === 'lww').length,
-  }), [onlineUsers]);
+    conflictCount: conflictSnapshot.length,
+    mergeCount: conflictSnapshot.filter(c => c.strategy === 'merge').length,
+    lwwCount: conflictSnapshot.filter(c => c.strategy === 'lww').length,
+    activeFieldLocks: fieldLocks.filter(l => Date.now() - l.acquiredAt < 30000).length,
+  }), [onlineUsers, conflictSnapshot, fieldLocks]);
 
   return (
     <div className="space-y-4">
@@ -156,8 +142,8 @@ export function CollabTab() {
               <div className="text-xl font-bold">{collabStats.conflictCount}</div>
             </div>
             <div className="bg-card rounded-xl p-3 border">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Radio size={12} />通道状态</div>
-              <div className="text-xl font-bold text-green-600">已连接</div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Eye size={12} />字段锁</div>
+              <div className="text-xl font-bold text-amber-600">{collabStats.activeFieldLocks}</div>
             </div>
           </div>
 
@@ -199,6 +185,29 @@ export function CollabTab() {
               </div>
             </div>
           </div>
+
+          {/* 活跃字段锁 */}
+          {fieldLocks.filter(l => Date.now() - l.acquiredAt < 30000).length > 0 && (
+            <div className="space-y-2">
+              <div className="text-sm font-semibold flex items-center gap-2">
+                <Eye size={14} className="text-amber-500" />
+                活跃字段锁
+              </div>
+              <div className="space-y-1">
+                {fieldLocks.filter(l => Date.now() - l.acquiredAt < 30000).map((lock, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs border rounded-lg px-3 py-2 bg-amber-50 border-amber-200">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-bold" style={{ backgroundColor: lock.color }}>
+                      {lock.userName.charAt(0)}
+                    </div>
+                    <span className="font-medium">{lock.userName}</span>
+                    <span className="text-muted-foreground">正在编辑</span>
+                    <span className="font-mono text-[10px] bg-amber-100 px-1.5 py-0.5 rounded">{lock.itemType}/{lock.itemId.slice(0, 6)}.{lock.field}</span>
+                    <span className="text-muted-foreground text-[10px] ml-auto">{formatTimeAgo(lock.acquiredAt)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -221,11 +230,10 @@ export function CollabTab() {
           {/* 冲突历史 */}
           <div className="space-y-2">
             <div className="text-sm font-semibold">冲突历史</div>
-            {DEMO_CONFLICTS.map(c => (
-              <ConflictCard key={c.id} conflict={c} />
-            ))}
-            {DEMO_CONFLICTS.length === 0 && (
-              <div className="text-center py-6 text-sm text-muted-foreground">暂无冲突记录</div>
+            {conflictSnapshot.length > 0 ? conflictSnapshot.map(c => (
+              <ConflictCardReal key={c.id} conflict={c} />
+            )) : (
+              <div className="text-center py-6 text-sm text-muted-foreground">暂无冲突记录 — 多人同时编辑相同字段时将自动记录</div>
             )}
           </div>
         </>
