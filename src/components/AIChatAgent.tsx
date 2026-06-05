@@ -9,7 +9,8 @@
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
-import { callLLMStream, loadAIConfig } from '@/lib/ai/llmService';
+import { callLLMStream } from '@/lib/ai/llmService';
+import { loadAIConfig } from '@/lib/ai/types';
 import { buildKnowledgeIndex, searchKnowledge, buildRAGContext, loadIndex, saveIndex, type KnowledgeChunk } from '@/lib/ai/knowledgeRAG';
 import { handleError } from '@/lib/errorHandler';
 import { Send, Bot, User, Sparkles, X, Trash2, Loader2 } from 'lucide-react';

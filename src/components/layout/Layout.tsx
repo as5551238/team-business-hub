@@ -23,6 +23,7 @@ import { isWeChatEnabled, sendWeChatMessage } from '@/supabase/wechat';
 import { setWeChatNotify, fireAutomationRules } from '@/store/shared';
 import { getPageFromPathname, PAGE_TO_PATH, useAppNavigate, usePageInfo } from '@/lib/routes';
 import { Breadcrumb } from '@/components/Breadcrumb';
+import { FloatingAIPanel } from '@/components/FloatingAIPanel';
 
 // Detect H5 embedded mode (WeChat/Feishu in-app browser or ?h5=1 param)
 function isH5Mode(): boolean {
@@ -259,12 +260,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
     return () => window.removeEventListener('tbh-close-detail-panel', handler);
   }, [navigate]);
 
-  // AI chat button from dashboard opens command palette
-  useEffect(() => {
-    const handler = () => setCommandPaletteOpen(true);
-    window.addEventListener('tbh-open-ai-chat', handler);
-    return () => window.removeEventListener('tbh-open-ai-chat', handler);
-  }, []);
+  // AI chat button handled by FloatingAIPanel (tbh-open-ai-chat event)
 
   // When new notifications arrive while page is hidden, show browser notification
   const prevNotificationCountRef = useRef(state.notifications.length);
@@ -709,6 +705,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
       {showOnboarding && <OnboardingWizard onComplete={() => setShowOnboarding(false)} />}
       <PWAInstallPrompt />
       <OperationToast />
+      <FloatingAIPanel />
     </div>
   );
 }
