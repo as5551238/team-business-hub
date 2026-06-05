@@ -5,6 +5,7 @@ import { generateReviewLocal, generateReviewDeep } from '@/lib/ai/aiReviewGenera
 import type { ReviewResult, ReviewSection, OKRFeedback } from '@/lib/ai/aiReviewGenerator';
 import { useStore } from '@/store/useStore';
 import { trackAISuggestion } from '@/store/behaviorTracking';
+import { resolveToken } from '@/lib/resolveToken';
 
 interface AIReviewPanelProps {
   goalId?: string;
@@ -20,9 +21,9 @@ function scoreColor(score: number): string {
 }
 
 function scoreRingStroke(score: number): string {
-  if (score >= 80) return '#10b981';
-  if (score >= 60) return '#f97316';
-  return '#ef4444';
+  if (score >= 80) return resolveToken('success');
+  if (score >= 60) return resolveToken('warning');
+  return resolveToken('destructive');
 }
 
 function krBarColor(score: number): string {
@@ -55,7 +56,7 @@ function ScoreRing({ score }: { score: number }) {
   return (
     <div className="relative flex items-center justify-center">
       <svg width={96} height={96} className="-rotate-90">
-        <circle cx={48} cy={48} r={r} fill="none" stroke="#e5e7eb" strokeWidth={6} />
+        <circle cx={48} cy={48} r={r} fill="none" stroke={resolveToken('border')} strokeWidth={6} />
         <circle cx={48} cy={48} r={r} fill="none" stroke={stroke} strokeWidth={6} strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round" className="transition-all duration-700" />
       </svg>
       <span className={`absolute text-2xl font-bold ${scoreColor(score)}`}>{score}</span>

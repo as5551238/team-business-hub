@@ -4,6 +4,7 @@
  */
 import { useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { generateLocalDecomposition, generateDeepDecomposition } from '@/lib/ai/aiDecomposition';
 import type { DecompositionResult, KRDraft, TaskDraft } from '@/lib/ai/aiDecomposition';
 import type { Attachment, TrackingRecord, SubTask, ItemType } from '@/types';
@@ -27,6 +28,7 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
   const [result, setResult] = useState<DecompositionResult | null>(null);
   const [expandedProjects, setExpandedProjects] = useState<Set<number>>(new Set());
   const [applied, setApplied] = useState(false);
+  const trapRef = useFocusTrap(true, onClose);
 
   const handleDecompose = useCallback(async () => {
     if (!goalTitle.trim()) return;
@@ -201,14 +203,14 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-2xl animate-slide-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-2xl animate-slide-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="AI流程" ref={trapRef}>
         {/* Header */}
         <div className="px-5 md:px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <Wand2 size={18} className="text-primary" />
             <h3 className="font-semibold">AI 智能拆解</h3>
           </div>
-          <button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={onClose}><X size={16} /></button>
+          <button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={onClose} aria-label="关闭"><X size={16} /></button>
         </div>
 
         <div className="px-5 md:px-6 py-4 space-y-4 overflow-y-auto flex-1">

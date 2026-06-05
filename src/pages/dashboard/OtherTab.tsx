@@ -129,7 +129,7 @@ function BookmarksWidget() {
           <div key={bm.id} className="px-4 md:px-5 py-3 flex items-center gap-3 hover:bg-muted/30 transition-colors group">
             <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button className="p-0.5 hover:bg-muted rounded disabled:opacity-30" disabled={idx === 0 && activeCat === '全部'} onClick={() => handleMoveUp(idx)}><ChevronUp size={12} /></button>
-              <button className="p-0.5 hover:bg-muted rounded disabled:opacity-30" disabled={idx === filtered.length - 1 && activeCat === '全部'} onClick={() => handleMoveDown(idx)}><ChevronDown size={12} /></button>
+              <button className="p-0.5 hover:bg-muted rounded disabled:opacity-30" disabled={idx === filtered.length - 1 && activeCat === '全部'} onClick={() => handleMoveDown(idx)} aria-label="下移"><ChevronDown size={12} /></button>
             </div>
             <span className="text-lg flex-shrink-0">{bm.icon || '🔗'}</span>
             <div className="flex-1 min-w-0">
@@ -138,8 +138,8 @@ function BookmarksWidget() {
             </div>
             <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground flex-shrink-0">{bm.category}</span>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-              <button className="p-1 hover:bg-muted rounded" onClick={e => { e.stopPropagation(); handleEdit(bm); }}><Edit2 size={12} className="text-muted-foreground" /></button>
-              <button className="p-1 hover:bg-red-50 rounded" onClick={e => { e.stopPropagation(); if (confirm('确认删除此书签？')) deleteBookmark(bm.id); }}><Trash2 size={12} className="text-red-400" /></button>
+              <button className="p-1 hover:bg-muted rounded" onClick={e => { e.stopPropagation(); handleEdit(bm); }} aria-label="编辑书签"><Edit2 size={12} className="text-muted-foreground" /></button>
+              <button className="p-1 hover:bg-red-50 rounded" onClick={e => { e.stopPropagation(); if (confirm('确认删除此书签？')) deleteBookmark(bm.id); }} aria-label="删除书签"><Trash2 size={12} className="text-red-400" /></button>
               {bm.url.startsWith('http') && <a href={bm.url} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-muted rounded" onClick={e => e.stopPropagation()}><ExternalLink size={12} className="text-muted-foreground" /></a>}
             </div>
           </div>

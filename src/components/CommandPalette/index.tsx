@@ -12,7 +12,7 @@ import {
   BarChart3, Settings, Brain, StickyNote, User, Layers, ArrowRight, Clock, BookOpen
 } from 'lucide-react';
 
-type CommandGroup = 'actions' | 'navigation' | 'smartsearch' | 'items' | 'views' | 'members' | 'ai';
+type CommandGroup = 'recent' | 'actions' | 'navigation' | 'smartsearch' | 'items' | 'views' | 'members';
 
 interface CommandItem {
   id: string;
@@ -34,17 +34,17 @@ interface SmartSearchEntry {
 type PaletteItem = CommandItem | SmartSearchEntry;
 
 const GROUP_LABELS: Record<CommandGroup, string> = {
+  recent: '最近使用',
   actions: '动作',
   navigation: '导航',
   smartsearch: '搜索结果',
   items: '事项',
   views: '视图',
   members: '成员',
-  ai: 'AI 助手',
 };
 
 const GROUP_ORDER: Record<CommandGroup, number> = {
-  actions: 0, navigation: 1, ai: 2, smartsearch: 3, items: 4, views: 5, members: 6,
+  recent: 0, actions: 1, navigation: 2, smartsearch: 3, items: 4, views: 5, members: 6,
 };
 
 function fuzzyMatch(items: CommandItem[], query: string): CommandItem[] {
@@ -74,11 +74,11 @@ function fuzzyMatch(items: CommandItem[], query: string): CommandItem[] {
 function mergePaletteItems(fuzzyItems: CommandItem[], smartEntries: SmartSearchEntry[]): PaletteItem[] {
   const result: PaletteItem[] = [];
   for (const item of fuzzyItems) {
-    if (item.group === 'actions' || item.group === 'navigation' || item.group === 'ai') result.push(item);
+    if (item.group === 'recent' || item.group === 'actions' || item.group === 'navigation') result.push(item);
   }
   for (const entry of smartEntries) result.push(entry);
   for (const item of fuzzyItems) {
-    if (item.group !== 'actions' && item.group !== 'navigation' && item.group !== 'ai' && item.group !== 'smartsearch') result.push(item);
+    if (item.group !== 'recent' && item.group !== 'actions' && item.group !== 'navigation' && item.group !== 'smartsearch') result.push(item);
   }
   return result;
 }
@@ -100,10 +100,15 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
   const listRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  const showAiResult = useCallback((_mode: string) => {
-    window.alert('AI功能开发中');
-    onClose();
-  }, [onClose]);
+  // S4-4: Recent commands — persist last 8 executed commands
+  const recentIdsRef = useRef<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('tbh-recent-cmds') || '[]'); } catch { return []; }
+  }());
+  const trackRecent = useCallback((id: string) => {
+    const next = [id, ...recentIdsRef.current.filter(r => r !== id)].slice(0, 8);
+    recentIdsRef.current = next;
+    try { localStorage.setItem('tbh-recent-cmds', JSON.stringify(next)); } catch {}
+  }, []);
 
   const items: CommandItem[] = useMemo(() => {
     const result: CommandItem[] = [];
@@ -113,10 +118,16 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
     result.push({ id: 'action-create-project', label: '创建项目', group: 'actions', icon: <Plus className="w-4 h-4" />, keywords: ['新建', '创建', '项目', 'new project'], action: () => { onCreateItem?.('project'); onClose(); } });
     result.push({ id: 'action-create-goal', label: '创建目标', group: 'actions', icon: <Plus className="w-4 h-4" />, keywords: ['新建', '创建', '目标', 'new goal', 'okr'], action: () => { onCreateItem?.('goal'); onClose(); } });
 
-    // AI commands
-    result.push({ id: 'ai-decompose', label: 'AI: 分解目标', group: 'ai', icon: <span>🎯</span>, keywords: ['ai', 'AI', '分解', '目标', 'decompose', '智能'], action: () => { showAiResult('decompose'); } });
-    result.push({ id: 'ai-risk', label: 'AI: 评估风险', group: 'ai', icon: <span>⚠️</span>, keywords: ['ai', 'AI', '风险', '评估', 'risk', '智能'], action: () => { showAiResult('risk'); } });
-    result.push({ id: 'ai-schedule', label: 'AI: 智能排期', group: 'ai', icon: <span>📅</span>, keywords: ['ai', 'AI', '排期', '日程', 'schedule', '智能'], action: () => { showAiResult('schedule'); } });
+    // S4-4: Recent commands — show when query is empty
+    if (!query) {
+      const recentIds = recentIdsRef.current;
+      for (const rid of recentIds) {
+        const match = result.find(r => r.id === rid);
+        if (match) {
+          result.push({ ...match, id: `recent-${rid}`, group: 'recent' as CommandGroup });
+        }
+      }
+    }
 
     // Navigation
     const pages: { key: string; label: string; icon: React.ReactNode; shortcut: string }[] = [
@@ -149,7 +160,7 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
     }
 
     return result;
-  }, [state.goals, state.projects, state.tasks, state.members, onCreateItem, onClose, showAiResult, goToPage, goToItem]);
+  }, [state.goals, state.projects, state.tasks, state.members, onCreateItem, onClose, goToPage, goToItem, query]);
 
   const filtered = useMemo(() => fuzzyMatch(items, query), [items, query]);
 
@@ -182,7 +193,7 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
     }
     else if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, allItems.length - 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIndex(i => Math.max(i - 1, 0)); }
-    else if (e.key === 'Enter' && allItems[selectedIndex]) { e.preventDefault(); allItems[selectedIndex].action(); }
+    else if (e.key === 'Enter' && allItems[selectedIndex]) { e.preventDefault(); const item = allItems[selectedIndex]; trackRecent(item.id); item.action(); }
   }, [allItems, selectedIndex, onClose]);
 
   // Scroll selected into view
@@ -196,7 +207,7 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]" onClick={onClose}>
-      <div className="w-[640px] max-w-[90vw] max-h-[480px] bg-card dark:bg-gray-900 rounded-xl shadow-2xl border border-border overflow-hidden flex flex-col" role="dialog" aria-modal="true" aria-label="命令面板" onClick={e => e.stopPropagation()}>
+      <div className="w-[min(640px,92vw)] max-h-[480px] bg-card dark:bg-gray-900 rounded-xl shadow-2xl border border-border overflow-hidden flex flex-col" role="dialog" aria-modal="true" aria-label="命令面板" onClick={e => e.stopPropagation()}>
         {/* Search input */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
           <Search size={18} className="text-muted-foreground shrink-0" />
@@ -236,7 +247,7 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
                       className={i === selectedIndex ? 'bg-accent text-accent-foreground rounded-lg' : ''}
                       onMouseEnter={() => setSelectedIndex(i)}
                     >
-                      <SmartSearchResult item={item.searchResult.item} matchReasons={item.searchResult.matchReasons} onClick={item.action} />
+                      <SmartSearchResult item={item.searchResult.item} matchReasons={item.searchResult.matchReasons} onClick={() => { trackRecent(item.id); item.action(); }} />
                     </div>
                   ) : (
                     <div
@@ -245,7 +256,7 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
                       aria-selected={i === selectedIndex}
                       data-selected={i === selectedIndex}
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${i === selectedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
-                      onClick={() => item.action()}
+                      onClick={() => { trackRecent(item.id); item.action(); }}
                       onMouseEnter={() => setSelectedIndex(i)}
                       tabIndex={-1}
                     >

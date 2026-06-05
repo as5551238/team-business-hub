@@ -164,7 +164,7 @@ export function ConsentDialog({ onAccept, onDecline }: { onAccept: () => void; o
   if (showPrivacy) {
     return (
       <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-        <div className="bg-card dark:bg-gray-800 rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto">
+        <div className="bg-card dark:bg-gray-800 rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="隐私协议">
           <div className="sticky top-0 bg-card dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">隐私政策</h2>
             <button onClick={() => setShowPrivacy(false)} className="text-sm text-indigo-600 hover:underline">返回确认</button>
@@ -183,7 +183,7 @@ export function ConsentDialog({ onAccept, onDecline }: { onAccept: () => void; o
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-card dark:bg-gray-800 rounded-2xl w-full max-w-md p-6">
+      <div className="bg-card dark:bg-gray-800 rounded-2xl w-full max-w-md p-6" role="alertdialog" aria-modal="true" aria-label="确认同意">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
             <Shield size={24} className="text-indigo-600" />

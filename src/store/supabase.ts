@@ -268,12 +268,9 @@ export async function replayFailedWrites(): Promise<void> {
   if (failedWrites.length === 0) return;
   const batch = failedWrites.splice(0, failedWrites.length);
   persistPendingMeta(); // Clear persisted list since we're replaying
-  if (import.meta.env.DEV) console.log(`[Supabase] Replaying ${batch.length} queued writes...`);
   for (const pw of batch) {
     // Skip writes from stale versions — newer writes may have already made this obsolete
-    if (pw.version < _writeVersion) {
-      if (import.meta.env.DEV) console.log(`[Supabase] Skipping stale write for ${pw.label} (v${pw.version} < v${_writeVersion})`);
-      continue;
+    if (pw.version < _writeVersion) {continue;
     }
     try { await pw.fn(); _writeVersion++; } catch (e) {
       handleError(e, { module: 'store', operation: 'DB_WRITE_REPLAY', severity: 'error' });
@@ -299,13 +296,13 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   behavior_events: new Set(['id','user_id','event_type','entity_type','entity_id','metadata','created_at']),
   item_links: new Set(['id','source_id','source_type','target_id','target_type','label','created_at','team_id']),
   reviews: new Set(['id','period','period_start','period_end','member_id','content','improvements','metrics','created_at','updated_at','team_id']),
-  categories: new Set(['id','name','color','icon','applies_to','created_at','team_id']),
+  categories: new Set(['id','name','color','icon','applies_to','created_at','updated_at','team_id']),
   tags: new Set(['id','name','color','created_at','updated_at','team_id']),
   templates: new Set(['id','title','description','type','content','created_by','updated_by','is_public','category','created_at','updated_at','team_id']),
   schedule_events: new Set(['id','title','description','start_date','end_date','all_day','color','linked_item_id','linked_item_type','member_id','repeat_cycle','created_at','updated_at','team_id']),
   notes: new Set(['id','title','content','folder','color','is_pinned','linked_item_id','linked_item_type','created_by','updated_by','created_at','updated_at','category','tags','team_id']),
   comments: new Set(['id','item_id','item_type','member_id','member_name','content','created_at','mentioned_member_ids','is_read','follow_up_required','follow_up_status','team_id','parent_id','attachments']),
-  bookmarks: new Set(['id','title','url','category','icon','order','member_id','created_at','team_id']),
+  bookmarks: new Set(['id','title','url','category','icon','order','member_id','created_at','updated_at','team_id']),
   saved_views: new Set(['id','name','type','filters','filter_logic','member_id','updated_at','created_at','team_id']),
   status_flow_rules: new Set(['id','from_status','to_status','allowed_roles','auto_actions','created_at','updated_at','team_id']),
   automation_rules: new Set(['id','name','enabled','item_type','trigger','condition','actions','created_at','updated_at','team_id']),

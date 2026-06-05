@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Activity, AlertTriangle, Lightbulb, Users, TrendingUp, Shield, RefreshCw } from 'lucide-react';
 import { handleError } from '@/lib/errorHandler';
+import { resolveToken } from '@/lib/resolveToken';
 
 interface DiagnosticsData {
   healthScore: number;
@@ -23,22 +24,22 @@ interface DiagnosticsData {
 }
 
 const HEALTH_DIMS = [
-  { key: 'efficiency', label: '效率', icon: '⚡', color: '#3B82F6' },
-  { key: 'collaboration', label: '协作', icon: '🤝', color: '#10B981' },
-  { key: 'stability', label: '稳定性', icon: '🛡', color: '#8B5CF6' },
-  { key: 'goalAlignment', label: '目标聚焦', icon: '🎯', color: '#EC4899' },
-  { key: 'aiAdoption', label: 'AI采纳', icon: '🤖', color: '#06B6D4' },
+  { key: 'efficiency', label: '效率', icon: '⚡', color: resolveToken('primary') },
+  { key: 'collaboration', label: '协作', icon: '🤝', color: resolveToken('success') },
+  { key: 'stability', label: '稳定性', icon: '🛡', color: resolveToken('chart-purple') },
+  { key: 'goalAlignment', label: '目标聚焦', icon: '🎯', color: resolveToken('chart-pink') },
+  { key: 'aiAdoption', label: 'AI采纳', icon: '🤖', color: resolveToken('chart-cyan') },
 ] as const;
 
 function HealthGauge({ score }: { score: number }) {
   const r = 36;
   const circ = 2 * Math.PI * r;
   const pct = Math.min(1, Math.max(0, score / 100));
-  const color = score >= 75 ? '#10B981' : score >= 50 ? '#F59E0B' : score >= 25 ? '#F97316' : '#EF4444';
+  const color = score >= 75 ? resolveToken('success') : score >= 50 ? resolveToken('warning') : score >= 25 ? '#f97316' : resolveToken('destructive');
   return (
     <div className="relative w-28 h-28 flex-shrink-0">
       <svg width="100%" height="100%" viewBox="0 0 80 80">
-        <circle cx="40" cy="40" r={r} fill="none" stroke="#e2e8f0" strokeWidth="6" />
+        <circle cx="40" cy="40" r={r} fill="none" stroke={resolveToken('border')} strokeWidth="6" />
         <circle cx="40" cy="40" r={r} fill="none" stroke={color} strokeWidth="6"
           strokeDasharray={`${circ}`} strokeDashoffset={circ * (1 - pct)}
           strokeLinecap="round" transform="rotate(-90 40 40)"

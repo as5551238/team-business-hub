@@ -13,6 +13,7 @@ import { calcDualTrack, calcKpiGoalScore, getKpiStatusColor, getKpiStatusLabel }
 import { Target, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Users, BarChart3 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { Goal, KeyResult } from '@/types';
+import { resolveToken } from '@/lib/resolveToken';
 
 // ===== KPI 汇总计算 =====
 
@@ -130,7 +131,7 @@ function ScoreRing({ score, size = 80 }: { score: number; size?: number }) {
   const circumference = 2 * Math.PI * radius;
   const progress = Math.min(100, score) / 100;
   const offset = circumference * (1 - progress);
-  const color = score >= 80 ? '#22c55e' : score >= 60 ? '#eab308' : '#ef4444';
+  const color = score >= 80 ? resolveToken('success') : score >= 60 ? resolveToken('warning') : resolveToken('destructive');
 
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>

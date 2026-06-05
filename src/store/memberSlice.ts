@@ -24,13 +24,14 @@ export function memberReducer(state: AppState, action: Action): AppState | null 
       const canManageTeam = hasPermission(state, state.currentUser?.id || '', 'team_manage');
       if (!isSelf && !isAdmin && !canManageTeam) return state;
       const idx = s.members.findIndex(m => m.id === action.payload.id);
+      const old = s.members.find(m => m.id === action.payload.id);
       if (idx !== -1) {
         if (!isAdmin && action.payload.updates.role !== undefined) {
           action.payload.updates.role = s.members[idx].role;
         }
-        s.members[idx] = { ...s.members[idx], ...action.payload.updates };
+        s.members[idx] = { ...s.members[idx], ...action.payload.updates, updatedAt: tsNow() };
         if (state.currentUser?.id === action.payload.id && state.currentUser) s.currentUser = { ...state.currentUser, ...action.payload.updates } as Member;
-        supabaseUpdate('members', action.payload.id, action.payload.updates);
+        supabaseUpdate('members', action.payload.id, { ...action.payload.updates, updated_at: tsNow() }, old?.updatedAt);
       }
       return s;
     }

@@ -5,10 +5,11 @@ import { uploadFile, deleteFile, BUCKET_NAMES } from '@/supabase/storage';
 import type { TrackingRecord, RepeatCycle } from '@/types';
 import { useCollabPresence } from '@/lib/collab';
 import { useAutoSave } from '@/hooks/useAutoSave';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { X, Trash2, Clock, Tag, Paperclip, Plus, Edit2 } from 'lucide-react';
+import { X, Trash2, Clock, Tag, Paperclip, Plus, Edit2, Eye } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { genId } from '@/store/utils';
 import { Section, STATUS_MAP, PRIORITY_MAP, REPEAT_LABELS } from './detail-shared';
@@ -76,22 +77,27 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
   const canDelete = (itemType === 'goal' ? can('goals_delete') : itemType === 'project' ? can('projects_delete') : can('tasks_delete'));
   const canEdit = (itemType === 'goal' ? can('goals_edit') : itemType === 'project' ? can('projects_edit') : can('tasks_edit'));
 
-  // Edit lock via collab presence
+  // Edit lock via collab presence — track all viewers via editingOn field
   const { onlineUsers, trackEditing } = useCollabPresence(state.currentUser?.id || '', state.currentUser?.name || '');
-  const editLockUser = useMemo(() => onlineUsers.find(u => u.id !== state.currentUser?.id && u.editingOn && u.editingOn.itemId === itemId && u.editingOn.itemType === itemType), [onlineUsers, state.currentUser?.id, itemId, itemType]);
+  // All other users currently viewing this item
+  const otherViewers = useMemo(() => onlineUsers.filter(u => u.id !== state.currentUser?.id && u.editingOn && u.editingOn.itemId === itemId && u.editingOn.itemType === itemType), [onlineUsers, state.currentUser?.id, itemId, itemType]);
+  // The first viewer with potential edit access is the "edit lock" user
+  const editLockUser = otherViewers.length > 0 ? otherViewers[0] : undefined;
 
-  // Auto-clear edit lock when panel closes
+  // Auto-clear edit lock when panel closes — always track viewing presence
   useEffect(() => {
-    if (isOpen && canEdit) {
+    if (isOpen) {
       trackEditing({ itemId, itemType });
     } else {
       trackEditing(null);
     }
     return () => { trackEditing(null); };
-  }, [isOpen, canEdit, itemId, itemType, trackEditing]);
+  }, [isOpen, itemId, itemType, trackEditing]);
+  const focusTrapRef = useFocusTrap(isOpen, () => { if (!inline) onClose(); });
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const uploadTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [panelWidth, setPanelWidth] = useState(480);
 
   useEffect(() => {
@@ -111,6 +117,9 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
     window.addEventListener('mouseup', onUp);
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
+
+  // Cleanup upload timer on unmount
+  useEffect(() => () => { if (uploadTimerRef.current) clearTimeout(uploadTimerRef.current); }, []);
 
   const goal = itemType === 'goal' ? state.goals.find(g => g.id === itemId) : null;
   const project = itemType === 'project' ? state.projects.find(p => p.id === itemId) : null;
@@ -295,7 +304,8 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
       setUploadStatus('error');
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
-    setTimeout(() => setUploadStatus('idle'), 3000);
+    if (uploadTimerRef.current) clearTimeout(uploadTimerRef.current);
+    uploadTimerRef.current = setTimeout(() => setUploadStatus('idle'), 3000);
   }
 
   async function handleDeleteAttachment(attId: string, attUrl: string) {
@@ -342,7 +352,8 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
     }
     if (newAttachments.length > 0) {
       updateItem({ attachments: [...attachments, ...newAttachments] });
-      setTimeout(() => setUploadStatus('idle'), 3000);
+      if (uploadTimerRef.current) clearTimeout(uploadTimerRef.current);
+      uploadTimerRef.current = setTimeout(() => setUploadStatus('idle'), 3000);
     }
   }
 
@@ -354,7 +365,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
         <div className="text-center p-6">
           <div className="text-3xl mb-3">📝</div>
           <div className="text-sm text-muted-foreground mb-3">该事项已被删除</div>
-          <button onClick={() => onClose()} className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-muted">关闭面板</button>
+          <button onClick={() => onClose()} className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-muted" aria-label="关闭面板">关闭面板</button>
         </div>
       </div>
     </>
@@ -364,8 +375,8 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
   return (
     <DetailPanelErrorBoundary>
     <>
-      {!inline && isOpen && <div className="fixed inset-0 bg-black/30 z-40 hidden md:block" onClick={handleOverlayClick} />}
-      <div ref={panelRef} className={cn(inline ? 'h-full flex flex-col border-l bg-card animate-slide-in-right' : 'fixed glass-elevated border-border z-50 flex flex-col transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', !inline && (isOpen ? 'translate-x-0' : 'translate-x-full'))} style={inline ? undefined : { width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}>
+      {!inline && isOpen && <div className="fixed inset-0 bg-black/30 z-40 hidden md:block" onClick={handleOverlayClick} aria-hidden="true" />}
+      <div ref={(el) => { (focusTrapRef as React.MutableRefObject<HTMLDivElement | null>).current = el; (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }} role="dialog" aria-label={`${itemType === 'goal' ? '目标' : itemType === 'project' ? '项目' : '任务'}详情`} aria-modal={!inline && isOpen ? true : undefined} className={cn(inline ? 'h-full flex flex-col border-l bg-card animate-slide-in-right' : 'fixed glass-elevated border-border z-50 flex flex-col transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', !inline && (isOpen ? 'translate-x-0' : 'translate-x-full'))} style={inline ? undefined : { width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}>
         {inline && <div className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/20 active:bg-primary/30 z-10" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }} />}
         {!inline && <div className="hidden md:block absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/20 active:bg-primary/30 z-10" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }} />}
         <div className="overflow-y-auto flex-1">
@@ -374,6 +385,17 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
               <div className="mb-2 px-2 py-1 rounded text-xs bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full flex items-center justify-center text-[8px] font-bold" style={{ backgroundColor: editLockUser.color + '30', color: editLockUser.color }}>{editLockUser.name.charAt(0)}</div>
                 <span>{editLockUser.name} 正在编辑此{itemType === 'goal' ? '目标' : itemType === 'project' ? '项目' : '任务'}</span>
+              </div>
+            )}
+            {otherViewers.length > 0 && (
+              <div className={cn('mb-2 px-2 py-1 rounded text-xs flex items-center gap-1.5', editLockUser ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200')}>
+                <Eye className="w-3 h-3 flex-shrink-0" />
+                <div className="flex -space-x-1">
+                  {otherViewers.slice(0, 3).map(u => (
+                    <div key={u.id} className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold ring-1 ring-white" style={{ backgroundColor: u.color + '30', color: u.color }} title={u.name}>{u.name.charAt(0)}</div>
+                  ))}
+                </div>
+                <span>{otherViewers.map(u => u.name).slice(0, 2).join('、')}{otherViewers.length > 2 ? `等${otherViewers.length}人` : ''}正在查看</span>
               </div>
             )}
             <div className="flex items-start gap-2">
@@ -409,7 +431,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                   </div>
                 </div>
               </div>
-              <button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={handleClose}><X className="w-5 h-5" /></button>
+              <button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={handleClose} aria-label="关闭详情面板"><X className="w-5 h-5" /></button>
             </div>
           </div>
           <div className="px-4 sm:px-5 py-1.5 border-b border-border/50 flex items-center gap-2">
@@ -471,7 +493,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                       </div>
                       <div className="flex items-center gap-2 mt-2">
                         <input type="text" className="flex-1 text-sm border border-input rounded px-2 py-1" placeholder="添加自定义标签" value={customTagInput} onChange={e => setCustomTagInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }} />
-                        <Button variant="outline" size="sm" className="h-7" onClick={addCustomTag} disabled={!customTagInput.trim()}><Plus className="w-3.5 h-3.5" /></Button>
+                        <Button variant="outline" size="sm" className="h-7" onClick={addCustomTag} disabled={!customTagInput.trim()} aria-label="添加自定义标签"><Plus className="w-3.5 h-3.5" /></Button>
                       </div>
                     </div>
                   </div>
@@ -535,7 +557,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                         <Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
                         <a href={att.url && (att.url.startsWith('http://') || att.url.startsWith('https://')) ? att.url : '#'} target="_blank" rel="noopener noreferrer" className="flex-1 truncate hover:text-primary hover:underline">{att.name}</a>
                         <span className="text-[10px] text-muted-foreground">{formatFileSize(att.size)}</span>
-                        <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" onClick={() => handleDeleteAttachment(att.id, att.url)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                        <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" aria-label="删除附件" onClick={() => handleDeleteAttachment(att.id, att.url)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
                       </div>
                     ))}
                     <div className="flex items-center gap-2">
@@ -557,7 +579,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                     <div key={record.id} className="border rounded p-2 space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-muted-foreground">{record.date}</span>
-                        <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" onClick={() => handleDeleteTracking(record.id)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                        <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" aria-label="删除跟踪记录" onClick={() => handleDeleteTracking(record.id)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
                       </div>
                       <p className="text-sm">{record.content}</p>
                       {record.result && <p className="text-xs text-muted-foreground bg-accent/50 rounded p-1">结果: {record.result}</p>}

@@ -15,13 +15,12 @@ const ProjectCard = React.memo(function ProjectCard({ project, members, expanded
   onClick: () => void; tags: Array<{ id: string; name: string; color: string }>;
   commentCount: number;
 } & BatchProps) {
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
   const { can } = usePermissions();
   const [showMenu, setShowMenu] = useState(false);
   const leader = members.find(m => m.id === project.leaderId);
   const supporters = [...new Set((project.supporterIds || []))].map(id => members.find(m => m.id === id)).filter(Boolean) as typeof members;
-  const { state: _projState } = useStore();
-  const goal = _projState.goals.find(g => g.id === project.goalId);
+  const goal = state.goals.find(g => g.id === project.goalId);
   const uniqueTags = [...new Set((project.tags || []))];
 
   return (
@@ -30,7 +29,7 @@ const ProjectCard = React.memo(function ProjectCard({ project, members, expanded
         <div className="flex items-start gap-3 mb-3">
           {batchMode && <div onClick={e => e.stopPropagation()}><input type="checkbox" checked={isSelected} readOnly className="mt-1 rounded cursor-pointer" onClick={() => onToggleSelect(project.id)} /></div>}
           <GripVertical size={16} className="text-muted-foreground hover:text-foreground flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing" />
-          {hasChildren && <button className="flex-shrink-0 mt-0.5 text-muted-foreground hover:text-foreground transition-transform" onClick={e => { e.stopPropagation(); onToggle(); }}><ChevronRight size={16} className={`transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} /></button>}
+          {hasChildren && <button className="flex-shrink-0 mt-0.5 text-muted-foreground hover:text-foreground transition-transform" onClick={e => { e.stopPropagation(); onToggle(); }} aria-label="展开子项目" aria-expanded={expanded}><ChevronRight size={16} className={`transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} /></button>}
           {!hasChildren && <div className="w-4 flex-shrink-0" />}
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-orange-100 text-orange-700" onClick={onClick}><FolderKanban size={16} /></div>
           <div className="flex-1 min-w-0 cursor-pointer" onClick={onClick}>
@@ -46,14 +45,14 @@ const ProjectCard = React.memo(function ProjectCard({ project, members, expanded
             </div>
           </div>
           <div className="relative flex-shrink-0">
-            <button className="p-1 rounded hover:bg-muted" onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }}><MoreHorizontal size={16} /></button>
+            <button className="p-1 rounded hover:bg-muted" onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }} aria-label="更多操作"><MoreHorizontal size={16} /></button>
             {showMenu && (
               <div className="relative">
                 <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
                 <div className="absolute right-0 top-full mt-1 w-36 bg-card rounded-lg shadow-lg border border-border z-50 py-1">
                   <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); onClick(); setShowMenu(false); }}><Edit2 size={14} /> 编辑</button>
                   {can('edit_projects') && project.status !== 'done' && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, updates: { status: 'done' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 完成</button>}
-                  {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除</button>}
+                  {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenu(false); }} aria-label="删除项目"><Trash2 size={14} /> 删除</button>}
                 </div>
               </div>
             )}
@@ -154,13 +153,13 @@ export function ProjectListView({ projects, members, setDetailItem, commentCount
         <span className="text-[11px] text-muted-foreground flex-shrink-0 hidden sm:inline w-20 text-right">{project.endDate}</span>
         <span className="text-[10px] text-muted-foreground flex-shrink-0 flex items-center gap-0.5"><MessageSquare size={11} />{commentCounts[project.id] || 0}</span>
         <div className="relative flex-shrink-0">
-          <button className="p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === project.id ? null : project.id); }}><MoreHorizontal size={14} /></button>
+          <button className="p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === project.id ? null : project.id); }} aria-label="更多操作"><MoreHorizontal size={14} /></button>
           {showMenuId === project.id && (
             <div className="relative">
               <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
               <div className="absolute right-0 top-full mt-1 w-32 bg-card rounded-lg shadow-lg border border-border z-50 py-1">
                 <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); setShowMenuId(null); }}><Edit2 size={12} /> 编辑</button>
-                {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
+                {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }} aria-label="删除项目"><Trash2 size={12} /> 删除</button>}
               </div>
             </div>
           )}
@@ -248,13 +247,13 @@ export function ProjectTableView({ projects, members, setDetailItem, commentCoun
                 <td className="px-3 py-2.5 text-xs text-muted-foreground">{commentCounts[project.id] || 0}</td>
                 <td className="px-4 py-2.5">
                   <div className="relative">
-                    <button className="p-1 rounded hover:bg-muted" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === project.id ? null : project.id); }}><MoreHorizontal size={14} /></button>
+                    <button className="p-1 rounded hover:bg-muted" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === project.id ? null : project.id); }} aria-label="更多操作"><MoreHorizontal size={14} /></button>
                     {showMenuId === project.id && (
                       <div className="relative">
                         <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
                         <div className="absolute right-0 top-full mt-1 w-32 bg-card rounded-lg shadow-lg border border-border z-50 py-1">
                           <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); setShowMenuId(null); }}><Edit2 size={12} /> 编辑</button>
-                          {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
+                          {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }} aria-label="删除项目"><Trash2 size={12} /> 删除</button>}
                         </div>
                       </div>
                     )}
@@ -478,16 +477,54 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
   );
 }
 
-const MatrixQuadrantCard = React.memo(function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, batchProps, dispatch, dragRef }: { project: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; dispatch: React.Dispatch<unknown>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
+const PROJECT_Q_ARROW_MAP: Record<string, { up?: string; down?: string; left?: string; right?: string }> = {
+  Q1: { down: 'Q2', right: 'Q3' },
+  Q2: { up: 'Q1', right: 'Q4' },
+  Q3: { down: 'Q4', left: 'Q1' },
+  Q4: { up: 'Q3', left: 'Q2' },
+};
+
+const MatrixQuadrantCard = React.memo(function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, batchProps, dispatch, dragRef, dragMovedRef, currentQuadrant, canEdit }: { project: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; dispatch: React.Dispatch<unknown>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null>; dragMovedRef: React.MutableRefObject<boolean>; currentQuadrant: string; canEdit: boolean }) {
   const { can } = usePermissions();
   const leader = (members || []).find(m => m.id === project.leaderId);
+  const focusAfterMoveId = useRef<string | null>(null);
+  function handleProjectKeyDown(e: React.KeyboardEvent) {
+    if (e.altKey && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+      const arrows = PROJECT_Q_ARROW_MAP[currentQuadrant];
+      if (!arrows) return;
+      let tq: string | undefined;
+      if (e.key === 'ArrowUp') tq = arrows.up;
+      else if (e.key === 'ArrowDown') tq = arrows.down;
+      else if (e.key === 'ArrowLeft') tq = arrows.left;
+      else if (e.key === 'ArrowRight') tq = arrows.right;
+      if (tq && canEdit) {
+        e.preventDefault();
+        const pMap: Record<string, TaskPriority> = { Q1: 'urgent', Q2: 'high', Q3: 'medium', Q4: 'low' };
+        dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, updates: { priority: pMap[tq] } } });
+        focusAfterMoveId.current = project.id;
+      }
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setDetailItem({ type: 'project', id: project.id });
+    }
+  }
   return (
-    <div className="bg-card rounded-lg border border-border p-3 hover:shadow-sm transition-shadow group cursor-pointer select-none" onMouseDown={e => { if (e.button !== 0) return; e.preventDefault(); dragMovedRef.current = false; dragRef.current = { id: project.id, el: e.currentTarget }; e.currentTarget.classList.add('opacity-30', 'scale-95'); }} onTouchStart={e => { const t = e.touches[0]; if (!t) return; dragMovedRef.current = false; dragRef.current = { id: project.id, el: e.currentTarget as HTMLElement }; (e.currentTarget as HTMLElement).classList.add('opacity-30', 'scale-95'); }} onClick={() => { if (!dragMovedRef.current) setDetailItem({ type: 'project', id: project.id }); }}>
+    <div
+      data-project-id={project.id}
+      tabIndex={0}
+      role="option"
+      aria-label={`${project.title}, 象限: ${currentQuadrant}, 优先级: ${project.priority}`}
+      className="bg-card rounded-lg border border-border p-3 hover:shadow-sm transition-shadow group cursor-pointer select-none focus:ring-2 focus:ring-primary focus:outline-none"
+      onMouseDown={e => { if (e.button !== 0) return; e.preventDefault(); dragMovedRef.current = false; dragRef.current = { id: project.id, el: e.currentTarget }; e.currentTarget.classList.add('opacity-30', 'scale-95'); }}
+      onTouchStart={e => { const t = e.touches[0]; if (!t) return; dragMovedRef.current = false; dragRef.current = { id: project.id, el: e.currentTarget as HTMLElement }; (e.currentTarget as HTMLElement).classList.add('opacity-30', 'scale-95'); }}
+      onClick={() => { if (!dragMovedRef.current) setDetailItem({ type: 'project', id: project.id }); }}
+      onKeyDown={handleProjectKeyDown}
+    >
       <div className="flex items-center gap-1 mb-1">
         {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(project.id)} className="rounded" onChange={() => batchProps.onToggleSelect(project.id)} /></span>}
         <span className="text-xs font-medium truncate flex-1">{project.title}</span>
         <div className="relative flex-shrink-0">
-          {can('delete_projects') && <button className="p-0.5 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); }}><Trash2 size={12} className="text-destructive" /></button>}
+          {can('delete_projects') && <button className="p-0.5 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); }} aria-label="删除项目"><Trash2 size={12} className="text-destructive" /></button>}
         </div>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
@@ -556,7 +593,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
 
   function handlePointerMove(cx: number, cy: number) {
     if (!dragRef.current) return;
-    dragMovedRef.current = true;
+    if (!dragMovedRef.current) dragMovedRef.current = true;
     let found = false;
     for (const key of qKeys) {
       const el = boxRefs.current[key];
@@ -618,10 +655,10 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
         const q = quadrants[qKey];
         const items = grouped[qKey];
         return (
-          <div key={qKey} data-quadrant={qKey} ref={el => { boxRefs.current[qKey] = el; }} className={`rounded-xl border p-3 min-h-[200px] ${q.accent}`}>
+          <div key={qKey} data-quadrant={qKey} ref={el => { boxRefs.current[qKey] = el; }} role="listbox" aria-label={`${q.title} 项目列表`} className={`rounded-xl border p-3 min-h-[200px] ${q.accent}`}>
             <div className="text-xs font-bold mb-3 text-foreground/70">{q.title} ({items.length})</div>
             <div className="space-y-2 max-h-[calc(100vh-420px)] overflow-y-auto">
-              {items.map(p => <MatrixQuadrantCard key={p.id} project={p} members={members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} dispatch={dispatch} dragRef={dragRef} />)}
+              {items.map(p => <MatrixQuadrantCard key={p.id} project={p} members={members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} dispatch={dispatch} dragRef={dragRef} dragMovedRef={dragMovedRef} currentQuadrant={qKey} canEdit={can('edit_projects')} />)}
               {items.length === 0 && <div className="text-xs text-muted-foreground/50 py-4 text-center">拖拽项目到此处</div>}
             </div>
           </div>

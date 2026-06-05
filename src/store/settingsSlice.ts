@@ -26,8 +26,9 @@ export function settingsReducer(state: AppState, action: Action): AppState | nul
         const others = s.statusFlowRules.filter((_: unknown, i: number) => i !== index);
         const validation = validateNewFlowRule(others, rule);
         if (!validation.valid) { console.warn('Invalid flow rule:', validation.reason); return state; }
+        const old = s.statusFlowRules.find(r => r.id === rule.id);
         s.statusFlowRules[index] = rule;
-        supabaseUpdate('status_flow_rules', rule.id, { from_status: rule.fromStatus, to_status: rule.toStatus, allowed_roles: rule.allowedRoles, auto_actions: rule.autoActions ?? [], updated_at: tsNow() });
+        supabaseUpdate('status_flow_rules', rule.id, { from_status: rule.fromStatus, to_status: rule.toStatus, allowed_roles: rule.allowedRoles, auto_actions: rule.autoActions ?? [], updated_at: tsNow() }, old?.updatedAt);
       }
       return s;
     }
@@ -67,8 +68,9 @@ export function settingsReducer(state: AppState, action: Action): AppState | nul
       const now = tsNow();
       const rIdx = s.automationRules.findIndex(r => r.id === action.payload.id);
       if (rIdx !== -1) {
+        const oldUpdatedAt = s.automationRules[rIdx].updatedAt;
         s.automationRules[rIdx] = { ...s.automationRules[rIdx], ...action.payload.updates, updatedAt: now };
-        supabaseUpdate('automation_rules', action.payload.id, { ...action.payload.updates, updated_at: now });
+        supabaseUpdate('automation_rules', action.payload.id, { ...action.payload.updates, updated_at: now }, oldUpdatedAt);
       }
       return s;
     }

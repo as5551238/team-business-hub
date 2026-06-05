@@ -268,7 +268,6 @@ export function dispatchAiPushEvent(event: AiPushEvent): void {
       dispatchPushEvent(pushEvent);
       break;
     case 'low':
-      console.debug('[PushEngine] Low-priority event dropped:', event.type, event.targetId);
       break;
   }
 }

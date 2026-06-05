@@ -4,6 +4,10 @@ import { supabaseInsert, supabaseUpdate, supabaseDelete, logActivity } from './s
 import { genId } from './utils';
 import { needMutate, reducerCanDelete, notifyAssigned, calcGoalLevel, computeGoalProgressInfo, applyGoalProgressInfo, calcProjectProgress, clampTitle, clampDesc, markPendingDelete, diffAssigned, resolveInheritedPriority, executeAutomationActions, matchCondition, tsNow, validateStatusFlow, fireAutomationRules } from './shared';
 import { cascadeAddGoal, cascadeGoalStatusChange, cascadeGoalProgressUpdate } from './cascadeHandlers';
+import { pushFieldUndo } from './undo';
+
+/** Field name → human-readable label (shared across slices, S5-5) */
+import { fieldLabelMap as goalFieldLabelMap } from './fieldLabels';
 
 export function goalReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
@@ -52,6 +56,16 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
         const oldSupporterIds = s.goals[idx].supporterIds;
         const oldStatus = s.goals[idx].status;
         const updates = { ...action.payload.updates };
+        // S4-3: Capture old field values for undo before applying updates
+        const oldGoal = s.goals[idx];
+        const changedKeys = Object.keys(updates).filter(k => (updates as Record<string, unknown>)[k] !== (oldGoal as Record<string, unknown>)[k]);
+        if (changedKeys.length > 0) {
+          const oldValues: Record<string, unknown> = {};
+          const newValues: Record<string, unknown> = {};
+          for (const k of changedKeys) { oldValues[k] = (oldGoal as Record<string, unknown>)[k]; newValues[k] = (updates as Record<string, unknown>)[k]; }
+          const fieldLabel = changedKeys.length === 1 ? goalFieldLabelMap[changedKeys[0]] || changedKeys[0] : `${changedKeys.length}个字段`;
+          pushFieldUndo('UPDATE_GOAL', action.payload.id, oldValues, newValues, `更新目标${fieldLabel}`);
+        }
         if (updates.title) updates.title = clampTitle(updates.title) ?? updates.title;
         if (updates.description) updates.description = clampDesc(updates.description) ?? updates.description;
         if ('parentId' in updates) {

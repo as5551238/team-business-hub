@@ -107,7 +107,7 @@ export function isFeatureVisible(feature: string, level?: UserLevel): boolean {
     'goal_key_results': 'intermediate',
     'comment_ai': 'intermediate',
     // Advanced: 高级功能
-    'knowledge': 'advanced',
+    'knowledge': 'intermediate',
     'admin_advanced': 'advanced',
     'gantt': 'advanced',
     'ai_push_events': 'advanced',

@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react';
 import type { Page } from './Layout';
+import type { Action } from '@/store/types';
 
 interface UseKeyboardShortcutsParams {
   goToPage: (page: Page) => void;
   closeAllDropdowns: () => void;
-  dispatch: React.Dispatch<any>;
+  dispatch: React.Dispatch<Action>;
   cycleSidebarMode: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setQuickCreateOpen: (open: boolean) => void;
   setQuickCreateType: (type: 'task' | 'goal' | 'project') => void;
+  setShortcutHelpOpen: (open: boolean) => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
@@ -20,6 +22,7 @@ export function useKeyboardShortcuts({
   setCommandPaletteOpen,
   setQuickCreateOpen,
   setQuickCreateType,
+  setShortcutHelpOpen,
   searchInputRef,
 }: UseKeyboardShortcutsParams) {
   const keyBufferRef = useRef('');
@@ -65,6 +68,10 @@ export function useKeyboardShortcuts({
         // Not a recognized g-prefix combo — fall through to single-key handling
       }
 
+      // Bug10 fix: Skip single-key shortcuts when modifier keys are held
+      // (e.g. Ctrl+C copy should NOT trigger 'c' quick create)
+      if (mod) return;
+
       // --- Single key shortcuts ---
       // Escape: close dropdowns / command palette / detail panel
       if (e.key === 'Escape') { closeAllDropdowns(); setCommandPaletteOpen(false); window.dispatchEvent(new CustomEvent('tbh-close-detail-panel')); return; }
@@ -73,7 +80,7 @@ export function useKeyboardShortcuts({
       if (e.key === '/') { e.preventDefault(); searchInputRef.current?.focus(); return; }
 
       // ? : show keyboard help (via command palette with shortcut filter)
-      if (e.key === '?') { e.preventDefault(); setCommandPaletteOpen(true); return; }
+      if (e.key === '?') { e.preventDefault(); setShortcutHelpOpen(true); return; }
 
       // [ / ] : sidebar toggle
       if (e.key === '[') { e.preventDefault(); cycleSidebarMode(); return; }

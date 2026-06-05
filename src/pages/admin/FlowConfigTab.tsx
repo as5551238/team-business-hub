@@ -119,8 +119,8 @@ export function FlowConfigTab() {
             <span className="text-xs text-muted-foreground">{rule.allowedRoles.length === 0 ? '全部角色' : rule.allowedRoles.map(r => ROLE_LABELS[r]).join(', ')}</span>
             {(rule.autoActions?.length ?? 0) > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">{rule.autoActions!.length}个动作</span>}
             <div className="flex-1" />
-            <button onClick={() => { setForm({ ...rule }); setEditingIdx(idx); }} className="text-muted-foreground hover:text-primary cursor-pointer"><Edit2 size={14} /></button>
-            <button onClick={() => handleDelete(idx)} className="text-muted-foreground hover:text-destructive cursor-pointer"><Trash2 size={14} /></button>
+            <button onClick={() => { setForm({ ...rule }); setEditingIdx(idx); }} className="text-muted-foreground hover:text-primary cursor-pointer" aria-label="编辑规则"><Edit2 size={14} /></button>
+            <button onClick={() => handleDelete(idx)} className="text-muted-foreground hover:text-destructive cursor-pointer" aria-label="删除规则"><Trash2 size={14} /></button>
           </div>
         ))}
       </div>
@@ -174,7 +174,7 @@ export function FlowConfigTab() {
                       {state.members.filter(m => m.status === 'active').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
                   )}
-                  <button onClick={() => removeAction(i)} className="text-muted-foreground hover:text-destructive cursor-pointer"><Trash2 size={12} /></button>
+                  <button onClick={() => removeAction(i)} className="text-muted-foreground hover:text-destructive cursor-pointer" aria-label="移除动作"><Trash2 size={12} /></button>
                 </div>
               ))}
             </div>

@@ -2,7 +2,7 @@ import type { AppState } from '@/types';
 import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete } from './supabase';
 import { genId } from './utils';
-import { canDeleteOwnContent, needMutate, clampComment, markPendingDelete } from './shared';
+import { canDeleteOwnContent, needMutate, clampComment, markPendingDelete, tsNow } from './shared';
 import { cascadeAddComment } from './cascadeHandlers';
 
 export function commentReducer(state: AppState, action: Action): AppState | null {
@@ -50,10 +50,13 @@ export function commentReducer(state: AppState, action: Action): AppState | null
     case 'UPDATE_COMMENT': {
       if (!state.currentUser) return state;
       const commentObj = (state.comments ?? []).find(c => c.id === action.payload.id);
-      if (!canDeleteOwnContent(state, commentObj?.memberId)) return state;
+      // isRead updates should always be allowed (reading others' comments is not content modification)
+      const isReadToggle = action.payload.updates && 'isRead' in action.payload.updates && Object.keys(action.payload.updates).length === 1;
+      if (!isReadToggle && !canDeleteOwnContent(state, commentObj?.memberId)) return state;
       const s = needMutate(state, ['comments']);
-      s.comments = s.comments.map(c => c.id === action.payload.id ? { ...c, ...action.payload.updates } : c);
-      supabaseUpdate('comments', action.payload.id, action.payload.updates);
+      const old = s.comments.find(c => c.id === action.payload.id);
+      s.comments = s.comments.map(c => c.id === action.payload.id ? { ...c, ...action.payload.updates, updatedAt: tsNow() } : c);
+      supabaseUpdate('comments', action.payload.id, { ...action.payload.updates, updated_at: tsNow() }, old?.updatedAt);
       return s;
     }
   }

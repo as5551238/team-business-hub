@@ -97,7 +97,7 @@ export const GoalCard = React.memo(function GoalCard({ goal, members, projects, 
             </div>
           </div>
           <div className="relative">
-            <button className="p-1 rounded hover:bg-muted" onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }}>
+            <button className="p-1 rounded hover:bg-muted" onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }} aria-label="更多操作">
               <MoreHorizontal size={16} />
             </button>
             {showMenu && (
@@ -187,7 +187,7 @@ export const GoalTreeNode = React.memo(function GoalTreeNode({ goal, filteredGoa
   projects: { id: string; title: string; goalId: string | null }[];
   expandedGoals: Set<string>; toggleExpand: (id: string) => void;
   tags: Array<{ id: string; name: string; color: string }>; depth: number; onOpenDetail: (id: string) => void;
-  commentCounts: Map<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void;
+  commentCounts: Record<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void;
   visited?: Set<string>;
 }) {
   if (depth > 10 || (visited && visited.has(goal.id))) return null;
@@ -197,7 +197,7 @@ export const GoalTreeNode = React.memo(function GoalTreeNode({ goal, filteredGoa
   const nextVisited = new Set(visited); nextVisited.add(goal.id);
   return (
     <div>
-      <GoalCard goal={goal} members={members} projects={projects} expanded={isExpanded} hasChildren={hasChildren} onToggle={() => toggleExpand(goal.id)} tags={tags} onOpenDetail={() => onOpenDetail(goal.id)} commentCount={commentCounts.get(goal.id) || 0} batchMode={batchMode} selected={selectedIds.has(goal.id)} onToggleSelect={() => onToggleSelect(goal.id)} />
+      <GoalCard goal={goal} members={members} projects={projects} expanded={isExpanded} hasChildren={hasChildren} onToggle={() => toggleExpand(goal.id)} tags={tags} onOpenDetail={() => onOpenDetail(goal.id)} commentCount={commentCounts[goal.id] || 0} batchMode={batchMode} selected={selectedIds.has(goal.id)} onToggleSelect={() => onToggleSelect(goal.id)} />
       {hasChildren && isExpanded && (
         <div className="mt-3 space-y-3 border-l-2 border-primary/20 pl-4" style={{ marginLeft: Math.min(depth * 20 + 16, 80) + 'px' }}>
           {children.map(child => (
@@ -209,7 +209,7 @@ export const GoalTreeNode = React.memo(function GoalTreeNode({ goal, filteredGoa
   );
 });
 
-export function GoalListView({ goals, members, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect }: { goals: Goal[]; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }) {
+export function GoalListView({ goals, members, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect }: { goals: Goal[]; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Record<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }) {
   const { dispatch } = useStore();
   const { can } = usePermissions();
   const [showMenuId, setShowMenuId] = useState<string | null>(null);
@@ -280,7 +280,7 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
     const { goal, depth, connector, parentTitle } = item;
     const leader = members.find(m => m.id === goal.leaderId);
     const hasKids = (childrenMap.get(goal.id)?.length || 0) > 0;
-    const cc = commentCounts.get(goal.id) || 0;
+    const cc = commentCounts[goal.id] || 0;
     return (
       <div key={goal.id} data-item-id={goal.id} data-item-type="goal" className="flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 hover:bg-muted/30 transition-colors group cursor-pointer border-b border-border/50" style={{ paddingLeft: (16 + depth * 24) + 'px' }} onClick={() => onOpenDetail(goal.id)}>
         {batchMode && (
@@ -312,7 +312,7 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
         )}
         <span className="text-[10px] md:text-xs text-muted-foreground flex-shrink-0 w-20 text-right hidden sm:inline">{goal.endDate}</span>
         <div className="relative flex-shrink-0">
-          <button className="p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === goal.id ? null : goal.id); }}><MoreHorizontal size={14} /></button>
+          <button className="p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100" onClick={e => { e.stopPropagation(); setShowMenuId(showMenuId === goal.id ? null : goal.id); }} aria-label="更多操作"><MoreHorizontal size={14} /></button>
           {showMenuId === goal.id && (
             <div className="relative">
               <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
@@ -348,17 +348,57 @@ export function GoalListView({ goals, members, onOpenDetail, commentCounts, batc
   );
 }
 
-const GoalMatrixQuadrantCard = React.memo(function GoalMatrixQuadrantCard({ goal, members, onOpenDetail, commentCounts, dragRef }: { goal: Goal; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
+const GOAL_Q_ARROW_MAP: Record<string, { up?: string; down?: string; left?: string; right?: string }> = {
+  Q1: { down: 'Q2', right: 'Q3' },
+  Q2: { up: 'Q1', right: 'Q4' },
+  Q3: { down: 'Q4', left: 'Q1' },
+  Q4: { up: 'Q3', left: 'Q2' },
+};
+
+const GoalMatrixQuadrantCard = React.memo(function GoalMatrixQuadrantCard({ goal, members, onOpenDetail, commentCounts, dragRef, dragMovedRef, currentQuadrant, dispatch, canEdit }: { goal: Goal; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Record<string, number>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null>; dragMovedRef: React.MutableRefObject<boolean>; currentQuadrant: string; dispatch: React.Dispatch<unknown>; canEdit: boolean }) {
   const leader = members.find(m => m.id === goal.leaderId);
-  const cc = commentCounts.get(goal.id) || 0;
+  const cc = commentCounts[goal.id] || 0;
+  const focusAfterMoveId = React.useRef<string | null>(null);
   const handleDown = (e: React.MouseEvent | React.TouchEvent) => {
     if ('button' in e && e.button !== 0) return;
     e.preventDefault();
+    dragMovedRef.current = false;
     dragRef.current = { id: goal.id, el: e.currentTarget };
     e.currentTarget.classList.add('opacity-30', 'scale-95');
   };
+  function handleGoalKeyDown(e: React.KeyboardEvent) {
+    if (e.altKey && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+      const arrows = GOAL_Q_ARROW_MAP[currentQuadrant];
+      if (!arrows) return;
+      let tq: string | undefined;
+      if (e.key === 'ArrowUp') tq = arrows.up;
+      else if (e.key === 'ArrowDown') tq = arrows.down;
+      else if (e.key === 'ArrowLeft') tq = arrows.left;
+      else if (e.key === 'ArrowRight') tq = arrows.right;
+      if (tq && canEdit) {
+        e.preventDefault();
+        // Q1→urgent Q2→high Q3→medium Q4→low
+        const pMap: Record<string, string> = { Q1: 'urgent', Q2: 'high', Q3: 'medium', Q4: 'low' };
+        dispatch({ type: 'UPDATE_GOAL', payload: { id: goal.id, updates: { priority: pMap[tq] } } });
+        focusAfterMoveId.current = goal.id;
+      }
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpenDetail(goal.id);
+    }
+  }
   return (
-    <div className="bg-card rounded-lg border p-2.5 md:p-3 hover:shadow-sm transition-shadow cursor-pointer select-none" onMouseDown={handleDown} onTouchStart={handleDown} onClick={() => onOpenDetail(goal.id)}>
+    <div
+      data-goal-id={goal.id}
+      tabIndex={0}
+      role="option"
+      aria-label={`${goal.title}, 象限: ${currentQuadrant}, 优先级: ${goal.priority}`}
+      className="bg-card rounded-lg border p-2.5 md:p-3 hover:shadow-sm transition-shadow cursor-pointer select-none focus:ring-2 focus:ring-primary focus:outline-none"
+      onMouseDown={handleDown}
+      onTouchStart={handleDown}
+      onClick={() => { if (!dragMovedRef.current) onOpenDetail(goal.id); }}
+      onKeyDown={handleGoalKeyDown}
+    >
       <div className="flex items-center justify-between gap-1 mb-1.5">
         <span className="text-xs font-medium truncate flex-1">{goal.title}</span>
         <span className={`text-[10px] px-1 py-0.5 rounded flex-shrink-0 ${bizColors[goal.priority]}`}>{bizLabels[goal.priority]}</span>
@@ -379,24 +419,25 @@ const GoalMatrixQuadrantCard = React.memo(function GoalMatrixQuadrantCard({ goal
   );
 });
 
-function GoalMatrixQuadrantBox({ qKey, quadrants, grouped, quadrantBoxRefs, members, onOpenDetail, commentCounts, dragRef }: { qKey: string; quadrants: Record<string, { title: string; accent: string; hoverAccent: string; priorityMap: TaskPriority }>; grouped: Record<string, Goal[]>; quadrantBoxRefs: React.MutableRefObject<Record<string, HTMLElement | null>>; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
+function GoalMatrixQuadrantBox({ qKey, quadrants, grouped, quadrantBoxRefs, members, onOpenDetail, commentCounts, dragRef, dragMovedRef, dispatch, canEdit }: { qKey: string; quadrants: Record<string, { title: string; accent: string; hoverAccent: string; priorityMap: TaskPriority }>; grouped: Record<string, Goal[]>; quadrantBoxRefs: React.MutableRefObject<Record<string, HTMLElement | null>>; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Record<string, number>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null>; dragMovedRef: React.MutableRefObject<boolean>; dispatch: React.Dispatch<unknown>; canEdit: boolean }) {
   const q = quadrants[qKey];
   const items = grouped[qKey];
   return (
-    <div data-quadrant={qKey} ref={el => { quadrantBoxRefs.current[qKey] = el; }} className={`rounded-xl border p-2.5 md:p-3 min-h-[160px] md:min-h-[200px] ${q.accent}`}>
+    <div data-quadrant={qKey} ref={el => { quadrantBoxRefs.current[qKey] = el; }} role="listbox" aria-label={`${q.title} 目标列表`} className={`rounded-xl border p-2.5 md:p-3 min-h-[160px] md:min-h-[200px] ${q.accent}`}>
       <div className="text-xs font-bold mb-3 text-foreground/70">{q.title} ({items.length})</div>
       <div className="space-y-2">
-        {items.map(g => <GoalMatrixQuadrantCard key={g.id} goal={g} members={members} onOpenDetail={onOpenDetail} commentCounts={commentCounts} dragRef={dragRef} />)}
+        {items.map(g => <GoalMatrixQuadrantCard key={g.id} goal={g} members={members} onOpenDetail={onOpenDetail} commentCounts={commentCounts} dragRef={dragRef} dragMovedRef={dragMovedRef} currentQuadrant={qKey} dispatch={dispatch} canEdit={canEdit} />)}
         {items.length === 0 && <div className="text-xs text-muted-foreground/50 py-4 text-center">拖拽目标到此区域</div>}
       </div>
     </div>
   );
 }
 
-export function GoalMatrixView({ goals, members, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect }: { goals: Goal[]; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Map<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }) {
+export function GoalMatrixView({ goals, members, onOpenDetail, commentCounts, batchMode, selectedIds, onToggleSelect }: { goals: Goal[]; members: { id: string; name: string; avatar: string }[]; onOpenDetail: (id: string) => void; commentCounts: Record<string, number>; batchMode: boolean; selectedIds: Set<string>; onToggleSelect: (id: string) => void }) {
   const { dispatch } = useStore();
   const { can } = usePermissions();
   const dragRef = useRef<{ id: string; el: HTMLElement } | null>(null);
+  const dragMovedRef = useRef(false);
   const hoverQRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const quadrantBoxRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -502,7 +543,7 @@ export function GoalMatrixView({ goals, members, onOpenDetail, commentCounts, ba
   return (
     <div ref={containerRef} className="grid grid-cols-1 md:grid-cols-2 gap-3 select-none">
       {(['Q1','Q2','Q3','Q4'] as const).map(qKey => (
-        <GoalMatrixQuadrantBox key={qKey} qKey={qKey} quadrants={quadrants} grouped={grouped} quadrantBoxRefs={quadrantBoxRefs} members={members} onOpenDetail={onOpenDetail} commentCounts={commentCounts} dragRef={dragRef} />
+        <GoalMatrixQuadrantBox key={qKey} qKey={qKey} quadrants={quadrants} grouped={grouped} quadrantBoxRefs={quadrantBoxRefs} members={members} onOpenDetail={onOpenDetail} commentCounts={commentCounts} dragRef={dragRef} dispatch={dispatch} canEdit={can('goals_edit')} />
       ))}
     </div>
   );

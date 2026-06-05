@@ -3,6 +3,10 @@ import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete, logActivity } from './supabase';
 import { genId } from './utils';
 import { needMutate, reducerCanDelete, clampTitle, clampDesc, resolveInheritedPriority, executeAutomationActions, validateStatusFlow, fireAutomationRules, tsNow } from './shared';
+import { pushFieldUndo } from './undo';
+
+/** Field name → human-readable label (shared across slices, S5-5) */
+import { fieldLabelMap } from './fieldLabels';
 import { learnFromCompletedTask } from '@/lib/delayPrediction';
 import { cascadeAddTask, cascadeUpdateTaskStatusProjectGoal, cascadeUpdateTaskDone, cascadeUpdateTaskUndone, cascadeUpdateTaskProject, cascadeUpdateTaskGoal, cascadeTaskAssignmentChange, cascadeToggleSubtask } from './cascadeHandlers';
 
@@ -70,6 +74,18 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
       if (tIdx !== -1) {
         const oldTask = s.tasks[tIdx];
         const updates = { ...action.payload.updates };
+        // S4-3: Capture old field values for undo before applying updates
+        const changedKeys = Object.keys(updates).filter(k => (updates as Record<string, unknown>)[k] !== (oldTask as Record<string, unknown>)[k]);
+        if (changedKeys.length > 0) {
+          const oldValues: Record<string, unknown> = {};
+          const newValues: Record<string, unknown> = {};
+          for (const k of changedKeys) {
+            oldValues[k] = (oldTask as Record<string, unknown>)[k];
+            newValues[k] = (updates as Record<string, unknown>)[k];
+          }
+          const fieldLabel = changedKeys.length === 1 ? fieldLabelMap[changedKeys[0]] || changedKeys[0] : `${changedKeys.length}个字段`;
+          pushFieldUndo('UPDATE_TASK', action.payload.id, oldValues, newValues, `更新任务${fieldLabel}`);
+        }
         if (updates.title) updates.title = clampTitle(updates.title) ?? updates.title;
         if (updates.description) updates.description = clampDesc(updates.description) ?? updates.description;
         if ('parentId' in updates || 'projectId' in updates || 'goalId' in updates) {

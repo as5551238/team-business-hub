@@ -162,7 +162,7 @@ export function DetailLinks({ itemId, itemType, canEdit }: DetailLinksProps) {
                 <span className="flex-1 truncate font-medium">{getItemTitle(otherId, otherType)}</span>
                 {link.label && <span className="text-xs text-muted-foreground px-1.5 py-0.5 bg-accent rounded">{link.label}</span>}
                 <span className="text-xs text-muted-foreground">{isSource ? '\u2192' : '\u2190'}</span>
-                <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" onClick={() => handleDeleteLink(link.id)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" onClick={() => handleDeleteLink(link.id)} aria-label="删除关联"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
               </div>
               {agg && agg.totalCount > 0 && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">

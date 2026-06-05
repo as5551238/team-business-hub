@@ -113,8 +113,8 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard icon={<Target size={20} className="text-blue-600" />} label="进行中目标" value={stats.activeGoals} sub={`平均进度 ${stats.overallGoalProgress}%`} color="bg-blue-50" onClick={() => goWithFilter('goals', { statuses: 'in_progress' })} />
         <StatCard icon={<FolderKanban size={20} className="text-emerald-600" />} label="活跃项目" value={stats.activeProjects} color="bg-emerald-50" onClick={() => goWithFilter('projects', { statuses: 'in_progress' })} />
-        <StatCard icon={<Clock size={20} className="text-orange-600" />} label="我的待办" value={stats.myTasks} sub={`今日 ${stats.todayTodos.length} 项`} color="bg-orange-50" onClick={() => goWithFilter('tasks', { statuses: 'todo,in_progress' })} />
-        <StatCard icon={<AlertTriangle size={20} className="text-red-600" />} label="已逾期" value={stats.overdueTasks} color="bg-red-50" onClick={() => goWithFilter('tasks', { timeFilter: 'overdue' })} />
+        <StatCard icon={<Clock size={20} className="text-orange-600" />} label="我的待办" value={stats.myTasks} sub={`今日 ${stats.todayTodos.length} 项`} color="bg-orange-50" onClick={() => goWithFilter('tasks', { statuses: 'todo,in_progress', persons: state.currentUser?.id || '' })} />
+        <StatCard icon={<AlertTriangle size={20} className="text-red-600" />} label="已逾期" value={stats.overdueTasks} color="bg-red-50" onClick={() => goWithFilter('tasks', { timeFilter: 'overdue', persons: state.currentUser?.id || '' })} />
       </div>
 
       {/* P0: 行为画像 — 管理员可见当前用户画像 */}

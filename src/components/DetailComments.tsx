@@ -3,7 +3,7 @@ import { useStore } from '@/store/useStore';
 import { uploadFile, BUCKET_NAMES } from '@/supabase/storage';
 import type { ItemType, Attachment, Task } from '@/types';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Edit2, Save, Trash2, Bell, Sparkles, ListChecks, CornerDownRight, Paperclip } from 'lucide-react';
+import { MessageSquare, Edit2, Save, Trash2, Bell, Sparkles, ListChecks, CornerDownRight, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 import { handleError } from '@/lib/errorHandler';
@@ -62,6 +62,7 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentContent, setEditingCommentContent] = useState('');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set());
   const [commentAttachments, setCommentAttachments] = useState<Attachment[]>([]);
   const [aiDropdownOpen, setAiDropdownOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -100,6 +101,17 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
     return map;
   }, [allComments]);
 
+  // Unread replies count per parent (for badge)
+  const unreadRepliesByParent = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of allComments) {
+      if (c.parentId && !c.isRead && c.memberId !== state.currentUser?.id) {
+        map.set(c.parentId, (map.get(c.parentId) || 0) + 1);
+      }
+    }
+    return map;
+  }, [allComments, state.currentUser?.id]);
+
   // Count unread comments (comments not by current user and not yet read by current user, or that mention current user)
   const unreadCommentCount = useMemo(() => allComments.filter(c => {
     if (c.memberId === state.currentUser?.id) return false;
@@ -113,20 +125,6 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
     const q = mentionSearch.toLowerCase();
     return active.filter(m => m.name.toLowerCase().includes(q) || (m.nickname || '').toLowerCase().includes(q));
   }, [state.members, mentionSearch]);
-
-  const memberNameSet = useMemo(() => new Set(state.members.map(m => m.name)), [state.members]);
-
-  const highlightMentions = useCallback((content: string) => {
-    const parts = content.split(/(@\S+)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('@')) {
-        const name = part.slice(1);
-        const isMember = state.members.some(m => m.name === name || m.nickname === name);
-        if (isMember) return <span key={i} className="text-blue-600 font-medium">{part}</span>;
-      }
-      return <span key={i}>{part}</span>;
-    });
-  }, [state.members]);
 
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -226,10 +224,11 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
     }
     const mentionedIds = parseMentions(newComment);
     dispatch({ type: 'ADD_COMMENT', payload: { itemId, itemType, memberId: state.currentUser?.id || '', memberName: state.currentUser?.name || '未知', content: newComment.trim(), mentionedMemberIds: mentionedIds, isRead: false, followUpRequired: false, followUpStatus: 'none' as const, ...(replyingTo ? { parentId: replyingTo } : {}), attachments: commentAttachments } });
+    // Mention notifications are already handled by cascadeAddComment in the store — no duplicate dispatch needed here.
+    // Only send browser push notifications for mentioned users.
     const itemTitle = state.goals.find(g => g.id === itemId)?.title || state.projects.find(p => p.id === itemId)?.title || state.tasks.find(t => t.id === itemId)?.title || '';
     for (const mid of mentionedIds) {
       if (mid !== state.currentUser?.id) {
-        dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'nmen_' + itemId + '_' + mid + '_' + Date.now(), type: 'mentioned' as const, title: '你被提及了', message: `${state.currentUser?.name || '未知'} 在「${itemTitle}」中@了你`, relatedId: itemId, relatedType: itemType, memberId: mid, read: false, createdAt: new Date().toISOString() } });
         if (isNotificationGranted()) {
           sendUrgentNotification('你被提及了', { body: `${state.currentUser?.name || '未知'} 在「${itemTitle}」中@了你` });
         }
@@ -388,6 +387,8 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
             const isAi = c.memberId === '__ai_assistant__';
             const replies = repliesByParentId.get(c.id) || [];
             const isReplying = replyingTo === c.id;
+            const isCollapsed = collapsedThreads.has(c.id);
+            const hasUnreadReplies = (unreadRepliesByParent.get(c.id) || 0) > 0;
             return (
             <div key={c.id}>
               <div className={cn('group relative', isAi && 'bg-blue-50/60 rounded-lg px-2 py-1 -mx-2')}>
@@ -402,14 +403,14 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
                     </span>
                   )}
                   <div className="ml-auto flex items-center gap-1 shrink-0">
-                    <button className="p-0.5 hover:bg-accent rounded cursor-pointer text-muted-foreground hover:text-primary" title="回复" onClick={() => { setReplyingTo(isReplying ? null : c.id); commentInputRef.current?.focus(); }}><CornerDownRight className="w-3 h-3" /></button>
-                    {!isAi && <button className="p-0.5 hover:bg-accent rounded cursor-pointer text-muted-foreground hover:text-primary" title="转为任务" onClick={() => handleConvertToTask(c.id)}><ListChecks className="w-3 h-3" /></button>}
-                    {!isAi && <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="切换跟进状态" onClick={() => handleToggleFollowUp(c.id)}><Bell className="w-3 h-3 text-muted-foreground" /></button>}
+                    <button className={cn('p-0.5 hover:bg-accent rounded cursor-pointer text-muted-foreground hover:text-primary flex items-center gap-0.5', isReplying && 'text-primary bg-accent')} title="回复" aria-label="回复评论" onClick={() => { setReplyingTo(isReplying ? null : c.id); commentInputRef.current?.focus(); }}><CornerDownRight className="w-3 h-3" />{replies.length > 0 && <span className="text-[10px]">{replies.length}</span>}</button>
+                    {!isAi && <button className="p-0.5 hover:bg-accent rounded cursor-pointer text-muted-foreground hover:text-primary" title="转为任务" aria-label="转为任务" onClick={() => handleConvertToTask(c.id)}><ListChecks className="w-3 h-3" /></button>}
+                    {!isAi && <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="切换跟进状态" aria-label="切换跟进状态" onClick={() => handleToggleFollowUp(c.id)}><Bell className="w-3 h-3 text-muted-foreground" /></button>}
                     {!isAi && c.memberId === state.currentUser?.id && (
-                      <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="编辑" onClick={() => handleStartEditComment(c.id)}><Edit2 className="w-3 h-3 text-muted-foreground" /></button>
+                      <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="编辑" aria-label="编辑评论" onClick={() => handleStartEditComment(c.id)}><Edit2 className="w-3 h-3 text-muted-foreground" /></button>
                     )}
                     {!isAi && c.memberId === state.currentUser?.id && (
-                      <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" title="删除" onClick={() => handleDeleteComment(c.id)}><Trash2 className="w-3 h-3 text-destructive" /></button>
+                      <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" title="删除" aria-label="删除评论" onClick={() => handleDeleteComment(c.id)}><Trash2 className="w-3 h-3 text-destructive" /></button>
                     )}
                   </div>
                 </div>
@@ -446,50 +447,67 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
               </div>
               {/* Nested replies */}
               {replies.length > 0 && (
-                <div className="ml-7 mt-1 space-y-2 border-l-2 border-muted pl-3">
-                  {replies.map(r => {
-                    const isAiR = r.memberId === '__ai_assistant__';
-                    return (
-                      <div key={r.id} className={cn('group relative', isAiR && 'bg-blue-50/60 rounded-lg px-2 py-1 -mx-2')}>
-                        <div className="flex items-center gap-2">
-                          <div className={cn('w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-medium shrink-0', isAiR ? 'bg-blue-100 text-blue-700' : 'bg-primary/10 text-primary')}>{isAiR ? <Sparkles className="w-2.5 h-2.5" /> : r.memberName.charAt(0)}</div>
-                          <span className="text-[11px] font-medium shrink-0">{r.memberName}</span>
-                          <span className="text-[10px] text-muted-foreground shrink-0">{new Date(r.createdAt).toLocaleString('zh-CN')}</span>
-                          <div className="ml-auto flex items-center gap-1 shrink-0">
-                            {!isAiR && r.memberId === state.currentUser?.id && (
-                              <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="编辑" onClick={() => handleStartEditComment(r.id)}><Edit2 className="w-2.5 h-2.5 text-muted-foreground" /></button>
-                            )}
-                            {!isAiR && r.memberId === state.currentUser?.id && (
-                              <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" title="删除" onClick={() => handleDeleteComment(r.id)}><Trash2 className="w-2.5 h-2.5 text-destructive" /></button>
-                            )}
-                          </div>
-                        </div>
-                        {editingCommentId === r.id ? (
-                          <div className="mt-1 ml-5 space-y-1">
-                            <textarea className="w-full text-xs border border-input rounded px-2 py-1 min-h-[30px] resize-none" value={editingCommentContent} onChange={e => setEditingCommentContent(e.target.value)} />
-                            <div className="flex gap-1">
-                              <Button size="sm" className="h-5 text-[10px] px-2" onClick={handleSaveEditComment}><Save className="w-2.5 h-2.5 mr-1" />保存</Button>
-                              <Button size="sm" variant="outline" className="h-5 text-[10px] px-2" onClick={() => setEditingCommentId(null)}>取消</Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div>
-                            <div className="text-xs mt-0.5 ml-5 break-words" dangerouslySetInnerHTML={{ __html: renderMarkdown(r.content, memberNameSet) }} />
-                            {r.attachments && r.attachments.length > 0 && (
-                              <div className="mt-0.5 ml-5 flex flex-wrap gap-1">
-                                {r.attachments.map(a => (
-                                  <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-1 py-0.5 rounded text-[10px] bg-muted hover:bg-accent transition-colors">
-                                    <Paperclip className="w-2 h-2" />
-                                    <span className="truncate max-w-[100px]">{a.name}</span>
-                                  </a>
-                                ))}
+                <div className="ml-7 mt-1 space-y-0">
+                  {isCollapsed ? (
+                    <button className={cn('flex items-center gap-1 py-1 px-2 text-[10px] rounded-md hover:bg-accent transition-colors', hasUnreadReplies ? 'text-primary font-medium' : 'text-muted-foreground')} onClick={() => setCollapsedThreads(prev => { const next = new Set(prev); next.delete(c.id); return next; })}>
+                      <ChevronRight className="w-3 h-3" />
+                      <span>展开{replies.length}条回复{hasUnreadReplies ? `(${unreadRepliesByParent.get(c.id) || 0}条未读)` : ''}</span>
+                    </button>
+                  ) : (
+                    <div className="space-y-0">
+                      {replies.length > 2 && (
+                        <button className="flex items-center gap-1 py-1 px-2 text-[10px] text-muted-foreground rounded-md hover:bg-accent transition-colors" onClick={() => setCollapsedThreads(prev => { const next = new Set(prev); next.add(c.id); return next; })}>
+                          <ChevronDown className="w-3 h-3" />
+                          <span>收起回复</span>
+                        </button>
+                      )}
+                      <div className={cn('space-y-2 border-l-2 pl-3', hasUnreadReplies ? 'border-primary/40' : 'border-muted')}>
+                        {replies.map(r => {
+                          const isAiR = r.memberId === '__ai_assistant__';
+                          return (
+                            <div key={r.id} className={cn('group relative', isAiR && 'bg-blue-50/60 rounded-lg px-2 py-1 -mx-2')}>
+                              <div className="flex items-center gap-2">
+                                <div className={cn('w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-medium shrink-0', isAiR ? 'bg-blue-100 text-blue-700' : 'bg-primary/10 text-primary')}>{isAiR ? <Sparkles className="w-2.5 h-2.5" /> : r.memberName.charAt(0)}</div>
+                                <span className="text-[11px] font-medium shrink-0">{r.memberName}</span>
+                                <span className="text-[10px] text-muted-foreground shrink-0">{new Date(r.createdAt).toLocaleString('zh-CN')}</span>
+                                <div className="ml-auto flex items-center gap-1 shrink-0">
+                                  {!isAiR && r.memberId === state.currentUser?.id && (
+                                    <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="编辑" aria-label="编辑回复" onClick={() => handleStartEditComment(r.id)}><Edit2 className="w-2.5 h-2.5 text-muted-foreground" /></button>
+                                  )}
+                                  {!isAiR && r.memberId === state.currentUser?.id && (
+                                    <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" title="删除" aria-label="删除回复" onClick={() => handleDeleteComment(r.id)}><Trash2 className="w-2.5 h-2.5 text-destructive" /></button>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                          </div>
-                        )}
+                              {editingCommentId === r.id ? (
+                                <div className="mt-1 ml-5 space-y-1">
+                                  <textarea className="w-full text-xs border border-input rounded px-2 py-1 min-h-[30px] resize-none" value={editingCommentContent} onChange={e => setEditingCommentContent(e.target.value)} />
+                                  <div className="flex gap-1">
+                                    <Button size="sm" className="h-5 text-[10px] px-2" onClick={handleSaveEditComment}><Save className="w-2.5 h-2.5 mr-1" />保存</Button>
+                                    <Button size="sm" variant="outline" className="h-5 text-[10px] px-2" onClick={() => setEditingCommentId(null)}>取消</Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <div className="text-xs mt-0.5 ml-5 break-words" dangerouslySetInnerHTML={{ __html: renderMarkdown(r.content, memberNameSet) }} />
+                                  {r.attachments && r.attachments.length > 0 && (
+                                    <div className="mt-0.5 ml-5 flex flex-wrap gap-1">
+                                      {r.attachments.map(a => (
+                                        <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-1 py-0.5 rounded text-[10px] bg-muted hover:bg-accent transition-colors">
+                                          <Paperclip className="w-2 h-2" />
+                                          <span className="truncate max-w-[100px]">{a.name}</span>
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -506,7 +524,7 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
           <textarea ref={commentInputRef} className="w-full text-sm border border-input rounded px-2 py-1.5 min-h-[60px] resize-none" placeholder={replyingTo ? '回复评论，输入@提及成员...' : '发表评论，输入@提及成员，输入@AI召唤助手，支持粘贴图片...'} value={newComment} onChange={e => { setNewComment(e.target.value); handleTypingBroadcast(); const val = e.target.value; const cursorPos = e.target.selectionStart; const textBefore = val.substring(0, cursorPos); if (AI_TRIGGER_RE.test(textBefore)) { setAiDropdownOpen(true); } else { setAiDropdownOpen(false); } const mentionCtx = getMentionContext(val, cursorPos); if (mentionCtx !== null) { setMentionOpen(true); setMentionSearch(mentionCtx); setMentionSelectedIndex(0); } else if (mentionOpen && !val.includes('@')) { setMentionOpen(false); setMentionSearch(''); } }} onKeyDown={e => { if (mentionOpen && filteredMentionMembers.length > 0) { if (e.key === 'ArrowDown') { e.preventDefault(); setMentionSelectedIndex(i => Math.min(i + 1, filteredMentionMembers.length - 1)); return; } if (e.key === 'ArrowUp') { e.preventDefault(); setMentionSelectedIndex(i => Math.max(i - 1, 0)); return; } if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(filteredMentionMembers[mentionSelectedIndex].name); return; } if (e.key === 'Escape') { e.preventDefault(); setMentionOpen(false); setMentionSearch(''); return; } } if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleAddComment(); } }} onPaste={handlePasteImage} />
            <div className="flex items-center gap-2">
              <input type="file" className="hidden" id="comment-attach-input" multiple onChange={async e => { const files = Array.from(e.target.files || []); for (const file of files) { try { const path = `${itemType}/${itemId}/${Date.now()}_${file.name}`; const url = await uploadFile(BUCKET_NAMES.attachments, path, file); if (url) { setCommentAttachments(prev => [...prev, { id: genId('att'), name: file.name, type: file.type, size: file.size, url, uploadedBy: state.currentUser?.id || '', uploadedAt: new Date().toISOString() }]); } } catch (err) { handleError(err, { module: 'DetailComments', operation: 'ATTACH_UPLOAD', severity: 'warn' }); } } e.target.value = ''; }} />
-             <button className="px-2 py-1 text-xs border border-border rounded hover:bg-accent cursor-pointer" title="上传附件" onClick={() => document.getElementById('comment-attach-input')?.click()}><Paperclip className="w-3.5 h-3.5" /></button>
+             <button className="px-2 py-1 text-xs border border-border rounded hover:bg-accent cursor-pointer" title="上传附件" aria-label="上传附件" onClick={() => document.getElementById('comment-attach-input')?.click()}><Paperclip className="w-3.5 h-3.5" /></button>
              {commentAttachments.length > 0 && (
                <div className="flex items-center gap-1 flex-wrap">
                  {commentAttachments.map(a => (

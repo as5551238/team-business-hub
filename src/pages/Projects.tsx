@@ -1,9 +1,9 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
-import { useTags, useViewingMember, usePermissions } from '@/store/hooks';
+import { useTags, useViewingMember, usePermissions, useActiveMembers } from '@/store/hooks';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
-import type { Project, ProjectStatus, TaskPriority, Comment } from '@/types';
-import { Plus, FolderKanban, Search, Check, Users, Trash2, X, Filter, ChevronDown } from 'lucide-react';
+import type { TaskPriority } from '@/types';
+import { Plus, FolderKanban, Search, Check, Users, X, Filter, ChevronDown, EyeOff, Eye } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence } from '@/lib/collab';
@@ -16,7 +16,9 @@ import { ProjectTreeNode, ProjectListView, ProjectTableView, ProjectKanbanView, 
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 import { useBatchSelection } from '@/hooks/useBatchSelection';
 import { BatchActionBar } from '@/components/BatchActionBar';
-import { pushBatchUndo } from '@/store/useStore';
+import { useBatchOperations } from '@/hooks/useBatchOperations';
+import { useCommentCounts } from '@/hooks/useCommentCounts';
+import { isDateRangeInTimeRange } from '@/lib/timeRangeUtils';
 
 export default function Projects() {
   const { state, dispatch } = useStore();
@@ -33,6 +35,7 @@ export default function Projects() {
   const urlFilters = useFiltersFromUrl();
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => urlFilters.statuses || new Set());
   const [selectedPriorities, setSelectedPriorities] = useState<Set<string>>(new Set());
+  const [showCompleted, setShowCompleted] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('detail');
@@ -45,6 +48,52 @@ export default function Projects() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const batchSel = useBatchSelection();
+  const { batchMode, selectedIds, toggleSelect, selectAll, selectRange, clearSelection, exitBatchMode } = batchSel;
+
+  const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [personFilter, setPersonFilter] = useState<string[]>([]);
+  const [timeFilter, setTimeFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showPersonPicker, setShowPersonPicker] = useState(false);
+
+  // All users default to team view — no auto-switch to personal view
+  const setDetailItem = useCallback((item: { type: 'project'; id: string } | null) => {
+    if (item) openProjectDetail(item.id);
+    else closeProjectDetail();
+  }, [openProjectDetail, closeProjectDetail]);
+
+  // All users default to team view — no auto-switch to personal view
+
+  const toggleExpand = useCallback((id: string) => { setExpandedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }, []);
+
+  const { activeMembers } = useActiveMembers();
+  const categories = useMemo(() => { const cats = new Set<string>(); state.projects.forEach(p => { if (p.category) cats.add(p.category); }); return Array.from(cats).sort(); }, [state.projects]);
+  const projectTags = useMemo(() => { const tgs = new Set<string>(); state.projects.forEach(p => (p.tags || []).forEach(t => tgs.add(t))); return Array.from(tgs).sort(); }, [state.projects]);
+
+  const commentCounts = useCommentCounts('project', state.comments);
+
+  const filteredProjects = useMemo(() => {
+    let result = state.projects.filter(p => !p.deletedAt);
+    if (!showCompleted) result = result.filter(p => p.status !== 'done' && p.status !== 'cancelled');
+    if (selectedStatuses.size > 0) result = result.filter(p => selectedStatuses.has(p.status));
+    if (selectedPriorities.size > 0) result = result.filter(p => selectedPriorities.has(p.priority));
+    if (selectedLevels.size > 0) result = result.filter(p => { const bp = bpOptions.find(o => o.value !== 'all' && priorityFromBp(o.value) === p.priority)?.value; return bp && selectedLevels.has(bp); });
+    if (selectedCategories.size > 0) result = result.filter(p => selectedCategories.has(p.category));
+    if (selectedTags.size > 0) result = result.filter(p => (p.tags || []).some(t => selectedTags.has(t)));
+    if (personFilter.length > 0) result = result.filter(p => personFilter.some(pid => p.leaderId === pid || (p.supporterIds || []).includes(pid)));
+    if (searchQuery.trim()) { const q = searchQuery.trim().toLowerCase(); result = result.filter(p => p.title.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)); }
+    if (timeFilter !== 'all') {
+      result = result.filter(p => isDateRangeInTimeRange(p.startDate, p.endDate, timeFilter));
+    }
+    if (!isTeamView && viewingMember) {
+      result = result.filter(p => p.leaderId === viewingMember.id || (p.supporterIds || []).includes(viewingMember.id));
+    }
+    return result;
+  }, [state.projects, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, personFilter, timeFilter, searchQuery, isTeamView, viewingMember, showCompleted]);
+
   // Keyboard event handlers for batch toggle + select-all
   useEffect(() => {
     const onToggleBatch = () => { batchSel.toggleBatchMode(); };
@@ -56,70 +105,6 @@ export default function Projects() {
       window.removeEventListener('tbh-select-all', onSelectAll);
     };
   }, [batchSel, selectAll, filteredProjects]);
-
-  const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
-  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
-  const [personFilter, setPersonFilter] = useState<string[]>([]);
-  const [timeFilter, setTimeFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showPersonPicker, setShowPersonPicker] = useState(false);
-  const batchSel = useBatchSelection();
-  const { batchMode, selectedIds, toggleSelect, selectAll, selectRange, clearSelection, exitBatchMode } = batchSel;
-  // Adapter: sub-views pass { type, id } objects; we route to URL
-  const setDetailItem = useCallback((item: { type: 'project'; id: string } | null) => {
-    if (item) openProjectDetail(item.id);
-    else closeProjectDetail();
-  }, [openProjectDetail, closeProjectDetail]);
-
-  // All users default to team view — no auto-switch to personal view
-
-  const toggleExpand = useCallback((id: string) => { setExpandedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }, []);
-
-  const activeMembers = useMemo(() => state.members.filter(m => m.status === 'active'), [state.members]);
-  const categories = useMemo(() => { const cats = new Set<string>(); state.projects.forEach(p => { if (p.category) cats.add(p.category); }); return Array.from(cats).sort(); }, [state.projects]);
-  const projectTags = useMemo(() => { const tgs = new Set<string>(); state.projects.forEach(p => (p.tags || []).forEach(t => tgs.add(t))); return Array.from(tgs).sort(); }, [state.projects]);
-
-  const todayDate = useMemo(() => new Date(), []); // stable Date reference, recalculated on mount only
-  const todayStr = useMemo(() => todayDate.toISOString().split('T')[0], [todayDate]);
-
-  const commentCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    (state.comments || []).forEach((c: Comment) => { if (c.itemType === 'project') counts[c.itemId] = (counts[c.itemId] || 0) + 1; });
-    return counts;
-  }, [state.comments]);
-
-  const filteredProjects = useMemo(() => {
-    let result = state.projects;
-    if (selectedStatuses.size > 0) result = result.filter(p => selectedStatuses.has(p.status));
-    if (selectedPriorities.size > 0) result = result.filter(p => selectedPriorities.has(p.priority));
-    if (selectedLevels.size > 0) result = result.filter(p => { const bp = bpOptions.find(o => o.value !== 'all' && priorityFromBp(o.value) === p.priority)?.value; return bp && selectedLevels.has(bp); });
-    if (selectedCategories.size > 0) result = result.filter(p => selectedCategories.has(p.category));
-    if (selectedTags.size > 0) result = result.filter(p => (p.tags || []).some(t => selectedTags.has(t)));
-    if (personFilter.length > 0) result = result.filter(p => personFilter.some(pid => p.leaderId === pid || (p.supporterIds || []).includes(pid)));
-    if (searchQuery.trim()) { const q = searchQuery.trim().toLowerCase(); result = result.filter(p => p.title.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)); }
-    if (timeFilter === 'today') {
-      result = result.filter(p => p.startDate <= todayStr && p.endDate >= todayStr);
-    } else if (timeFilter === 'this_week') {
-      const dow = todayDate.getDay() || 7;
-      const ws = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() - dow + 1).toISOString().split('T')[0];
-      const we = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() - dow + 7).toISOString().split('T')[0];
-      result = result.filter(p => p.endDate >= ws && p.endDate <= we);
-    } else if (timeFilter === 'this_month') {
-      const ms = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1).toISOString().split('T')[0];
-      const me = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).toISOString().split('T')[0];
-      result = result.filter(p => p.startDate <= me && p.endDate >= ms);
-    } else if (timeFilter === 'this_quarter') {
-      const qi = Math.floor(todayDate.getMonth() / 3);
-      const qs = new Date(todayDate.getFullYear(), qi * 3, 1).toISOString().split('T')[0];
-      const qe = new Date(todayDate.getFullYear(), qi * 3 + 3, 0).toISOString().split('T')[0];
-      result = result.filter(p => p.startDate <= qe && p.endDate >= qs);
-    }
-    if (!isTeamView && viewingMember) {
-      result = result.filter(p => p.leaderId === viewingMember.id || (p.supporterIds || []).includes(viewingMember.id));
-    }
-    return result;
-  }, [state.projects, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, personFilter, timeFilter, searchQuery, todayStr, todayDate, isTeamView, viewingMember]);
 
   const topProjects = useMemo(() => filteredProjects.filter(p => !p.parentId), [filteredProjects]);
   const activeFilterCount = (selectedStatuses.size > 0 ? 1 : 0) + (selectedPriorities.size > 0 ? 1 : 0) + (selectedLevels.size > 0 ? 1 : 0) + (selectedCategories.size > 0 ? 1 : 0) + (selectedTags.size > 0 ? 1 : 0) + (personFilter.length > 0 ? 1 : 0) + (timeFilter !== 'all' ? 1 : 0) + (searchQuery.trim().length > 0 ? 1 : 0);
@@ -153,77 +138,22 @@ export default function Projects() {
     },
   }), [batchMode, selectedIds, toggleSelect, selectRange, batchSel, filteredProjects]);
 
-  const batchDelete = useCallback(() => { if (!can('delete_projects')) return; if (!confirm(`确认删除选中的 ${selectedIds.size} 个项目？`)) return; selectedIds.forEach(id => dispatch({ type: 'DELETE_PROJECT', payload: id })); exitBatchMode(); }, [selectedIds, dispatch, can, exitBatchMode]);
-  const batchUpdateStatus = useCallback((status: string) => {
-    if (!can('edit_projects')) return; if (!status) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const p = state.projects.find(x => x.id === id);
-      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { status: p?.status || 'todo' } } };
-    });
-    selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { status: status as ProjectStatus } } }));
-    pushBatchUndo(inverses, undefined, '批量修改项目状态'); clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
-  const batchAssign = useCallback((leaderId: string) => {
-    if (!can('edit_projects')) return; if (!leaderId) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const p = state.projects.find(x => x.id === id);
-      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { leaderId: p?.leaderId || '' } } };
-    });
-    selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { leaderId } } }));
-    pushBatchUndo(inverses, undefined, '批量分配项目'); clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
-  const batchUpdatePriority = useCallback((priority: string) => {
-    if (!can('edit_projects')) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const p = state.projects.find(x => x.id === id);
-      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { priority: p?.priority || 'medium' } } };
-    });
-    selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { priority: priority as TaskPriority } } }));
-    pushBatchUndo(inverses, undefined, '批量修改项目优先级'); clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
-  const batchAddTags = useCallback((newTags: string[]) => {
-    if (!can('edit_projects')) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const p = state.projects.find(x => x.id === id);
-      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { tags: p?.tags || [] } } };
-    });
-    selectedIds.forEach(id => {
-      const p = state.projects.find(x => x.id === id);
-      if (p) { const merged = [...new Set([...(p.tags || []), ...newTags])]; dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { tags: merged } } }); }
-    });
-    pushBatchUndo(inverses, undefined, '批量添加项目标签'); clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
-  const batchRemoveTags = useCallback((removeTags: string[]) => {
-    if (!can('edit_projects')) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const p = state.projects.find(x => x.id === id);
-      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { tags: p?.tags || [] } } };
-    });
-    selectedIds.forEach(id => {
-      const p = state.projects.find(x => x.id === id);
-      if (p) { const filtered = (p.tags || []).filter(t => !removeTags.includes(t)); dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { tags: filtered } } }); }
-    });
-    pushBatchUndo(inverses, undefined, '批量移除项目标签'); clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
-  const batchSetDate = useCallback((field: string, value: string) => {
-    if (!can('edit_projects')) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const p = state.projects.find(x => x.id === id);
-      const oldVal = field === 'endDate' ? p?.endDate : field === 'startDate' ? p?.startDate : null;
-      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { [field]: oldVal || '' } } };
-    });
-    selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { [field]: value || '' } } }));
-    pushBatchUndo(inverses, undefined, '批量设置项目日期'); clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
-  const batchMoveToGoal = useCallback((goalId: string) => {
-    if (!can('edit_projects')) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const p = state.projects.find(x => x.id === id);
-      return { type: 'UPDATE_PROJECT' as const, payload: { id, updates: { goalId: p?.goalId || null } } };
-    });
-    selectedIds.forEach(id => dispatch({ type: 'UPDATE_PROJECT', payload: { id, updates: { goalId } } }));
-    pushBatchUndo(inverses, undefined, '批量移动到目标'); clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.projects]);
+  const { batchDelete, batchUpdateStatus, batchAssign, batchUpdatePriority, batchAddTags, batchRemoveTags, batchSetDate, batchMoveTo } = useBatchOperations({
+    entityType: 'project',
+    updateActionType: 'UPDATE_PROJECT',
+    deleteActionType: 'DELETE_PROJECT',
+    editPermission: 'edit_projects',
+    deletePermission: 'delete_projects',
+    entityLabel: '项目',
+    items: state.projects,
+    getItemId: (p: any) => p.id,
+    dispatch,
+    can,
+    clearSelection,
+    exitBatchMode,
+    selectedIds,
+  });
+  const batchMoveToGoal = useCallback((goalId: string) => batchMoveTo('goalId', goalId, '批量移动到目标'), [batchMoveTo]);
 
   function handleCreate() {
     if (!formData.title.trim()) return;
@@ -308,6 +238,7 @@ export default function Projects() {
         <select className="border border-border rounded-lg px-2 py-1 text-xs bg-card focus:outline-none focus:ring-1 focus:ring-primary/20" value={timeFilter} onChange={e => setTimeFilter(e.target.value)}>{timeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
         {activeFilterCount > 0 && <button className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1" onClick={clearFilters}><X size={12} />清除 ({activeFilterCount})</button>}
         <span className="text-xs text-muted-foreground ml-auto">{filteredProjects.length} 条</span>
+        <button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`} title={showCompleted ? '隐藏已完成' : '显示已完成'}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button>
       </div>
 
       {viewMode === 'detail' && (
@@ -326,10 +257,10 @@ export default function Projects() {
       {showCreateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => setShowCreateDialog(false)} />
-          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up">
+          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up" role="dialog" aria-modal="true" aria-label="新建项目">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <h3 className="font-semibold">新建项目</h3>
-              <button className="p-1 rounded hover:bg-muted" onClick={() => setShowCreateDialog(false)}><X size={16} /></button>
+              <button className="p-1 rounded hover:bg-muted" onClick={() => setShowCreateDialog(false)} aria-label="关闭新建项目对话框"><X size={16} /></button>
             </div>
             <div className="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
               <div><label className="block text-sm font-medium mb-1">项目名称 *</label><input className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="例：Q2产品迭代" value={formData.title} onChange={e => setFormData(f => ({ ...f, title: e.target.value }))} /></div>

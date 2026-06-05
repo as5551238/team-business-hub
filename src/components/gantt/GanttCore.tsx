@@ -5,6 +5,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Task, TaskStatus } from '@/types';
 import { calculateCriticalPath, suggestBuffers, DAY_MS, parseDate, type CPMResult, type CPMTaskMetrics } from '@/lib/gantt/cpm';
+import { resolveToken } from '@/lib/resolveToken';
 
 export type ZoomLevel = 'week' | 'month';
 
@@ -280,7 +281,7 @@ export function renderDependencyLines(opts: {
     const fromY = depIdx < currentIdx ? rowHeight : 0;
     const toY = rowHeight / 2;
     const isBothCritical = cpmResult && cpmResult.criticalTaskIds.has(bid) && cpmResult.criticalTaskIds.has(task.id);
-    const strokeColor = isBothCritical ? '#ef4444' : '#f59e0b';
+    const strokeColor = isBothCritical ? resolveToken('destructive') : resolveToken('warning');
     const strokeWidth = isBothCritical ? 2 : 1.5;
     const midX = (fromX + toX) / 2;
     const pathD = `M${fromX},${fromY} C${fromX + (midX - fromX) * 0.5},${fromY} ${toX - (toX - midX) * 0.5},${toY} ${toX},${toY}`;
@@ -295,10 +296,10 @@ export function renderDependencySVGDefs(): React.ReactNode {
   return (
     <defs>
       <marker id="depArrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-        <path d="M0,0 L8,3 L0,6 Z" fill="#f59e0b" />
+        <path d="M0,0 L8,3 L0,6 Z" fill={resolveToken('warning')} />
       </marker>
       <marker id="criticalArrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-        <path d="M0,0 L8,3 L0,6 Z" fill="#ef4444" />
+        <path d="M0,0 L8,3 L0,6 Z" fill={resolveToken('destructive')} />
       </marker>
     </defs>
   );

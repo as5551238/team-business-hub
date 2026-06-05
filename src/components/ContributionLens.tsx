@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { Award, ChevronDown, ChevronUp, BarChart3, RefreshCw } from 'lucide-react';
 import { handleError } from '@/lib/errorHandler';
+import { resolveToken } from '@/lib/resolveToken';
 
 interface ContributionData {
   userId: string;
@@ -29,11 +30,11 @@ interface ContributionData {
 }
 
 const DIMS = [
-  { key: 'taskOutput', label: '任务产出', color: '#3B82F6' },
-  { key: 'collabImpact', label: '协作影响', color: '#10B981' },
-  { key: 'goalContribution', label: '目标贡献', color: '#EC4899' },
-  { key: 'innovation', label: '创新度', color: '#F59E0B' },
-  { key: 'reliability', label: '可靠性', color: '#8B5CF6' },
+  { key: 'taskOutput', label: '任务产出', color: resolveToken('primary') },
+  { key: 'collabImpact', label: '协作影响', color: resolveToken('success') },
+  { key: 'goalContribution', label: '目标贡献', color: resolveToken('chart-pink') },
+  { key: 'innovation', label: '创新度', color: resolveToken('warning') },
+  { key: 'reliability', label: '可靠性', color: resolveToken('chart-purple') },
 ] as const;
 
 const LEVEL_STYLES: Record<string, string> = {

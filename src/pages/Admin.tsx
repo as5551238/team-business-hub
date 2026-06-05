@@ -24,6 +24,7 @@ const ComplianceBaselineTab = lazy(() => import('./admin/ComplianceBaselineTab')
 const CollabTab = lazy(() => import('./admin/CollabTab').then(m => ({ default: m.CollabTab })));
 const TemplateMarketTab = lazy(() => import('./admin/TemplateMarketTab').then(m => ({ default: m.TemplateMarketTab })));
 const AutomatonTab = lazy(() => import('./admin/AutomatonTab').then(m => ({ default: m.AutomatonTab })));
+const PrivacyTab = lazy(() => import('./PrivacyPage').then(m => ({ default: m.PrivacyPage })));
 
 // --- Grouped tab structure: 5 sections instead of 19 flat tabs ---
 interface TabItem { key: AdminTab; label: string; icon: typeof Users }
@@ -65,6 +66,7 @@ const tabGroups: TabGroup[] = [
       { key: 'deploy', label: '部署', icon: Server },
       { key: 'compliance', label: '等保合规', icon: ShieldCheck },
       { key: 'billing', label: '订阅计费', icon: CreditCard },
+      { key: 'privacy', label: '隐私政策', icon: Shield },
       { key: 'settings', label: '设置', icon: SettingsIcon },
     ],
   },
@@ -77,7 +79,7 @@ const tabGroups: TabGroup[] = [
   },
 ];
 
-const TAB_LABELS: Record<AdminTab, string> = { team: '团队管理', toolbox: '工具箱', schedule: '日程管理', settings: '系统设置', flow: '流程配置', automation: '自动化规则', automaton: 'AI自主执行', integrations: '集成管理', kpi: 'KPI 看板', agent: 'Agent 审计', deploy: '私有化部署', riskradar: '风险雷达', teamload: '团队负载', mcptools: 'MCP 工具', billing: '订阅计费', retro: '复盘跟踪', marketplace: 'Agent 市场', compliance: '等保合规', collab: '实时协作', templates: '模板市场' };
+const TAB_LABELS: Record<AdminTab, string> = { team: '团队管理', toolbox: '工具箱', schedule: '日程管理', settings: '系统设置', flow: '流程配置', automation: '自动化规则', automaton: 'AI自主执行', integrations: '集成管理', kpi: 'KPI 看板', agent: 'Agent 审计', deploy: '私有化部署', riskradar: '风险雷达', teamload: '团队负载', mcptools: 'MCP 工具', billing: '订阅计费', retro: '复盘跟踪', marketplace: 'Agent 市场', compliance: '等保合规', collab: '实时协作', templates: '模板市场', privacy: '隐私政策' };
 
 // Permission check per tab
 const tabVisibility: Record<AdminTab, 'admin' | 'manager' | 'member' | 'all'> = {
@@ -85,6 +87,7 @@ const tabVisibility: Record<AdminTab, 'admin' | 'manager' | 'member' | 'all'> = 
   agent: 'admin', deploy: 'admin', settings: 'admin', billing: 'admin',
   marketplace: 'manager', compliance: 'manager', collab: 'manager', templates: 'all',
   retro: 'manager', riskradar: 'all', teamload: 'all', mcptools: 'manager', toolbox: 'member', schedule: 'member',
+  privacy: 'all',
 };
 
 export default function Admin({ activeTab }: { activeTab?: string }) {
@@ -215,6 +218,7 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
           {tab === 'collab' && <TabErrorBoundary key="collab" name={TAB_LABELS.collab}><Suspense fallback={<TabLoader />}><CollabTab /></Suspense></TabErrorBoundary>}
           {tab === 'automaton' && <TabErrorBoundary key="automaton" name={TAB_LABELS.automaton}><Suspense fallback={<TabLoader />}><AutomatonTab /></Suspense></TabErrorBoundary>}
           {tab === 'templates' && <TabErrorBoundary key="templates" name={TAB_LABELS.templates}><Suspense fallback={<TabLoader />}><TemplateMarketTab /></Suspense></TabErrorBoundary>}
+          {tab === 'privacy' && <TabErrorBoundary key="privacy" name={TAB_LABELS.privacy}><Suspense fallback={<TabLoader />}><PrivacyTab /></Suspense></TabErrorBoundary>}
         </div>
       </div>
     </div>

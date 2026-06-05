@@ -22,8 +22,9 @@ export function sprintReducer(state: AppState, action: Action): AppState | null 
       const now = tsNow();
       const spIdx = s.sprints.findIndex(sp => sp.id === action.payload.id);
       if (spIdx !== -1) {
+        const oldUpdatedAt = s.sprints[spIdx].updatedAt;
         s.sprints[spIdx] = { ...s.sprints[spIdx], ...action.payload.updates, updatedAt: now };
-        supabaseUpdate('sprints', action.payload.id, { ...action.payload.updates, updated_at: now });
+        supabaseUpdate('sprints', action.payload.id, { ...action.payload.updates, updated_at: now }, oldUpdatedAt);
       }
       return s;
     }

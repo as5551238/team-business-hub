@@ -6,12 +6,13 @@ import { hasPermission } from '@/store/reducer';
 import type { Permission, ItemType } from '@/types';
 import { QuickCreateModal } from '@/components/QuickCreateModal';
 import { CommandPalette } from '@/components/CommandPalette';
+import { ShortcutHelpPanel } from '@/components/ShortcutHelpPanel';
 import { OnboardingWizard, shouldShowOnboarding } from '@/components/OnboardingWizard';
 import { useTheme } from '@/hooks/useTheme';
 import { handleError } from '@/lib/errorHandler';
 import { PageTransition } from '@/components/ui/motion';
 import { computeUserLevel, isFeatureVisible, getLevelDescription, setUserLevel, recordAction } from '@/lib/progressiveDisclosure';
-import { pushTaskEvent, pushGoalEvent, pushRiskAlert } from '@/lib/pushEventEngine';
+import { pushTaskEvent } from '@/lib/pushEventEngine';
 import { useCollabPresence } from '@/lib/collab';
 import { CollabPresenceBar } from '@/components/CollabPresenceBar';
 import { H5Layout } from '@/components/H5Layout';
@@ -34,9 +35,9 @@ function isH5Mode(): boolean {
   } catch (e) { handleError(e, { module: 'Layout', operation: 'H5_MODE_DETECT', severity: 'debug' }); return false; }
 }
 import {
-  LayoutDashboard, Target, FolderKanban, CheckSquare, StickyNote,
+  LayoutDashboard, Target, FolderKanban, CheckSquare,
   BarChart3, Users, Bell, Search, Menu, X, ChevronDown,
-  Settings, Cloud, CloudOff, Loader2, FileText, Eye, Users2,
+  Settings, Cloud, CloudOff, Loader2, Eye, Users2,
   BookOpen, Building2, Shield, PanelLeftClose, PanelLeft,
   ChevronsLeft, ChevronsRight, Plus, Minus, Maximize2, Edit2, Trash2, Check,
   Moon, Sun, Monitor
@@ -63,7 +64,6 @@ const navItems: { page: Page; label: string; icon: React.ReactNode; requirePermi
   { page: 'insight', label: '数据洞察', icon: <BarChart3 size={20} /> },
   { page: 'knowledge', label: '知识库', icon: <BookOpen size={20} /> },
   { page: 'admin', label: '管理中心', icon: <Settings size={20} />, requirePermission: 'settings_manage' },
-  { page: 'privacy', label: '隐私政策', icon: <Shield size={20} /> },
 ];
 
 import { MemberFilterDropdown, NotificationDropdown, UserMenuDropdown, MobileContextMenu } from './LayoutDropdowns';
@@ -98,8 +98,8 @@ export default function Layout({ children, currentUser }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<'wide' | 'narrow' | 'hidden'>(() => {
     try { const s = localStorage.getItem('tbh-sidebar-mode'); if (s === 'wide' || s === 'narrow' || s === 'hidden') return s; } catch (e) { handleError(e, { module: 'Layout', operation: 'LOAD_SIDEBAR_MODE', severity: 'debug' }); }
-    // 小屏默认收起，大屏默认展开
-    return window.innerWidth < 768 ? 'hidden' : 'wide';
+    // S5-4: 小屏隐藏，平板窄栏，桌面宽栏
+    return window.innerWidth < 768 ? 'hidden' : window.innerWidth <= 1024 ? 'narrow' : 'wide';
   });
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -107,6 +107,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
   const [showTeamSelector, setShowTeamSelector] = useState(false);
   const [offlineWrites, setOfflineWrites] = useState(0);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [quickCreateType, setQuickCreateType] = useState<'task' | 'goal' | 'project'>('task');
   const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding());
@@ -120,8 +121,9 @@ export default function Layout({ children, currentUser }: LayoutProps) {
   const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
   const user = state.currentUser;
   const isAdmin = user?.role === 'admin';
-  const unreadCount = useMemo(() => state.notifications.filter(n => !n.read).length, [state.notifications]);
+  const unreadCount = useMemo(() => state.notifications.filter(n => !n.read && (!n.memberId || n.memberId === user?.id)).length, [state.notifications, user?.id]);
   const overdueCount = useMemo(() => { const today = new Date().toISOString().split('T')[0]; return state.tasks.filter(t => (t.leaderId === user?.id || (t.supporterIds ?? []).includes(user?.id || '')) && t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today).length; }, [state.tasks, user?.id]);
+  const inProgressGoalsCount = useMemo(() => state.goals.filter(g => g.status === 'in_progress').length, [state.goals]);
   const visibleMembers = isAdmin ? activeMembers : activeMembers.filter(m => m.id === currentUser?.id);
   // Memoize visibleMembers for React.memo props comparison
   const visibleMembersMemo = useMemo(() => visibleMembers, [isAdmin, activeMembers, currentUser?.id]);
@@ -238,6 +240,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
         sendBrowserNotification(title, { body: message, tag: `auto-${Date.now()}`, data: { url: '/' } });
       }
     });
+    return () => setWeChatNotify(() => {});
   }, []);
 
   // S3-2a: Esc closes detail panel (navigate to base page path)
@@ -255,6 +258,13 @@ export default function Layout({ children, currentUser }: LayoutProps) {
     window.addEventListener('tbh-close-detail-panel', handler);
     return () => window.removeEventListener('tbh-close-detail-panel', handler);
   }, [navigate]);
+
+  // AI chat button from dashboard opens command palette
+  useEffect(() => {
+    const handler = () => setCommandPaletteOpen(true);
+    window.addEventListener('tbh-open-ai-chat', handler);
+    return () => window.removeEventListener('tbh-open-ai-chat', handler);
+  }, []);
 
   // When new notifications arrive while page is hidden, show browser notification
   const prevNotificationCountRef = useRef(state.notifications.length);
@@ -283,6 +293,20 @@ export default function Layout({ children, currentUser }: LayoutProps) {
       try { localStorage.setItem('tbh-sidebar-mode', next); } catch (e) { handleError(e, { module: 'Layout', operation: 'SAVE_SIDEBAR_MODE', severity: 'debug' }); }
       return next;
     });
+  }, []);
+
+  // S5-4: Auto-downgrade sidebar to narrow on tablet resize (≤1024px)
+  useEffect(() => {
+    const onResize = () => {
+      const w = window.innerWidth;
+      setSidebarMode(prev => {
+        if (w < 768 && prev !== 'hidden') return 'hidden';
+        if (w >= 768 && w <= 1024 && prev === 'wide') return 'narrow';
+        return prev;
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   const sidebarWidthClass = sidebarMode === 'wide' ? 'w-64' : sidebarMode === 'narrow' ? 'w-16' : 'w-0';
@@ -370,6 +394,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
     setCommandPaletteOpen,
     setQuickCreateOpen,
     setQuickCreateType,
+    setShortcutHelpOpen,
     searchInputRef,
   });
 
@@ -381,10 +406,11 @@ export default function Layout({ children, currentUser }: LayoutProps) {
 
   const handleMarkAllRead = useCallback(() => dispatch({ type: 'MARK_ALL_NOTIFICATIONS_READ' }), [dispatch]);
   const handleMarkRead = useCallback((id: string) => dispatch({ type: 'MARK_NOTIFICATION_READ', payload: id }), [dispatch]);
-  const handleNotificationNavigate = useCallback((page: Page, itemId: string, itemType: string) => {
+  const handleNotificationNavigate = useCallback((page: Page, itemId: string, itemType: string, notificationId?: string) => {
+    if (notificationId) dispatch({ type: 'MARK_NOTIFICATION_READ', payload: notificationId });
     goToItem(itemType as 'goal' | 'project' | 'task', itemId);
     setShowNotifications(false);
-  }, [goToItem]);
+  }, [goToItem, dispatch]);
   const handleSwitchUser = useCallback((id: string) => { dispatch({ type: 'SET_CURRENT_USER', payload: id }); setShowUserMenu(false); }, [dispatch]);
   const handleLogout = useCallback(() => {
     try { localStorage.removeItem(CURRENT_USER_KEY); } catch (e) { handleError(e, { module: 'Layout', operation: 'LOGOUT_REMOVE_KEY', severity: 'debug' }); }
@@ -409,10 +435,12 @@ export default function Layout({ children, currentUser }: LayoutProps) {
   }, [state.members, navigate]);
 
   // Memoize notification slice to prevent re-render when other state changes
-  const notificationsMemo = useMemo(() => state.notifications, [state.notifications]);
+  const notificationsMemo = useMemo(() => state.notifications.filter(n => !n.memberId || n.memberId === user?.id), [state.notifications, user?.id]);
 
   return (
     <div className="flex h-screen overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      {/* Skip-to-content for keyboard users */}
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-lg focus:text-sm focus:font-medium">跳到主内容</a>
       {sidebarOpen && <div className="sidebar-overlay md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <aside className={[
@@ -432,13 +460,13 @@ export default function Layout({ children, currentUser }: LayoutProps) {
               <div className="text-xs text-sidebar-foreground/50">Team Business Hub</div>
             </div>
           )}
-          <button className="ml-auto p-1 rounded hover:bg-sidebar-accent transition-colors" onClick={cycleSidebarMode} title={sidebarMode === 'wide' ? '收窄侧边栏' : sidebarMode === 'narrow' ? '隐藏侧边栏' : '展开侧边栏'}>
+          <button className="ml-auto p-1 rounded hover:bg-sidebar-accent transition-colors" onClick={cycleSidebarMode} title={sidebarMode === 'wide' ? '收窄侧边栏' : sidebarMode === 'narrow' ? '隐藏侧边栏' : '展开侧边栏'} aria-label={sidebarMode === 'wide' ? '收窄侧边栏' : sidebarMode === 'narrow' ? '隐藏侧边栏' : '展开侧边栏'}>
             {sidebarMode === 'wide' ? <PanelLeftClose size={16} /> : sidebarMode === 'narrow' ? <ChevronsLeft size={16} /> : <ChevronsRight size={16} />}
           </button>
-          <button className="md:hidden" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
+          <button className="md:hidden" onClick={() => setSidebarOpen(false)} aria-label="关闭侧边栏"><X size={18} /></button>
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto" aria-label="主导航">
           {navItems.filter(item => {
             if (item.requirePermission && (!user || (user.role !== 'admin' && !hasPermission(state, user.id, item.requirePermission)))) return false;
             // Progressive disclosure: filter nav items by user level
@@ -447,14 +475,16 @@ export default function Layout({ children, currentUser }: LayoutProps) {
           }).map((item, idx) => (
             <button key={item.page} onClick={() => handlePageClick(item.page)}
               title={sidebarNarrow ? item.label : undefined}
+              aria-label={item.label}
+              aria-current={currentPage === item.page ? 'page' : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left relative active:scale-[0.97] ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'} ${sidebarNarrow ? 'justify-center px-0' : ''}`}>
               {item.icon}
               {!sidebarNarrow && !sidebarCollapsed && item.label}
               {!sidebarNarrow && !sidebarCollapsed && item.page === 'tasks' && overdueCount > 0 && (
                 <span className="ml-auto bg-destructive text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{overdueCount}</span>
               )}
-              {!sidebarNarrow && !sidebarCollapsed && item.page === 'goals' && state.goals.filter(g => g.status === 'in_progress').length > 0 && (
-                <span className="ml-auto bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{state.goals.filter(g => g.status === 'in_progress').length}</span>
+              {!sidebarNarrow && !sidebarCollapsed && item.page === 'goals' && inProgressGoalsCount > 0 && (
+                <span className="ml-auto bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{inProgressGoalsCount}</span>
               )}
               {!sidebarNarrow && !sidebarCollapsed && item.page === 'dashboard' && unreadCount > 0 && (
                 <span className="ml-auto bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{unreadCount}</span>
@@ -505,7 +535,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
               })()}
             </>
           ) : (
-            <button className="p-2 rounded hover:bg-sidebar-accent transition-colors" onClick={cycleSidebarMode} title="展开侧边栏">
+            <button className="p-2 rounded hover:bg-sidebar-accent transition-colors" onClick={cycleSidebarMode} aria-label="展开侧边栏">
               <ChevronsRight size={16} className="text-sidebar-foreground/50" />
             </button>
           )}
@@ -527,11 +557,11 @@ export default function Layout({ children, currentUser }: LayoutProps) {
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-14 bg-background border-b border-border flex items-center px-4 gap-4 flex-shrink-0">
-          <button className="md:hidden p-1.5 -ml-1.5 rounded-md hover:bg-muted" onClick={() => setSidebarOpen(true)}>
+          <button className="md:hidden p-1.5 -ml-1.5 rounded-md hover:bg-muted" onClick={() => setSidebarOpen(true)} aria-label="打开侧边栏">
             <Menu size={20} />
           </button>
           {sidebarMode === 'hidden' && (
-            <button className="hidden md:flex p-1.5 -ml-1.5 rounded-md hover:bg-muted" onClick={cycleSidebarMode} title="展开侧边栏">
+            <button className="hidden md:flex p-1.5 -ml-1.5 rounded-md hover:bg-muted" onClick={cycleSidebarMode} aria-label="展开侧边栏">
               <PanelLeft size={20} />
             </button>
           )}
@@ -560,7 +590,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
           )}
 
           <div className="relative">
-            <button onClick={() => { setShowMemberFilter(!showMemberFilter); setShowUserMenu(false); setShowNotifications(false); }} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!isTeamView ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>{isTeamView ? <><Eye size={14} /> <span className="hidden sm:inline">团队视图</span></> : <><Users2 size={14} /> <span className="hidden sm:inline">{viewingMember?.name || '个人'}</span></>}<ChevronDown size={12} className="text-muted-foreground" /></button>
+            <button onClick={() => { setShowMemberFilter(!showMemberFilter); setShowUserMenu(false); setShowNotifications(false); }} aria-label="切换视图" aria-expanded={showMemberFilter} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!isTeamView ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>{isTeamView ? <><Eye size={14} /> <span className="hidden sm:inline">团队视图</span></> : <><Users2 size={14} /> <span className="hidden sm:inline">{viewingMember?.name || '个人'}</span></>}<ChevronDown size={12} className="text-muted-foreground" /></button>
             {showMemberFilter && (
               <MemberFilterDropdown isTeamView={isTeamView} viewingMemberId={viewingMemberId} viewingMember={viewingMember} visibleMembers={visibleMembersMemo} setViewingMember={setViewingMember} onClose={closeAllDropdowns} />
             )}
@@ -568,14 +598,14 @@ export default function Layout({ children, currentUser }: LayoutProps) {
 
           <div className="flex-1" />
           <div className="hidden md:flex items-center gap-2 bg-muted rounded-lg px-3 py-1.5 text-sm w-64">
-            <Search size={16} /><input ref={searchInputRef} type="text" placeholder="搜索... (⌘K)" className="bg-transparent border-none outline-none flex-1 text-sm text-foreground placeholder:text-muted-foreground" onKeyDown={handleGlobalSearch} />
+            <Search size={16} /><input ref={searchInputRef} type="text" placeholder="搜索... (⌘K)" aria-label="全局搜索" className="bg-transparent border-none outline-none flex-1 text-sm text-foreground placeholder:text-muted-foreground" onKeyDown={handleGlobalSearch} />
           </div>
           {/* Density toggle: comfortable ↔ compact */}
-          <button className="hidden md:flex p-1.5 rounded-md hover:bg-muted transition-colors" onClick={toggleDensity} title={density === 'comfortable' ? '切换紧凑模式' : '切换舒适模式'}>
+          <button className="hidden md:flex p-1.5 rounded-md hover:bg-muted transition-colors" onClick={toggleDensity} aria-label={density === 'comfortable' ? '切换紧凑模式' : '切换舒适模式'}>
             {density === 'comfortable' ? <Maximize2 size={16} className="text-muted-foreground" /> : <Minus size={16} className="text-primary" />}
           </button>
           {/* Theme toggle: light ↔ dark ↔ system */}
-          <button className="hidden md:flex p-1.5 rounded-md hover:bg-muted transition-colors" onClick={toggleTheme} title={`当前: ${theme === 'system' ? '跟随系统' : theme === 'dark' ? '暗色模式' : '亮色模式'} (点击切换)`}>
+          <button className="hidden md:flex p-1.5 rounded-md hover:bg-muted transition-colors" onClick={toggleTheme} aria-label={`当前: ${theme === 'system' ? '跟随系统' : theme === 'dark' ? '暗色模式' : '亮色模式'} (点击切换)`}>
             {theme === 'dark' ? <Moon size={16} className="text-primary" /> : theme === 'light' ? <Sun size={16} className="text-muted-foreground" /> : <Monitor size={16} className="text-muted-foreground" />}
           </button>
           {/* Online collaborators indicator with page-awareness */}
@@ -599,17 +629,21 @@ export default function Layout({ children, currentUser }: LayoutProps) {
           )}
            <CollabPresenceBar userId={user?.id || ''} userName={user?.name || ''} currentPage={currentPage} />
            <div className="relative">
-             <button className="relative p-2 rounded-lg hover:bg-muted transition-colors"
-               onClick={() => { setShowNotifications(!showNotifications); setShowUserMenu(false); setShowMemberFilter(false); }}>
-               <Bell size={18} />
-              {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />}
-            </button>
-            {showNotifications && (
-              <NotificationDropdown notifications={notificationsMemo} unreadCount={unreadCount} onMarkAllRead={handleMarkAllRead} onMarkRead={handleMarkRead} onNavigate={handleNotificationNavigate} />
-            )}
-          </div>
+              <button className="relative p-2 rounded-lg hover:bg-muted transition-colors" aria-label={`通知${unreadCount > 0 ? ` (${unreadCount}条未读)` : ''}`}
+                onClick={() => { setShowNotifications(!showNotifications); setShowUserMenu(false); setShowMemberFilter(false); }}>
+                <Bell size={18} />
+               {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />}
+             </button>
+             {showNotifications && (
+               <NotificationDropdown notifications={notificationsMemo} unreadCount={unreadCount} onMarkAllRead={handleMarkAllRead} onMarkRead={handleMarkRead} onNavigate={handleNotificationNavigate} />
+             )}
+             {/* Screen reader live region for notification count changes */}
+             <div aria-live="polite" aria-atomic="true" className="sr-only">
+               {unreadCount > 0 ? `${unreadCount}条未读通知` : '没有未读通知'}
+             </div>
+           </div>
           <div className="relative">
-            <button className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors"
+            <button className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors" aria-label="用户菜单" aria-expanded={showUserMenu}
               onClick={() => { setShowUserMenu(!showUserMenu); setShowNotifications(false); setShowMemberFilter(false); }}>
               <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">{user?.avatar || '?'}</div>
               <ChevronDown size={14} className="hidden sm:block text-muted-foreground" />
@@ -619,7 +653,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
             )}
           </div>
         </header>
-        <main className={`flex-1 overflow-y-auto bg-muted/30 pb-20 md:pb-0 ${density === 'compact' ? 'text-sm' : ''}`} onTouchStart={handleMainTouchStart} onTouchEnd={handleMainTouchEnd} onTouchMove={handleMainTouchMove}><DensityContext.Provider value={density}><PageTransition keyProp={currentPage}>{children}</PageTransition></DensityContext.Provider></main>
+        <main id="main-content" className={`flex-1 overflow-y-auto bg-muted/30 pb-20 md:pb-0 ${density === 'compact' ? 'text-sm' : ''}`} tabIndex={-1} onTouchStart={handleMainTouchStart} onTouchEnd={handleMainTouchEnd} onTouchMove={handleMainTouchMove}><DensityContext.Provider value={density}><PageTransition keyProp={currentPage}>{children}</PageTransition></DensityContext.Provider></main>
       </div>
 
       {/* Mobile bottom navigation */}
@@ -637,7 +671,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
         ))}
         {/* Quick create button */}
         <button onClick={() => { setQuickCreateType('task'); setQuickCreateOpen(true); }}
-          className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-white shadow-lg -mt-4">
+          className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-white shadow-lg -mt-4" aria-label="快速创建">
           <Plus size={20} />
         </button>
         <button onClick={() => handlePageClick('insight')}
@@ -666,6 +700,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
         }}
       />
       <QuickCreateModal open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} initialType={quickCreateType} />
+      <ShortcutHelpPanel isOpen={shortcutHelpOpen} onClose={() => setShortcutHelpOpen(false)} />
       {/* Mobile long-press context menu */}
       {contextMenu && <MobileContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={() => setContextMenu(null)} onAction={handleContextAction} />}
       {showOnboarding && <OnboardingWizard onComplete={() => setShowOnboarding(false)} />}

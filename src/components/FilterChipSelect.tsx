@@ -92,7 +92,7 @@ export function FilterChipSelect({ label, options, selected, onSelect, onClear, 
               ? (selected as Set<string>).has(opt.value)
               : selected === opt.value;
             return (
-              <label key={opt.value} className={cn('flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-accent text-xs transition-colors', isSelected && 'bg-primary/5 text-primary font-medium')}>
+              <label key={opt.value} onClick={() => handleSelect(opt)} className={cn('flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-accent text-xs transition-colors', isSelected && 'bg-primary/5 text-primary font-medium')}>
                 {multiple ? (
                   <span className={cn('w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors', isSelected ? 'bg-primary border-primary' : 'border-border')}>
                     {isSelected && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none"><path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}

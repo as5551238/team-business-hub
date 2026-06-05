@@ -19,7 +19,7 @@ export function tagCategoryReducer(state: AppState, action: Action): AppState | 
       const s = needMutate(state, ['tags']);
       const now = tsNow();
       const idx = s.tags.findIndex(t => t.id === action.payload.id);
-      if (idx !== -1) { s.tags[idx] = { ...s.tags[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('tags', action.payload.id, { ...action.payload.updates, updated_at: now }); }
+      if (idx !== -1) { const oldUpdatedAt = s.tags[idx].updatedAt; s.tags[idx] = { ...s.tags[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('tags', action.payload.id, { ...action.payload.updates, updated_at: now }, oldUpdatedAt); }
       return s;
     }
     case 'DELETE_TAG': {
@@ -44,7 +44,8 @@ export function tagCategoryReducer(state: AppState, action: Action): AppState | 
     case 'UPDATE_CATEGORY': {
       const s = needMutate(state, ['categories']);
       const idx = s.categories.findIndex(c => c.id === action.payload.id);
-      if (idx !== -1) { s.categories[idx] = { ...s.categories[idx], ...action.payload.updates }; supabaseUpdate('categories', action.payload.id, action.payload.updates); }
+      const old = s.categories.find(c => c.id === action.payload.id);
+      if (idx !== -1) { s.categories[idx] = { ...s.categories[idx], ...action.payload.updates, updatedAt: tsNow() }; supabaseUpdate('categories', action.payload.id, { ...action.payload.updates, updated_at: tsNow() }, old?.updatedAt); }
       return s;
     }
     case 'DELETE_CATEGORY': {

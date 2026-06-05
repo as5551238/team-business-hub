@@ -138,7 +138,7 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground mt-0.5">3步快速启动你的事项管理</p>
               </div>
             </div>
-            <button onClick={dismissOnboarding} className="text-muted-foreground/50 hover:text-muted-foreground transition-colors p-1"><X size={18} /></button>
+            <button onClick={dismissOnboarding} className="text-muted-foreground/50 hover:text-muted-foreground transition-colors p-1" aria-label="关闭引导提示"><X size={18} /></button>
           </div>
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold">

@@ -4,7 +4,8 @@
  */
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
-import { useMemberLookup, usePermissions } from '@/store/hooks';
+import { useMemberLookup, usePermissions, useActiveMembers } from '@/store/hooks';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag, X, Filter, Save, GitCompare, Sparkles, Zap } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -96,8 +97,9 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
   const [scheduleDeepSummary, setScheduleDeepSummary] = useState('');
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const trapRef = useFocusTrap(open, onClose);
 
-  const activeMembers = useMemo(() => state.members.filter(m => m.status === 'active'), [state.members]);
+  const { activeMembers } = useActiveMembers();
 
   const timeRange = useMemo(() => computeTimeRange(allTasks), [allTasks]);
 
@@ -162,13 +164,6 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
     window.addEventListener('mousedown', handler);
     return () => window.removeEventListener('mousedown', handler);
   }, [editingTaskId]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose]);
 
   const handleSaveBaseline = useCallback(() => {
     const name = baselineName.trim() || `基线 ${baselines.length + 1}`;
@@ -265,8 +260,8 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-card rounded-2xl shadow-2xl w-[95vw] max-w-[1400px] h-[85vh] flex flex-col animate-fade-in" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose} role="presentation">
+      <div className="bg-card rounded-2xl shadow-2xl w-[95vw] max-w-[1400px] h-[85vh] flex flex-col animate-fade-in" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="甘特图" ref={trapRef}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-3">
@@ -275,7 +270,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
             {cpmResult.criticalTaskIds.size > 0 && <span className="text-[10px] text-red-500 font-medium">关键路径 {cpmResult.criticalPath.length} 项 | 工期 {cpmResult.projectDuration} 天</span>}
             {(() => { const bufs = suggestBuffers(cpmResult.taskMetrics, cpmResult.criticalTaskIds); return bufs.length > 0 ? <span className="text-[10px] text-blue-500 font-medium ml-2">缓冲建议: {bufs.length}项, 总计{bufs.reduce((s,b)=>s+b.suggestBuffer,0)}天</span> : null; })()}
           </div>
-          <button className="p-1.5 rounded-lg hover:bg-muted transition-colors" onClick={onClose}><X size={20} /></button>
+          <button className="p-1.5 rounded-lg hover:bg-muted transition-colors" onClick={onClose} aria-label="关闭甘特图"><X size={20} /></button>
         </div>
 
         {/* Toolbar */}
@@ -300,8 +295,8 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
             </select>
           </div>
           <div className="flex-1" />
-          <button onClick={() => scrollBy(-200)} className="p-1 rounded hover:bg-muted"><ChevronLeft size={16} /></button>
-          <button onClick={() => scrollBy(200)} className="p-1 rounded hover:bg-muted"><ChevronRight size={16} /></button>
+          <button onClick={() => scrollBy(-200)} className="p-1 rounded hover:bg-muted" aria-label="向左滚动"><ChevronLeft size={16} /></button>
+          <button onClick={() => scrollBy(200)} className="p-1 rounded hover:bg-muted" aria-label="向右滚动"><ChevronRight size={16} /></button>
           <div className="h-4 w-px bg-border mx-1" />
           <button onClick={() => setShowBaseline(!showBaseline)} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs border hover:bg-muted transition-colors ${showBaseline ? 'border-primary bg-primary/5 text-primary' : 'border-border'}`}><GitCompare size={13} />基线</button>
           <button onClick={handleAutoSchedule} className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"><Sparkles size={13} />AI排程</button>
@@ -385,10 +380,10 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
                   const slackDisplay = Number.isNaN(slack) ? '循环' : `${slack}天`;
                   return (
                     <div key={task.id} className={`flex items-center px-3 border-b border-border/50 hover:bg-muted/30 group cursor-pointer ${isCritical ? 'bg-red-50/40' : ''}`} style={{ height: rowHeight }} onDoubleClick={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}>
-                      <button onClick={() => handleToggleMilestone(task)} className={`mr-1 flex-shrink-0 ${isMilestone ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`} title="里程碑"><Flag size={13} /></button>
+                      <button onClick={() => handleToggleMilestone(task)} className={`mr-1 flex-shrink-0 ${isMilestone ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`} title="里程碑" aria-label="切换里程碑"><Flag size={13} /></button>
                       <input value={task.title} onChange={e => handleTitleChange(task.id, e.target.value)} className={`flex-1 text-xs bg-transparent border-none outline-none truncate min-w-0 hover:bg-muted/50 px-1 py-0.5 rounded ${isCritical ? 'font-medium text-red-700' : ''}`} readOnly={!canEditTasks} />
                       <span className="w-14 text-[10px] text-muted-foreground truncate text-center flex-shrink-0">{getName(task.leaderId)}</span>
-                      {canDeleteTasks && <button onClick={() => handleDeleteTask(task.id)} className="ml-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"><Trash2 size={12} /></button>}
+                      {canDeleteTasks && <button onClick={() => handleDeleteTask(task.id)} className="ml-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" aria-label="删除任务"><Trash2 size={12} /></button>}
                       {isCritical && <span className="ml-1 text-[8px] text-red-400 flex-shrink-0" title={`浮动: ${slackDisplay}`}>CP</span>}
                     </div>
                   );
@@ -520,7 +515,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
         {editingTaskId && (() => { const et = allTasks.find(t => t.id === editingTaskId); if (!et) return null; return (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30" onClick={() => setEditingTaskId(null)}>
             <div className="bg-card rounded-2xl shadow-2xl p-6 w-[420px] max-h-[80vh] overflow-y-auto space-y-4" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between"><span className="text-base font-semibold">{et.title}</span><button onClick={() => setEditingTaskId(null)} className="p-1 hover:bg-muted rounded-lg"><X size={16} /></button></div>
+              <div className="flex items-center justify-between"><span className="text-base font-semibold">{et.title}</span><button onClick={() => setEditingTaskId(null)} className="p-1 hover:bg-muted rounded-lg" aria-label="关闭编辑"><X size={16} /></button></div>
               <div><label className="text-xs text-muted-foreground block mb-1">状态</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.status} onChange={e => handleUpdateTask(et.id, { status: e.target.value as TaskStatus })}>{(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
               <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.leaderId || ''} onChange={e => handleUpdateTask(et.id, { leaderId: e.target.value })}><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
               <div className="grid grid-cols-2 gap-3">
@@ -529,7 +524,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
               </div>
               <div><label className="text-xs text-muted-foreground block mb-1">紧急程度</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.priority} onChange={e => handleUpdateTask(et.id, { priority: e.target.value as TaskPriority })}><option value="urgent">紧急 (S)</option><option value="high">高 (A)</option><option value="medium">中 (B)</option><option value="low">低 (C)</option></select></div>
               <div><label className="text-xs text-muted-foreground block mb-1">前置依赖</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value="" onChange={e => { if (!e.target.value) return; const current = (et.blockedBy ?? []) as string[]; if (!current.includes(e.target.value)) handleUpdateTask(et.id, { blockedBy: [...current, e.target.value] }); }}><option value="">添加依赖...</option>{allTasks.filter(t => t.id !== et.id).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select>
-                <div className="flex flex-wrap gap-1 mt-2">{((et.blockedBy ?? []) as string[]).map(bid => { const dep = allTasks.find(t => t.id === bid); if (!dep) return null; return <span key={bid} className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1">{dep.title}<button className="hover:text-red-500" onClick={() => handleUpdateTask(et.id, { blockedBy: ((et.blockedBy ?? []) as string[]).filter((id: string) => id !== bid) })}><X size={12} /></button></span>; })}</div>
+                <div className="flex flex-wrap gap-1 mt-2">{((et.blockedBy ?? []) as string[]).map(bid => { const dep = allTasks.find(t => t.id === bid); if (!dep) return null; return <span key={bid} className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1">{dep.title}<button className="hover:text-red-500" onClick={() => handleUpdateTask(et.id, { blockedBy: ((et.blockedBy ?? []) as string[]).filter((id: string) => id !== bid) })} aria-label="移除依赖"><X size={12} /></button></span>; })}</div>
               </div>
             </div>
           </div>

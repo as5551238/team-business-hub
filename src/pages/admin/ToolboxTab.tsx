@@ -84,7 +84,7 @@ export function ToolboxTab() {
             <div className="flex items-center gap-2 mt-3">
               <button className={btnCls} onClick={() => handleCopy(tpl.content)}><Copy size={14} /> 使用</button>
               <button className={btnCls} onClick={() => openEdit(tpl.id)}><Edit2 size={14} /> 编辑</button>
-              <button className={btnCls + ' text-red-500 hover:text-red-700'} onClick={() => handleDelete(tpl.id, tpl.title)}><Trash2 size={14} /></button>
+              <button className={btnCls + ' text-red-500 hover:text-red-700'} onClick={() => handleDelete(tpl.id, tpl.title)} aria-label="删除模板"><Trash2 size={14} /></button>
             </div>
           </div>
         ))}
@@ -92,8 +92,8 @@ export function ToolboxTab() {
       </div>
       {showDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowDialog(false)} />
-          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowDialog(false)} role="presentation" />
+          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="模板编辑">
             <div className="px-6 py-4 border-b border-border"><h3 className="font-semibold">{editingId ? '编辑模板' : '新建模板'}</h3></div>
             <div className="px-6 py-4 space-y-4">
               <div><label className="block text-sm font-medium mb-1">标题 *</label><input className={inputCls} placeholder="模板标题" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>

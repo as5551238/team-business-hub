@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
-import { useTags, useViewingMember, useMemberLookup, useItemLookupMaps, usePermissions } from '@/store/hooks';
+import { useTags, useViewingMember, useMemberLookup, useItemLookupMaps, usePermissions, useActiveMembers } from '@/store/hooks';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import { useVirtualScroll } from '@/hooks/useVirtualScroll';
-import type { Task, TaskStatus, TaskPriority, Comment } from '@/types';
+import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { cn } from '@/lib/utils';
 import { handleError } from '@/lib/errorHandler';
-import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, FileText, Copy, MessageSquare, Trash2, Check, Filter, Sparkles, Users } from 'lucide-react';
+import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, FileText, Copy, MessageSquare, Trash2, Check, Filter, Sparkles, Users, EyeOff, Eye } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
@@ -21,7 +21,18 @@ import {
 } from './tasks/constants';
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 import { useBatchSelection } from '@/hooks/useBatchSelection';
-import { pushBatchUndo } from '@/store/useStore';
+import { useBatchOperations } from '@/hooks/useBatchOperations';
+import { useCommentCounts } from '@/hooks/useCommentCounts';
+
+const TASK_BATCH_STATUSES = [
+  { value: 'todo', label: '待处理' }, { value: 'in_progress', label: '进行中' },
+  { value: 'done', label: '已完成' }, { value: 'blocked', label: '已阻塞' }, { value: 'cancelled', label: '已取消' },
+] as const;
+
+const TASK_BATCH_PRIORITIES = [
+  { value: 'urgent', label: '紧急' }, { value: 'high', label: '高' },
+  { value: 'medium', label: '中' }, { value: 'low', label: '低' },
+] as const;
 
 export default function Tasks() {
   const { state, dispatch } = useStore();
@@ -49,6 +60,7 @@ export default function Tasks() {
   const [selectedPersons, setSelectedPersons] = useState<Set<string>>(() => urlFilters.persons ? new Set(urlFilters.persons) : new Set());
   const [timeFilter, setTimeFilter] = useState(() => urlFilters.timeFilter || 'all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCompleted, setShowCompleted] = useState(false);
 
   // Apply URL filter params on mount (one-time, for statuses/persons that may not have been in initial state)
   useEffect(() => {
@@ -89,20 +101,18 @@ export default function Tasks() {
 
   const { getName, getAvatar } = useMemberLookup();
   const { getProjectTitle: getProjectTitleFn, getTaskTitle } = useItemLookupMaps();
-  const activeMembers = useMemo(() => state.members.filter(m => m.status === 'active'), [state.members]);
+  const { activeMembers } = useActiveMembers();
+  const batchMembers = useMemo(() => activeMembers.map(m => ({ id: m.id, name: m.name })), [activeMembers]);
   const allCategories = useMemo(() => { const cats = new Set<string>(); state.tasks.forEach(t => { if (t.category) cats.add(t.category); }); return Array.from(cats).sort(); }, [state.tasks]);
   const allTags = useMemo(() => { const t = new Set<string>(); state.tasks.forEach(task => (task.tags || []).forEach(tag => t.add(tag))); return Array.from(t).sort(); }, [state.tasks]);
   const taskTemplates = useMemo(() => state.templates.filter(t => t.type === 'task'), [state.templates]);
 
-  const commentCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    (state.comments || []).forEach((c: Comment) => { if (c.itemType === 'task') counts[c.itemId] = (counts[c.itemId] || 0) + 1; });
-    return counts;
-  }, [state.comments]);
+  const commentCounts = useCommentCounts('task', state.comments);
 
   // filteredTasks MUST be declared before useEffect that references it (TDZ fix)
   const filteredTasks = useMemo(() => {
-    let list = state.tasks;
+    let list = state.tasks.filter(t => !t.deletedAt);
+    if (!showCompleted) list = list.filter(t => t.status !== 'done' && t.status !== 'cancelled');
     if (!isTeamView && viewingMember) list = list.filter(t => t.leaderId === viewingMember.id || (t.supporterIds || []).includes(viewingMember.id));
     if (selectedStatuses.size > 0) list = list.filter(t => selectedStatuses.has(t.status));
     if (selectedPriorities.size > 0) list = list.filter(t => selectedPriorities.has(t.priority));
@@ -119,7 +129,7 @@ export default function Tasks() {
     }
     if (searchQuery.trim()) { const q = searchQuery.trim().toLowerCase(); list = list.filter(t => t.title.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q)); }
     return list;
-  }, [state.tasks, isTeamView, viewingMember, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, selectedPersons, timeFilter, customDateFrom, customDateTo, searchQuery]);
+  }, [state.tasks, isTeamView, viewingMember, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, selectedPersons, timeFilter, customDateFrom, customDateTo, searchQuery, showCompleted]);
 
   // P3#11 fix: reset focusedId when it's no longer in the filtered list
   useEffect(() => {
@@ -135,7 +145,7 @@ export default function Tasks() {
     const onNavUp = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : 0; setFocusedId(ids[Math.max(idx - 1, 0)]); };
     const onEdit = () => { if (focusedId) openTaskDetail(focusedId); };
     const onOpen = () => { if (focusedId) openTaskDetail(focusedId); };
-    const onDelete = () => { if (focusedId && can('task_delete')) dispatch({ type: 'DELETE_TASK', payload: focusedId }); };
+    const onDelete = () => { if (focusedId && can('tasks_delete')) dispatch({ type: 'DELETE_TASK', payload: focusedId }); };
     const onComplete = () => { if (focusedId) { const task = state.tasks.find(t => t.id === focusedId); if (task) { const oldStatus = task.status; const newStatus = task.status === 'done' ? 'todo' : 'done'; dispatch({ type: 'UPDATE_TASK', payload: { id: focusedId, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'task', entityId: focusedId, field: 'status', oldValue: oldStatus, newValue: newStatus }); } } };
     const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
     const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (mode === 'table' || mode === 'board' || mode === 'list' || mode === 'timeline' || mode === 'matrix') setViewMode(mode as ViewMode); };
@@ -143,7 +153,7 @@ export default function Tasks() {
     const onSelectAll = () => { selectAll(filteredTasks.map(t => t.id)); };
     // S3-2c: Ctrl+D duplicate / Ctrl+E archive
     const onDuplicate = () => { if (!focusedId) return; const task = state.tasks.find(t => t.id === focusedId); if (!task) return; dispatch({ type: 'ADD_TASK', payload: { title: task.title + ' (副本)', description: task.description || '', projectId: task.projectId || null, goalId: task.goalId || null, priority: task.priority, leaderId: task.leaderId || '', supporterIds: task.supporterIds || [], dueDate: task.dueDate || null, tags: task.tags || [], category: task.category || '' } }); };
-    const onArchive = () => { if (focusedId && can('task_delete')) dispatch({ type: 'DELETE_TASK', payload: focusedId }); };
+    const onArchive = () => { if (focusedId && can('tasks_delete')) dispatch({ type: 'DELETE_TASK', payload: focusedId }); };
     window.addEventListener('tbh-nav-down', onNavDown);
     window.addEventListener('tbh-nav-up', onNavUp);
     window.addEventListener('tbh-edit-selected', onEdit);
@@ -529,113 +539,23 @@ export default function Tasks() {
 
   const activeFilterCount = (selectedStatuses.size > 0 ? 1 : 0) + (selectedPriorities.size > 0 ? 1 : 0) + (selectedLevels.size > 0 ? 1 : 0) + (selectedCategories.size > 0 ? 1 : 0) + (selectedTags.size > 0 ? 1 : 0) + (selectedPersons.size > 0 ? 1 : 0) + (timeFilter !== 'all' ? 1 : 0);
 
-  const batchDelete = useCallback(() => {
-    if (!can('delete_tasks')) return;
-    if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return;
-    const c = selectedIds.size;
-    selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id }));
-    exitBatchMode();
-    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已删除 ${c} 个任务`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_DELETE', severity: 'debug' }); }
-  }, [selectedIds, dispatch, can, exitBatchMode]);
-  const batchUpdateStatus = useCallback((status: string) => {
-    if (!can('edit_tasks')) return;
-    if (!status) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const t = state.tasks.find(x => x.id === id);
-      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { status: t?.status || 'todo' } } };
-    });
-    selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } }));
-    pushBatchUndo(inverses, undefined, '批量修改任务状态');
-    clearSelection();
-    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${selectedIds.size} 个任务状态`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_UPDATE', severity: 'debug' }); }
-  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
-  const batchAssign = useCallback((leaderId: string) => {
-    if (!can('edit_tasks')) return;
-    if (!leaderId) return;
-    // Capture old values for undo
-    const inverses = Array.from(selectedIds).map(id => {
-      const t = state.tasks.find(x => x.id === id);
-      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { leaderId: t?.leaderId || '' } } };
-    });
-    selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } }));
-    pushBatchUndo(inverses, undefined, '批量分配任务');
-    clearSelection();
-    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已分配 ${selectedIds.size} 个任务`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_ASSIGN', severity: 'debug' }); }
-  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
-
-  const batchUpdatePriority = useCallback((priority: string) => {
-    if (!can('edit_tasks')) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const t = state.tasks.find(x => x.id === id);
-      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { priority: t?.priority || 'medium' } } };
-    });
-    selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { priority: priority as TaskPriority } } }));
-    pushBatchUndo(inverses, undefined, '批量修改优先级');
-    clearSelection();
-    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${selectedIds.size} 个任务优先级`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_PRIORITY', severity: 'debug' }); }
-  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
-
-  const batchAddTags = useCallback((newTags: string[]) => {
-    if (!can('edit_tasks')) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const t = state.tasks.find(x => x.id === id);
-      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { tags: t?.tags || [] } } };
-    });
-    selectedIds.forEach(id => {
-      const t = state.tasks.find(x => x.id === id);
-      if (t) {
-        const merged = [...new Set([...(t.tags || []), ...newTags])];
-        dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { tags: merged } } });
-      }
-    });
-    pushBatchUndo(inverses, undefined, '批量添加标签');
-    clearSelection();
-    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已为 ${selectedIds.size} 个任务添加标签`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_ADD_TAGS', severity: 'debug' }); }
-  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
-
-  const batchRemoveTags = useCallback((removeTags: string[]) => {
-    if (!can('edit_tasks')) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const t = state.tasks.find(x => x.id === id);
-      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { tags: t?.tags || [] } } };
-    });
-    selectedIds.forEach(id => {
-      const t = state.tasks.find(x => x.id === id);
-      if (t) {
-        const filtered = (t.tags || []).filter(tag => !removeTags.includes(tag));
-        dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { tags: filtered } } });
-      }
-    });
-    pushBatchUndo(inverses, undefined, '批量移除标签');
-    clearSelection();
-    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已移除 ${selectedIds.size} 个任务的标签`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_REMOVE_TAGS', severity: 'debug' }); }
-  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
-
-  const batchSetDate = useCallback((field: string, value: string) => {
-    if (!can('edit_tasks')) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const t = state.tasks.find(x => x.id === id);
-      const oldVal = field === 'dueDate' ? t?.dueDate : field === 'startDate' ? t?.startDate : null;
-      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { [field]: oldVal || null } } };
-    });
-    selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { [field]: value || null } } }));
-    pushBatchUndo(inverses, undefined, '批量设置日期');
-    clearSelection();
-    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已设置 ${selectedIds.size} 个任务日期`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_DATE', severity: 'debug' }); }
-  }, [selectedIds, dispatch, can, clearSelection, state.tasks]);
-
-  const batchMoveToProject = useCallback((projectId: string) => {
-    if (!can('edit_tasks')) return;
-    const inverses = Array.from(selectedIds).map(id => {
-      const t = state.tasks.find(x => x.id === id);
-      return { type: 'UPDATE_TASK' as const, payload: { id, updates: { projectId: t?.projectId || null } } };
-    });
-    selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { projectId } } }));
-    pushBatchUndo(inverses, undefined, '批量移动到项目');
-    clearSelection();
-    const proj = state.projects.find(p => p.id === projectId);
-    try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已移动 ${selectedIds.size} 个任务到 ${proj?.title || '项目'}`, type: 'success' } })); } catch (e) { handleError(e, { module: 'Tasks', operation: 'BATCH_MOVE', severity: 'debug' }); }
-  }, [selectedIds, dispatch, can, clearSelection, state.tasks, state.projects]);
+  const { batchDelete, batchUpdateStatus, batchAssign, batchUpdatePriority, batchAddTags, batchRemoveTags, batchSetDate, batchMoveTo } = useBatchOperations({
+    entityType: 'task',
+    updateActionType: 'UPDATE_TASK',
+    deleteActionType: 'DELETE_TASK',
+    editPermission: 'edit_tasks',
+    deletePermission: 'delete_tasks',
+    entityLabel: '任务',
+    items: state.tasks,
+    getItemId: (t: any) => t.id,
+    dispatch,
+    can,
+    clearSelection,
+    exitBatchMode,
+    selectedIds,
+    showToast: true,
+  });
+  const batchMoveToProject = useCallback((projectId: string) => batchMoveTo('projectId', projectId, '批量移动到项目'), [batchMoveTo]);
 
   function closeCreateDialog() { setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate(''); setNewTags(new Set()); setNewSupporters(new Set()); }
 
@@ -663,9 +583,9 @@ export default function Tasks() {
                   filteredCount={filteredTasks.length}
                   filteredIds={filteredTasks.map(t => t.id)}
                   itemLabel="任务"
-                  statuses={[{ value: 'todo', label: '待处理' }, { value: 'in_progress', label: '进行中' }, { value: 'done', label: '已完成' }, { value: 'blocked', label: '已阻塞' }, { value: 'cancelled', label: '已取消' }]}
-                  members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
-                  priorities={[{ value: 'urgent', label: '紧急' }, { value: 'high', label: '高' }, { value: 'medium', label: '中' }, { value: 'low', label: '低' }]}
+                  statuses={TASK_BATCH_STATUSES}
+                  members={batchMembers}
+                  priorities={TASK_BATCH_PRIORITIES}
                   tags={allTags}
                   showDateFields
                   dateFields={[{ key: 'dueDate', label: '截止日' }]}
@@ -716,6 +636,7 @@ export default function Tasks() {
             {viewMode === 'list' && <button className={cn('text-xs px-2 py-1 rounded-md bg-muted/50 text-muted-foreground hover:text-foreground border border-border flex items-center gap-1', groupByDate && 'bg-primary/10 text-primary border-primary')} onClick={() => setGroupByDate(!groupByDate)}><Calendar className="w-3 h-3" />按日期</button>}
             {activeFilterCount > 0 && <button className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1" onClick={clearFilters}><X size={12} />清除 ({activeFilterCount})</button>}
             <span className="text-xs text-muted-foreground ml-auto">{filteredTasks.length} 条</span>
+            <button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`} title={showCompleted ? '隐藏已完成' : '显示已完成'}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button>
           </div>
 
           {viewMode === 'board' && renderBoard()}
@@ -730,8 +651,8 @@ export default function Tasks() {
       {showCreateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={closeCreateDialog} />
-          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="px-5 md:px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0"><h3 className="font-semibold">新建任务</h3><button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={closeCreateDialog}><X size={16} /></button></div>
+          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="新建任务">
+            <div className="px-5 md:px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0"><h3 className="font-semibold">新建任务</h3><button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={closeCreateDialog} aria-label="关闭新建任务对话框"><X size={16} /></button></div>
             <div className="px-5 md:px-6 py-4 space-y-4 overflow-y-auto flex-1">
               {!fromTemplate ? (
                 <div className="space-y-4">

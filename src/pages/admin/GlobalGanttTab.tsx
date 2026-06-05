@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useStore } from '@/store/useStore';
 import { usePermissions, useViewingMember } from '@/store/hooks';
+import { resolveToken } from '@/lib/resolveToken';
 import type { Task } from '@/types';
 
-const STATUS_COLORS: Record<string, string> = { todo: '#94a3b8', in_progress: '#3b82f6', done: '#22c55e', blocked: '#f59e0b', cancelled: '#ef4444' };
+const STATUS_COLORS: Record<string, string> = { todo: resolveToken('muted-foreground'), in_progress: resolveToken('primary'), done: '#22c55e', blocked: resolveToken('warning'), cancelled: resolveToken('destructive') };
 
 export function GlobalGanttView() {
   const { state } = useStore();
@@ -96,8 +97,8 @@ export function GlobalGanttView() {
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
               return (
                 <g key={i}>
-                  {isWeekend && <rect x={LABEL_W + i * DAY_W} y={0} width={DAY_W} height={chartH} fill="#f8fafc" />}
-                  <text x={LABEL_W + i * DAY_W + DAY_W / 2} y={14} textAnchor="middle" fontSize={9} fill="#94a3b8">{i % 3 === 0 ? dateStr : ''}</text>
+                  {isWeekend && <rect x={LABEL_W + i * DAY_W} y={0} width={DAY_W} height={chartH} fill={resolveToken('muted')} />}
+                  <text x={LABEL_W + i * DAY_W + DAY_W / 2} y={14} textAnchor="middle" fontSize={9} fill={resolveToken('muted-foreground')}>{i % 3 === 0 ? dateStr : ''}</text>
                 </g>
               );
             })}
@@ -105,7 +106,7 @@ export function GlobalGanttView() {
             {(() => {
               const todayOffset = getDayOffset(new Date().toISOString().split('T')[0]);
               if (todayOffset >= 0 && todayOffset < dateRange.days) {
-                return <line x1={LABEL_W + todayOffset * DAY_W + DAY_W / 2} y1={20} x2={LABEL_W + todayOffset * DAY_W + DAY_W / 2} y2={chartH} stroke="#3b82f6" strokeWidth={1} strokeDasharray="4 4" />;
+                return <line x1={LABEL_W + todayOffset * DAY_W + DAY_W / 2} y1={20} x2={LABEL_W + todayOffset * DAY_W + DAY_W / 2} y2={chartH} stroke={resolveToken('primary')} strokeWidth={1} strokeDasharray="4 4" />;
               }
               return null;
             })()}
@@ -114,24 +115,24 @@ export function GlobalGanttView() {
               const startX = task.startDate ? getDayOffset(task.startDate) : (task.dueDate ? Math.max(0, getDayOffset(task.dueDate) - 3) : 0);
               const endX = task.dueDate ? getDayOffset(task.dueDate) : startX + 3;
               const barW = Math.max(DAY_W, (endX - startX + 1) * DAY_W);
-              const color = STATUS_COLORS[task.status] ?? '#94a3b8';
+              const color = STATUS_COLORS[task.status] ?? resolveToken('muted-foreground');
               const y = 24 + i * ROW_H;
               return (
                 <g key={task.id}>
-                  <text x={LABEL_W - 8} y={y + ROW_H / 2 + 4} textAnchor="end" fontSize={10} fill="#475569">{task.title.length > 18 ? task.title.substring(0, 18) + '...' : task.title}</text>
+                  <text x={LABEL_W - 8} y={y + ROW_H / 2 + 4} textAnchor="end" fontSize={10} fill={resolveToken('muted-foreground')}>{task.title.length > 18 ? task.title.substring(0, 18) + '...' : task.title}</text>
                   <rect x={LABEL_W + startX * DAY_W} y={y + 4} width={barW} height={ROW_H - 8} rx={4} fill={color} opacity={0.8} />
                   {/* blockedBy dependency lines */}
                   {(task.blockedBy || []).map(bid => {
                     const depIdx = sortedTasks.findIndex(t => t.id === bid);
                     if (depIdx === -1) return null;
                     const depY = 24 + depIdx * ROW_H + ROW_H - 4;
-                    return <line key={bid} x1={LABEL_W + startX * DAY_W} y1={y + ROW_H / 2} x2={LABEL_W + startX * DAY_W - 8} y2={depY} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="3 3" />;
+                    return <line key={bid} x1={LABEL_W + startX * DAY_W} y1={y + ROW_H / 2} x2={LABEL_W + startX * DAY_W - 8} y2={depY} stroke={resolveToken('warning')} strokeWidth={1.5} strokeDasharray="3 3" />;
                   })}
                 </g>
               );
             })}
             {/* Separator line */}
-            <line x1={LABEL_W} y1={0} x2={LABEL_W} y2={chartH} stroke="#e2e8f0" strokeWidth={1} />
+            <line x1={LABEL_W} y1={0} x2={LABEL_W} y2={chartH} stroke={resolveToken('border')} strokeWidth={1} />
           </svg>
         </div>
       )}
@@ -142,7 +143,7 @@ export function GlobalGanttView() {
         <span className="flex items-center gap-1"><span className="w-3 h-2 rounded" style={{ backgroundColor: STATUS_COLORS.in_progress }} />进行中</span>
         <span className="flex items-center gap-1"><span className="w-3 h-2 rounded" style={{ backgroundColor: STATUS_COLORS.done }} />已完成</span>
         <span className="flex items-center gap-1"><span className="w-3 h-2 rounded" style={{ backgroundColor: STATUS_COLORS.blocked }} />阻塞</span>
-        <span className="flex items-center gap-1"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: '#f59e0b' }} />依赖线</span>
+        <span className="flex items-center gap-1"><span className="w-6 border-t-2 border-dashed" style={{ borderColor: resolveToken('warning') }} />依赖线</span>
       </div>
     </div>
   );

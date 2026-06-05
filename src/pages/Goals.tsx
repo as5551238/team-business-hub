@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
-import { useTags, useViewingMember, useMemberLookup, usePermissions } from '@/store/hooks';
+import { useTags, useViewingMember, useMemberLookup, usePermissions, useActiveMembers } from '@/store/hooks';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
-import { Trash2, Edit2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check, Users } from 'lucide-react';
+import { Trash2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check, Users, EyeOff, Eye } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
@@ -22,7 +22,9 @@ import { AIItemFlow } from '@/components/AIItemFlow';
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 import { useBatchSelection } from '@/hooks/useBatchSelection';
 import { BatchActionBar } from '@/components/BatchActionBar';
-import { pushBatchUndo } from '@/store/useStore';
+import { useBatchOperations } from '@/hooks/useBatchOperations';
+import { useCommentCounts } from '@/hooks/useCommentCounts';
+import { isDateRangeInTimeRange } from '@/lib/timeRangeUtils';
 
 export default function Goals() {
   const { state, dispatch } = useStore();
@@ -53,6 +55,7 @@ export default function Goals() {
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   const [timeRange, setTimeRange] = useState<string>('all');
   const [searchText, setSearchText] = useState('');
+  const [showCompleted, setShowCompleted] = useState(false);
 
   // Apply URL filter params on mount (one-time)
   useEffect(() => {
@@ -70,14 +73,12 @@ export default function Goals() {
   const { batchMode, selectedIds, toggleSelect, selectAll, selectRange, clearSelection, exitBatchMode } = batchSel;
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
-  const activeMembers = useMemo(() => state.members.filter(m => m.status === 'active'), [state.members]);
+  const { activeMembers } = useActiveMembers();
   const goalTemplates = useMemo(() => state.templates.filter(t => t.type === 'goal'), [state.templates]);
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-
-  // filteredGoals MUST be declared before useEffect that references it (TDZ fix)
   const filteredGoals = useMemo(() => {
-    let result = [...state.goals];
+    let result = state.goals.filter(g => !g.deletedAt);
+    if (!showCompleted) result = result.filter(g => g.status !== 'done' && g.status !== 'cancelled');
     if (selectedStatuses.size > 0) result = result.filter(g => selectedStatuses.has(g.status));
     if (selectedPriorities.size > 0) result = result.filter(g => selectedPriorities.has(g.priority));
     if (selectedLevels.size > 0) { const bpOf = (p: TaskPriority) => p === 'urgent' ? 'S' : p === 'high' ? 'A' : p === 'medium' ? 'B' : 'C'; result = result.filter(g => selectedLevels.has(bpOf(g.priority))); }
@@ -88,27 +89,14 @@ export default function Goals() {
       const q = searchText.trim().toLowerCase();
       result = result.filter(g => g.title.toLowerCase().includes(q) || (g.description || '').toLowerCase().includes(q));
     }
-    if (timeRange === 'today') {
-      result = result.filter(g => g.startDate <= todayStr && g.endDate >= todayStr);
-    } else if (timeRange === 'this_week') {
-      const d = new Date(todayStr); const day = d.getDay(); const mon = new Date(d); mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); const ws = mon.toISOString().split('T')[0];
-      const sun = new Date(mon); sun.setDate(mon.getDate() + 6); const we = sun.toISOString().split('T')[0];
-      result = result.filter(g => g.startDate <= we && g.endDate >= ws);
-    } else if (timeRange === 'this_month') {
-      const ms = new Date(new Date(todayStr).getFullYear(), new Date(todayStr).getMonth(), 1).toISOString().split('T')[0];
-      const me = new Date(new Date(todayStr).getFullYear(), new Date(todayStr).getMonth() + 1, 0).toISOString().split('T')[0];
-      result = result.filter(g => g.startDate <= me && g.endDate >= ms);
-    } else if (timeRange === 'this_quarter') {
-      const nowDate = new Date(todayStr); const qi = Math.floor(nowDate.getMonth() / 3);
-      const qs = new Date(nowDate.getFullYear(), qi * 3, 1).toISOString().split('T')[0];
-      const qe = new Date(nowDate.getFullYear(), qi * 3 + 3, 0).toISOString().split('T')[0];
-      result = result.filter(g => g.startDate <= qe && g.endDate >= qs);
+    if (timeRange !== 'all') {
+      result = result.filter(g => isDateRangeInTimeRange(g.startDate, g.endDate, timeRange));
     }
     if (!isTeamView && viewingMember) {
       result = result.filter(g => g.leaderId === viewingMember.id || (g.supporterIds ?? []).includes(viewingMember.id));
     }
     return result;
-  }, [state.goals, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, selectedMembers, searchText, timeRange, todayStr, isTeamView, viewingMember]);
+  }, [state.goals, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, selectedMembers, searchText, timeRange, isTeamView, viewingMember, showCompleted]);
 
   // P3#11 fix: reset focusedId when it's no longer in the filtered list
   useEffect(() => {
@@ -124,7 +112,7 @@ export default function Goals() {
     const onNavUp = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : 0; setFocusedId(ids[Math.max(idx - 1, 0)]); };
     const onEdit = () => { if (focusedId) openGoalDetail(focusedId); };
     const onOpen = () => { if (focusedId) openGoalDetail(focusedId); };
-    const onDelete = () => { if (focusedId && can('goal_delete')) dispatch({ type: 'DELETE_GOAL', payload: focusedId }); };
+    const onDelete = () => { if (focusedId && can('goals_delete')) dispatch({ type: 'DELETE_GOAL', payload: focusedId }); };
     const onComplete = () => { const id = focusedId; if (id) { const goal = state.goals.find(g => g.id === id); if (goal) { const oldStatus = goal.status; const newStatus = goal.status === 'done' ? 'in_progress' : 'done'; dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: oldStatus, newValue: newStatus }); } } };
     const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
     const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (VALID_VIEW_MODES.includes(mode as ViewMode)) setViewMode(mode as ViewMode); };
@@ -162,15 +150,7 @@ export default function Goals() {
     });
   }, []);
 
-  const commentCounts = useMemo(() => {
-    const map = new Map<string, number>();
-    state.comments.forEach(c => {
-      if (c.itemType === 'goal') {
-        map.set(c.itemId, (map.get(c.itemId) || 0) + 1);
-      }
-    });
-    return map;
-  }, [state.comments]);
+  const commentCounts = useCommentCounts('goal', state.comments);
 
   const topGoals = useMemo(() => filteredGoals.filter(g => !g.parentId), [filteredGoals]);
   const goalsByStatus = useMemo(() => { const m: Record<string, Goal[]> = {}; filteredGoals.forEach(g => { (m[g.status] ||= []).push(g); }); return m; }, [filteredGoals]);
@@ -186,96 +166,29 @@ export default function Goals() {
     setTimeRange('all'); setSearchText('');
   };
 
-  const handleBatchDelete = useCallback(() => {
-    if (!can('goals_delete')) return;
-    if (!confirm(`确认删除选中的 ${selectedIds.size} 个目标？`)) return;
-    selectedIds.forEach(id => { dispatch({ type: 'DELETE_GOAL', payload: id }); });
-    exitBatchMode();
-  }, [selectedIds, dispatch, can, exitBatchMode]);
+  const { batchDelete: _batchDelete, batchUpdateStatus, batchAssign, batchUpdatePriority, batchAddTags, batchRemoveTags, batchSetDate } = useBatchOperations({
+    entityType: 'goal',
+    updateActionType: 'UPDATE_GOAL',
+    deleteActionType: 'DELETE_GOAL',
+    editPermission: 'goals_edit',
+    deletePermission: 'goals_delete',
+    entityLabel: '目标',
+    items: state.goals,
+    getItemId: (g: any) => g.id,
+    dispatch,
+    can,
+    clearSelection,
+    exitBatchMode,
+    selectedIds,
+  });
 
-  const handleBatchStatus = useCallback((ids: string[], status: string) => {
-    if (!can('goals_edit')) return;
-    const inverses = ids.map(id => {
-      const g = state.goals.find(x => x.id === id);
-      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { status: g?.status || 'todo' } } };
-    });
-    ids.forEach(id => {
-      dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: status as GoalStatus } } });
-      broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: '', newValue: status });
-    });
-    pushBatchUndo(inverses, undefined, '批量修改目标状态');
-    clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
-
-  const handleBatchAssign = useCallback((ids: string[], assigneeId: string) => {
-    if (!can('goals_edit')) return;
-    const inverses = ids.map(id => {
-      const g = state.goals.find(x => x.id === id);
-      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { leaderId: g?.leaderId || '' } } };
-    });
-    ids.forEach(id => {
-      dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { leaderId: assigneeId } } });
-    });
-    pushBatchUndo(inverses, undefined, '批量分配目标');
-    clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
-
-  const handleBatchPriority = useCallback((ids: string[], priority: string) => {
-    if (!can('goals_edit')) return;
-    const inverses = ids.map(id => {
-      const g = state.goals.find(x => x.id === id);
-      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { priority: g?.priority || 'medium' } } };
-    });
-    ids.forEach(id => dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { priority: priority as TaskPriority } } }));
-    pushBatchUndo(inverses, undefined, '批量修改目标优先级');
-    clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
-
-  const handleBatchAddTags = useCallback((ids: string[], newTags: string[]) => {
-    if (!can('goals_edit')) return;
-    const inverses = ids.map(id => {
-      const g = state.goals.find(x => x.id === id);
-      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { tags: g?.tags || [] } } };
-    });
-    ids.forEach(id => {
-      const g = state.goals.find(x => x.id === id);
-      if (g) {
-        const merged = [...new Set([...(g.tags || []), ...newTags])];
-        dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { tags: merged } } });
-      }
-    });
-    pushBatchUndo(inverses, undefined, '批量添加目标标签');
-    clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
-
-  const handleBatchRemoveTags = useCallback((ids: string[], removeTags: string[]) => {
-    if (!can('goals_edit')) return;
-    const inverses = ids.map(id => {
-      const g = state.goals.find(x => x.id === id);
-      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { tags: g?.tags || [] } } };
-    });
-    ids.forEach(id => {
-      const g = state.goals.find(x => x.id === id);
-      if (g) {
-        const filtered = (g.tags || []).filter(t => !removeTags.includes(t));
-        dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { tags: filtered } } });
-      }
-    });
-    pushBatchUndo(inverses, undefined, '批量移除目标标签');
-    clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
-
-  const handleBatchSetDate = useCallback((ids: string[], field: string, value: string) => {
-    if (!can('goals_edit')) return;
-    const inverses = ids.map(id => {
-      const g = state.goals.find(x => x.id === id);
-      const oldVal = field === 'endDate' ? g?.endDate : field === 'startDate' ? g?.startDate : null;
-      return { type: 'UPDATE_GOAL' as const, payload: { id, updates: { [field]: oldVal || '' } } };
-    });
-    ids.forEach(id => dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { [field]: value || '' } } }));
-    pushBatchUndo(inverses, undefined, '批量设置目标日期');
-    clearSelection();
-  }, [selectedIds, dispatch, can, clearSelection, state.goals]);
+  const handleBatchDelete = _batchDelete;
+  const handleBatchStatus = useCallback((status: string) => batchUpdateStatus(status), [batchUpdateStatus]);
+  const handleBatchAssign = useCallback((assigneeId: string) => batchAssign(assigneeId), [batchAssign]);
+  const handleBatchPriority = useCallback((priority: string) => batchUpdatePriority(priority), [batchUpdatePriority]);
+  const handleBatchAddTags = useCallback((newTags: string[]) => batchAddTags(newTags), [batchAddTags]);
+  const handleBatchRemoveTags = useCallback((removeTags: string[]) => batchRemoveTags(removeTags), [batchRemoveTags]);
+  const handleBatchSetDate = useCallback((field: string, value: string) => batchSetDate(field, value), [batchSetDate]);
 
   const [formData, setFormData] = useState({
     title: '', description: '', type: 'okr' as GoalType, priority: 'medium' as TaskPriority,
@@ -354,13 +267,13 @@ export default function Goals() {
               tags={Array.from(new Set(state.goals.flatMap(g => g.tags || [])))}
               showDateFields
               dateFields={[{ key: 'endDate', label: '截止日' }]}
-              onBatchDelete={(ids) => handleBatchDelete()}
-              onBatchStatus={(_ids, status) => handleBatchStatus(Array.from(selectedIds), status)}
-              onBatchAssign={(_ids, assigneeId) => handleBatchAssign(Array.from(selectedIds), assigneeId)}
-              onBatchPriority={(_ids, priority) => handleBatchPriority(Array.from(selectedIds), priority)}
-              onBatchAddTags={(_ids, tags) => handleBatchAddTags(Array.from(selectedIds), tags)}
-              onBatchRemoveTags={(_ids, tags) => handleBatchRemoveTags(Array.from(selectedIds), tags)}
-              onBatchSetDate={(_ids, field, value) => handleBatchSetDate(Array.from(selectedIds), field, value)}
+              onBatchDelete={() => handleBatchDelete()}
+              onBatchStatus={(_ids, status) => handleBatchStatus(status)}
+              onBatchAssign={(_ids, assigneeId) => handleBatchAssign(assigneeId)}
+              onBatchPriority={(_ids, priority) => handleBatchPriority(priority)}
+              onBatchAddTags={(_ids, tags) => handleBatchAddTags(tags)}
+              onBatchRemoveTags={(_ids, tags) => handleBatchRemoveTags(tags)}
+              onBatchSetDate={(_ids, field, value) => handleBatchSetDate(field, value)}
               canDelete={can('goals_delete')}
               canEdit={can('goals_edit')}
             />
@@ -396,6 +309,7 @@ export default function Goals() {
           <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1"><X size={12} /> 清除 ({activeFilterCount})</button>
         )}
         <span className="text-xs text-muted-foreground ml-auto">{filteredGoals.length} 条</span>
+        <button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`} title={showCompleted ? '隐藏已完成' : '显示已完成'}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button>
       </div>
 
       {effectiveViewMode === 'detail' && (
@@ -434,10 +348,10 @@ export default function Goals() {
       {showCreateDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => { setShowCreateDialog(false); setShowTemplateDropdown(false); }} />
-          <div className="relative bg-card rounded-xl shadow-xl border w-full max-w-lg animate-slide-up max-h-[90vh] flex flex-col">
+          <div className="relative bg-card rounded-xl shadow-xl border w-full max-w-lg animate-slide-up max-h-[90vh] flex flex-col" role="dialog" aria-modal="true" aria-label="新建目标">
             <div className="px-5 md:px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
               <h3 className="font-semibold">新建目标</h3>
-              <button onClick={() => { setShowCreateDialog(false); setShowTemplateDropdown(false); }} className="p-1 rounded hover:bg-muted"><X size={16} /></button>
+              <button onClick={() => { setShowCreateDialog(false); setShowTemplateDropdown(false); }} className="p-1 rounded hover:bg-muted" aria-label="关闭新建目标对话框"><X size={16} /></button>
             </div>
             <div className="px-5 md:px-6 py-4 space-y-4 overflow-y-auto flex-1">
               <div className="flex items-center gap-2">

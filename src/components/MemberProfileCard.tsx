@@ -2,6 +2,7 @@ import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { BarChart3, TrendingUp, AlertTriangle, Zap, Target, Brain, User } from 'lucide-react';
 import { handleError } from '@/lib/errorHandler';
+import { resolveToken } from '@/lib/resolveToken';
 
 interface ProfileData {
   efficiency: number;
@@ -15,12 +16,12 @@ interface ProfileData {
 }
 
 const DIMENSIONS = [
-  { key: 'efficiency', label: '效率', icon: Zap, color: '#3B82F6' },
-  { key: 'collaboration', label: '协作', icon: BarChart3, color: '#10B981' },
-  { key: 'proactivity', label: '主动性', icon: TrendingUp, color: '#F59E0B' },
-  { key: 'stability', label: '稳定性', icon: User, color: '#8B5CF6' },
-  { key: 'goalAlignment', label: '目标聚焦', icon: Target, color: '#EC4899' },
-  { key: 'aiAdoption', label: 'AI采纳', icon: Brain, color: '#06B6D4' },
+  { key: 'efficiency', label: '效率', icon: Zap, color: resolveToken('primary') },
+  { key: 'collaboration', label: '协作', icon: BarChart3, color: resolveToken('success') },
+  { key: 'proactivity', label: '主动性', icon: TrendingUp, color: resolveToken('warning') },
+  { key: 'stability', label: '稳定性', icon: User, color: resolveToken('chart-purple') },
+  { key: 'goalAlignment', label: '目标聚焦', icon: Target, color: resolveToken('chart-pink') },
+  { key: 'aiAdoption', label: 'AI采纳', icon: Brain, color: resolveToken('chart-cyan') },
 ] as const;
 
 // 简易雷达图（纯SVG，无依赖）
@@ -40,17 +41,17 @@ function RadarChart({ scores }: { scores: Record<string, number> }) {
           const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
           return `${cx + r * lv * Math.cos(angle)},${cy + r * lv * Math.sin(angle)}`;
         }).join(' ');
-        return <polygon key={li} points={pts} fill="none" stroke="#e2e8f0" strokeWidth="0.5" />;
+        return <polygon key={li} points={pts} fill="none" stroke={resolveToken('border')} strokeWidth="0.5" />;
       })}
       {DIMENSIONS.map((d, i) => {
         const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
-        return <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle)} y2={cy + r * Math.sin(angle)} stroke="#e2e8f0" strokeWidth="0.5" />;
+        return <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle)} y2={cy + r * Math.sin(angle)} stroke={resolveToken('border')} strokeWidth="0.5" />;
       })}
       {points.length > 2 && (
         <polygon
           points={points.map(p => `${p.x},${p.y}`).join(' ')}
-          fill="rgba(59,130,246,0.15)"
-          stroke="#3B82F6"
+          fill={resolveToken('primary', 0.15)}
+          stroke={resolveToken('primary')}
           strokeWidth="1.5"
         />
       )}
@@ -126,7 +127,7 @@ export default function MemberProfileCard({ memberId }: { memberId: string }) {
         {loading ? (
           <span className="text-xs text-muted-foreground">计算中...</span>
         ) : (
-          <span className="text-xs font-semibold" style={{ color: avgScore >= 60 ? '#10B981' : avgScore >= 40 ? '#F59E0B' : '#EF4444' }}>
+          <span className="text-xs font-semibold" style={{ color: avgScore >= 60 ? resolveToken('success') : avgScore >= 40 ? resolveToken('warning') : resolveToken('destructive') }}>
             综合 {avgScore}
           </span>
         )}

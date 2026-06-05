@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
-import { useMemberLookup, usePermissions } from '@/store/hooks';
+import { useMemberLookup, usePermissions, useActiveMembers } from '@/store/hooks';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag, X } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -29,7 +29,7 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   const projectTasks = useMemo(() => state.tasks.filter(t => t.projectId === projectId), [state.tasks, projectId]);
-  const activeMembers = useMemo(() => state.members.filter(m => m.status === 'active'), [state.members]);
+  const { activeMembers } = useActiveMembers();
 
   const timeRange = useMemo(() => computeTimeRange(projectTasks), [projectTasks]);
 
@@ -138,8 +138,8 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
         <button onClick={handleAddTask} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"><Plus size={14} />添加任务</button>
         {cpmResult.criticalTaskIds.size > 0 && <span className="text-[10px] text-red-500 font-medium">关键路径 {cpmResult.criticalPath.length} 项 | 工期 {cpmResult.projectDuration} 天</span>}
         <div className="flex-1" />
-        <button onClick={() => scrollBy(-200)} className="p-1 rounded hover:bg-muted"><ChevronLeft size={16} /></button>
-        <button onClick={() => scrollBy(200)} className="p-1 rounded hover:bg-muted"><ChevronRight size={16} /></button>
+        <button onClick={() => scrollBy(-200)} className="p-1 rounded hover:bg-muted" aria-label="向左滚动"><ChevronLeft size={16} /></button>
+        <button onClick={() => scrollBy(200)} className="p-1 rounded hover:bg-muted" aria-label="向右滚动"><ChevronRight size={16} /></button>
         <div className="h-4 w-px bg-border mx-1" />
         <button onClick={toggleZoom} className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-border hover:bg-muted transition-colors">
           {zoom === 'week' ? <><ZoomOut size={13} />月视图</> : <><ZoomIn size={13} />周视图</>}
@@ -165,10 +165,10 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
             const slackDisplay = Number.isNaN(slack) ? '循环' : `${slack}天`;
             return (
               <div key={task.id} className={`flex items-center px-2 border-b border-border/50 hover:bg-muted/30 group cursor-pointer ${isCritical ? 'bg-red-50/40' : ''}`} style={{ height: rowHeight }} onDoubleClick={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}>
-                <button onClick={() => handleToggleMilestone(task)} className={`mr-1 flex-shrink-0 ${isMilestone ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`} title="里程碑"><Flag size={13} /></button>
+                <button onClick={() => handleToggleMilestone(task)} className={`mr-1 flex-shrink-0 ${isMilestone ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`} title="里程碑" aria-label="切换里程碑"><Flag size={13} /></button>
                 <input value={task.title} onChange={e => handleTitleChange(task.id, e.target.value)} className={`flex-1 text-xs bg-transparent border-none outline-none truncate min-w-0 hover:bg-muted/50 px-1 py-0.5 rounded ${isCritical ? 'font-medium text-red-700' : ''}`} />
                 <span className="w-14 text-[10px] text-muted-foreground truncate text-center flex-shrink-0">{getName(task.leaderId)}</span>
-                <button onClick={() => handleDeleteTask(task.id)} className="ml-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"><Trash2 size={12} /></button>
+                <button onClick={() => handleDeleteTask(task.id)} className="ml-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" aria-label="删除任务"><Trash2 size={12} /></button>
                 {isCritical && <span className="ml-1 text-[8px] text-red-400 flex-shrink-0" title={`浮动: ${slackDisplay}`}>CP</span>}
               </div>
             );
@@ -261,8 +261,8 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
       {/* Editing modal (centered overlay) */}
       {editingTaskId && (() => { const et = projectTasks.find(t => t.id === editingTaskId); if (!et) return null; return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setEditingTaskId(null)}>
-          <div className="bg-card rounded-2xl shadow-2xl p-6 w-[420px] max-h-[80vh] overflow-y-auto space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between"><span className="text-base font-semibold">{et.title}</span><button onClick={() => setEditingTaskId(null)} className="p-1 hover:bg-muted rounded-lg"><X size={16} /></button></div>
+          <div className="bg-card rounded-2xl shadow-2xl p-6 w-[420px] max-h-[80vh] overflow-y-auto space-y-4" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="任务编辑">
+            <div className="flex items-center justify-between"><span className="text-base font-semibold">{et.title}</span><button onClick={() => setEditingTaskId(null)} className="p-1 hover:bg-muted rounded-lg" aria-label="关闭编辑"><X size={16} /></button></div>
             <div><label className="text-xs text-muted-foreground block mb-1">状态</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.status} onChange={e => handleUpdateTask(et.id, { status: e.target.value as TaskStatus })}>{(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.leaderId || ''} onChange={e => handleUpdateTask(et.id, { leaderId: e.target.value })}><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
             <div className="grid grid-cols-2 gap-3">

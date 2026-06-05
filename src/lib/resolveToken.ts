@@ -19,9 +19,10 @@ type TokenName =
   | 'info' | 'info-foreground'
   | 'background' | 'foreground'
   | 'card' | 'card-foreground'
-  | 'border' | 'ring'
+  | 'border' | 'ring' | 'input'
   | 'sidebar' | 'sidebar-foreground' | 'sidebar-accent'
-  | 'chart-purple' | 'chart-pink' | 'chart-cyan' | 'chart-indigo';
+  | 'chart-purple' | 'chart-pink' | 'chart-cyan' | 'chart-indigo'
+  | 'chart-green' | 'chart-amber' | 'chart-blue';
 
 /** CSS var name → HSL channels cache */
 const cache = new Map<string, { h: number; s: number; l: number }>();

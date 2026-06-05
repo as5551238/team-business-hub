@@ -16,8 +16,9 @@ import { ZoomIn, ZoomOut, Maximize2, ChevronRight, ChevronDown, AlertTriangle } 
 import { EmptyState } from '@/components/ui/EmptyState';
 import { dispatchAiPushEvent } from '@/lib/pushEventEngine';
 import { useAppNavigate } from '@/lib/routes';
+import { resolveToken } from '@/lib/resolveToken';
 
-const STATUS_COLORS: Record<string, string> = { todo: '#94a3b8', in_progress: '#3b82f6', done: '#22c55e', blocked: '#f59e0b', cancelled: '#ef4444' };
+const STATUS_COLORS: Record<string, string> = { todo: resolveToken('muted-foreground'), in_progress: resolveToken('primary'), done: resolveToken('success'), blocked: resolveToken('warning'), cancelled: resolveToken('destructive') };
 
 type HealthColor = 'green' | 'yellow' | 'red';
 
@@ -37,12 +38,12 @@ function calcAlignmentHealth(parentGoal: Goal, childGoals: Goal[]): HealthInfo |
     weightSum += w;
   }
   const healthPercent = Math.round((weightedSum / weightSum) / parentGoal.progress * 100);
-  if (healthPercent >= 80) return { color: 'green', percent: healthPercent, stroke: '#22c55e' };
-  if (healthPercent >= 60) return { color: 'yellow', percent: healthPercent, stroke: '#eab308' };
-  return { color: 'red', percent: healthPercent, stroke: '#ef4444' };
+  if (healthPercent >= 80) return { color: 'green', percent: healthPercent, stroke: resolveToken('success') };
+  if (healthPercent >= 60) return { color: 'yellow', percent: healthPercent, stroke: resolveToken('warning') };
+  return { color: 'red', percent: healthPercent, stroke: resolveToken('destructive') };
 }
 
-const HEALTH_STROKE_DEFAULT = '#94a3b8';
+const HEALTH_STROKE_DEFAULT = resolveToken('muted-foreground');
 
 interface TreeNode {
   goal: Goal;
@@ -175,10 +176,10 @@ export function OKRAlignmentView() {
           <EmptyState title="展示目标层级对齐关系与级联进度穿透，点击节点跳转详情" compact />
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} className="p-1.5 hover:bg-muted rounded"><ZoomOut size={14} /></button>
+          <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} className="p-1.5 hover:bg-muted rounded" aria-label="缩小"><ZoomOut size={14} /></button>
           <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="p-1.5 hover:bg-muted rounded"><ZoomIn size={14} /></button>
-          <button onClick={() => setZoom(1)} className="p-1.5 hover:bg-muted rounded"><Maximize2 size={14} /></button>
+          <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="p-1.5 hover:bg-muted rounded" aria-label="放大"><ZoomIn size={14} /></button>
+          <button onClick={() => setZoom(1)} className="p-1.5 hover:bg-muted rounded" aria-label="重置缩放"><Maximize2 size={14} /></button>
         </div>
       </div>
 
@@ -206,26 +207,26 @@ export function OKRAlignmentView() {
               {layoutNodes.nodes.map(node => {
                 const memberName = state.members.find(m => m.id === node.leaderId)?.name ?? '';
                 const isSelected = selectedId === node.id;
-                const progressColor = node.progress >= 80 ? '#22c55e' : node.progress >= 40 ? '#f59e0b' : '#ef4444';
+                const progressColor = node.progress >= 80 ? resolveToken('success') : node.progress >= 40 ? resolveToken('warning') : resolveToken('destructive');
                 const h = node.health;
                 return (
                   <g key={node.id} className="cursor-pointer" onClick={() => handleNodeClick(node.id)}>
                     {isSelected && <rect x={node.x - node.width / 2 - 3} y={node.y - 3} width={node.width + 6} height={node.height + 6} rx={10} fill="none" stroke={STATUS_COLORS[node.status]} strokeWidth={2} strokeDasharray="4 2" />}
-                    <rect x={node.x - node.width / 2} y={node.y} width={node.width} height={node.height} rx={8} fill="white" stroke={STATUS_COLORS[node.status] ?? '#94a3b8'} strokeWidth={isSelected ? 2.5 : 1.5} />
+                    <rect x={node.x - node.width / 2} y={node.y} width={node.width} height={node.height} rx={8} fill="white" stroke={STATUS_COLORS[node.status] ?? resolveToken('muted-foreground')} strokeWidth={isSelected ? 2.5 : 1.5} />
                     <circle cx={node.x - node.width / 2 + 12} cy={node.y + 12} r={4} fill={STATUS_COLORS[node.status]} />
-                    <text x={node.x - node.width / 2 + 22} y={node.y + 14} fontSize={8} fill="#64748b">{node.type?.toUpperCase() || 'OKR'}</text>
-                    <text x={node.x} y={node.y + 28} textAnchor="middle" fontSize={11} fontWeight={600} fill="#1e293b">{node.title.length > 14 ? node.title.substring(0, 14) + '...' : node.title}</text>
-                    <rect x={node.x - node.width / 2 + 12} y={node.y + 36} width={node.width - 24} height={4} rx={2} fill="#e2e8f0" />
+                    <text x={node.x - node.width / 2 + 22} y={node.y + 14} fontSize={8} fill={resolveToken('muted-foreground')}>{node.type?.toUpperCase() || 'OKR'}</text>
+                    <text x={node.x} y={node.y + 28} textAnchor="middle" fontSize={11} fontWeight={600} fill={resolveToken('foreground')}>{node.title.length > 14 ? node.title.substring(0, 14) + '...' : node.title}</text>
+                    <rect x={node.x - node.width / 2 + 12} y={node.y + 36} width={node.width - 24} height={4} rx={2} fill={resolveToken('border')} />
                     <rect x={node.x - node.width / 2 + 12} y={node.y + 36} width={(node.width - 24) * Math.min(1, node.progress / 100)} height={4} rx={2} fill={progressColor} />
-                    <text x={node.x} y={node.y + 54} textAnchor="middle" fontSize={9} fill="#64748b">{memberName} · {node.progress}%{node.krCount > 0 ? ` · ${node.krCount}KR` : ''}</text>
+                    <text x={node.x} y={node.y + 54} textAnchor="middle" fontSize={9} fill={resolveToken('muted-foreground')}>{memberName} · {node.progress}%{node.krCount > 0 ? ` · ${node.krCount}KR` : ''}</text>
                     {h && (
                       <>
                         <rect x={node.x + node.width / 2 - 52} y={node.y - 10} width={48} height={14} rx={4} fill={h.stroke} opacity={0.15} />
                         <text x={node.x + node.width / 2 - 28} y={node.y + 1} textAnchor="middle" fontSize={8} fontWeight={600} fill={h.stroke}>{h.percent}%</text>
                         {h.color === 'red' && (
                           <g>
-                            <rect x={node.x - node.width / 2 - 2} y={node.y - 10} width={36} height={14} rx={4} fill="#fef2f2" stroke="#ef4444" strokeWidth={0.5} />
-                            <text x={node.x - node.width / 2 + 16} y={node.y + 1} textAnchor="middle" fontSize={7} fontWeight={600} fill="#ef4444">⚠ 告警</text>
+                            <rect x={node.x - node.width / 2 - 2} y={node.y - 10} width={36} height={14} rx={4} fill={resolveToken('muted')} stroke={resolveToken('destructive')} strokeWidth={0.5} />
+                            <text x={node.x - node.width / 2 + 16} y={node.y + 1} textAnchor="middle" fontSize={7} fontWeight={600} fill={resolveToken('destructive')}>⚠ 告警</text>
                           </g>
                         )}
                       </>
@@ -262,7 +263,7 @@ export function OKRAlignmentView() {
             </div>
             {/* 进度条 */}
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all" style={{ width: `${selectedGoal.progress}%`, backgroundColor: selectedGoal.progress >= 80 ? '#22c55e' : selectedGoal.progress >= 40 ? '#f59e0b' : '#ef4444' }} />
+              <div className="h-full rounded-full transition-all" style={{ width: `${selectedGoal.progress}%`, backgroundColor: selectedGoal.progress >= 80 ? resolveToken('success') : selectedGoal.progress >= 40 ? resolveToken('warning') : resolveToken('destructive') }} />
             </div>
             {/* KR 列表 */}
             {(selectedGoal.keyResults || []).length > 0 && (
@@ -277,7 +278,7 @@ export function OKRAlignmentView() {
                         <span className="text-muted-foreground ml-1">{krProgress}%</span>
                       </div>
                       <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${krProgress}%`, backgroundColor: krProgress >= 80 ? '#22c55e' : krProgress >= 50 ? '#f59e0b' : '#ef4444' }} />
+                        <div className="h-full rounded-full" style={{ width: `${krProgress}%`, backgroundColor: krProgress >= 80 ? resolveToken('success') : krProgress >= 50 ? resolveToken('warning') : resolveToken('destructive') }} />
                       </div>
                     </div>
                   );

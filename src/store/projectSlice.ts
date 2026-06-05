@@ -4,6 +4,10 @@ import { supabaseInsert, supabaseUpdate, supabaseDelete, logActivity } from './s
 import { genId } from './utils';
 import { needMutate, reducerCanDelete, calcProjectProgress, clampTitle, clampDesc, resolveInheritedPriority, diffAssigned, executeAutomationActions, matchCondition, notifyAssigned, tsNow, validateStatusFlow, fireAutomationRules } from './shared';
 import { cascadeAddProject } from './cascadeHandlers';
+import { pushFieldUndo } from './undo';
+
+/** Field name → human-readable label (shared across slices, S5-5) */
+import { fieldLabelMap as projectFieldLabelMap } from './fieldLabels';
 
 export function projectReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
@@ -46,11 +50,21 @@ export function projectReducer(state: AppState, action: Action): AppState | null
       const now = tsNow();
       const idx = s.projects.findIndex(p => p.id === action.payload.id);
       if (idx !== -1) {
-        const oldUpdatedAt = s.projects[idx].updatedAt;
-        const oldLeaderId = s.projects[idx].leaderId;
-        const oldSupporterIds = s.projects[idx].supporterIds;
-        const oldStatus = s.projects[idx].status;
+        const oldProject = s.projects[idx];
+        const oldUpdatedAt = oldProject.updatedAt;
+        const oldLeaderId = oldProject.leaderId;
+        const oldSupporterIds = oldProject.supporterIds;
+        const oldStatus = oldProject.status;
         const updates = { ...action.payload.updates };
+        // S4-3: Capture old field values for undo before applying updates
+        const changedKeys = Object.keys(updates).filter(k => (updates as Record<string, unknown>)[k] !== (oldProject as Record<string, unknown>)[k]);
+        if (changedKeys.length > 0) {
+          const oldValues: Record<string, unknown> = {};
+          const newValues: Record<string, unknown> = {};
+          for (const k of changedKeys) { oldValues[k] = (oldProject as Record<string, unknown>)[k]; newValues[k] = (updates as Record<string, unknown>)[k]; }
+          const fieldLabel = changedKeys.length === 1 ? projectFieldLabelMap[changedKeys[0]] || changedKeys[0] : `${changedKeys.length}个字段`;
+          pushFieldUndo('UPDATE_PROJECT', action.payload.id, oldValues, newValues, `更新项目${fieldLabel}`);
+        }
         if (updates.title) updates.title = clampTitle(updates.title) ?? updates.title;
         if (updates.description) updates.description = clampDesc(updates.description) ?? updates.description;
         if ('goalId' in updates || 'parentId' in updates) {
@@ -70,7 +84,7 @@ export function projectReducer(state: AppState, action: Action): AppState | null
             executeAutomationActions(s, rule, s.projects[idx].id, 'project', s.projects[idx].title);
           }
         }
-        s.projects[idx] = { ...s.projects[idx], ...updates, updatedAt: now };
+        s.projects[idx] = { ...oldProject, ...updates, updatedAt: now };
         s.projects[idx].progress = calcProjectProgress(s.tasks, action.payload.id);
         supabaseUpdate('projects', action.payload.id, { ...updates, progress: s.projects[idx].progress, updated_at: now }, oldUpdatedAt);
         if ('leaderId' in updates || 'supporterIds' in updates) {

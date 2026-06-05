@@ -253,6 +253,7 @@ create table if not exists categories (
   icon text default '',
   applies_to text default '',
   created_at timestamptz default now(),
+  updated_at timestamptz default now(),
   team_id text not null
 );
 
@@ -328,6 +329,7 @@ create table if not exists comments (
   member_name text default '',
   content text not null,
   created_at timestamptz default now(),
+  updated_at timestamptz default now(),
   mentioned_member_ids jsonb default '[]'::jsonb,
   is_read boolean default false,
   follow_up_required boolean default false,
@@ -345,6 +347,7 @@ create table if not exists bookmarks (
   "order" int default 0,
   member_id text references members(id),
   created_at timestamptz default now(),
+  updated_at timestamptz default now(),
   team_id text not null
 );
 

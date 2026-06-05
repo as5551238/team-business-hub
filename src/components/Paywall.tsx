@@ -76,6 +76,9 @@ export default function Paywall({ feature, currentTier, onClose, onUpgrade }: Pa
       <div
         className="relative w-full max-w-lg mx-4 bg-card rounded-2xl shadow-2xl p-6"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="升级提示"
       >
         <button
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"

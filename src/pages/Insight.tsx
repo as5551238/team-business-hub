@@ -6,12 +6,13 @@ import { BarChart3, Target, CheckCircle2, Clock, TrendingUp, Users, FolderKanban
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
+import { resolveToken } from '@/lib/resolveToken';
 import type { ReviewPeriod, ReviewMetrics, Goal, Project, Task, ReviewEntry } from '@/types';
 
 const AIAnalysisTab = lazy(() => import('@/pages/admin/AIAnalysisTab'));
-const AIReviewPanel = lazy(() => import('@/components/AIReviewPanel').then(m => ({ default: m.AIReviewPanel })));
+const AIReviewPanel = lazy(() => import('@/components/AIReviewPanel'));
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const COLORS = [resolveToken('primary'), resolveToken('success'), resolveToken('warning'), resolveToken('destructive'), resolveToken('chart-purple'), resolveToken('chart-pink')];
 
 type InsightTab = 'dashboard' | 'review' | 'compare' | 'ai';
 
@@ -170,10 +171,10 @@ export default function Insight() {
 
   const goalStats = useMemo(() => {
     const statuses = [
-      { name: '进行中', status: 'in_progress' as const, color: '#3b82f6' },
-      { name: '已完成', status: 'done' as const, color: '#10b981' },
-      { name: '规划中', status: 'todo' as const, color: '#f59e0b' },
-      { name: '已暂停', status: 'blocked' as const, color: '#ef4444' },
+      { name: '进行中', status: 'in_progress' as const, color: resolveToken('primary') },
+      { name: '已完成', status: 'done' as const, color: resolveToken('success') },
+      { name: '规划中', status: 'todo' as const, color: resolveToken('warning') },
+      { name: '已暂停', status: 'blocked' as const, color: resolveToken('destructive') },
     ];
     return statuses.map(s => ({ name: s.name, value: activeGoals.filter(g => g.status === s.status).length, color: s.color })).filter(d => d.value > 0);
   }, [activeGoals]);
@@ -315,15 +316,15 @@ export default function Insight() {
                   <ResponsiveContainer width="100%" height={260}>
                     <AreaChart data={weeklyTrend}>
                       <defs>
-                        <linearGradient id="gC" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} /></linearGradient>
-                        <linearGradient id="gN" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
+                        <linearGradient id="gC" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={resolveToken('primary')} stopOpacity={0.3} /><stop offset="95%" stopColor={resolveToken('primary')} stopOpacity={0} /></linearGradient>
+                        <linearGradient id="gN" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={resolveToken('success')} stopOpacity={0.3} /><stop offset="95%" stopColor={resolveToken('success')} stopOpacity={0} /></linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
                       <XAxis dataKey="week" tick={{ fontSize: 12 }} />
                       <YAxis tick={{ fontSize: 12 }} />
                       <Tooltip />
-                      <Area type="monotone" dataKey="completed" name="完成" stroke="#3b82f6" fill="url(#gC)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="created" name="新建" stroke="#10b981" fill="url(#gN)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="completed" name="完成" stroke={resolveToken('primary')} fill="url(#gC)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="created" name="新建" stroke={resolveToken('success')} fill="url(#gN)" strokeWidth={2} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -348,13 +349,13 @@ export default function Insight() {
                 <div className="min-w-[400px]">
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={memberTaskStats} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
                       <XAxis type="number" tick={{ fontSize: 12 }} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={60} />
                       <Tooltip />
-                      <Bar dataKey="completed" name="已完成" fill="#10b981" stackId="a" />
-                      <Bar dataKey="inProgress" name="进行中" fill="#3b82f6" stackId="a" />
-                      <Bar dataKey="todo" name="待处理" fill="#f59e0b" stackId="a" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="completed" name="已完成" fill={resolveToken('success')} stackId="a" />
+                      <Bar dataKey="inProgress" name="进行中" fill={resolveToken('primary')} stackId="a" />
+                      <Bar dataKey="todo" name="待处理" fill={resolveToken('warning')} stackId="a" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -367,7 +368,7 @@ export default function Insight() {
                 {activeProjects.filter(p => p.status !== 'cancelled').sort((a, b) => b.progress - a.progress).slice(0, 8).map(p => (
                   <div key={p.id}>
                     <div className="flex items-center justify-between mb-1"><span className="text-sm truncate flex-1 mr-3">{p.title}</span><span className="text-sm font-bold min-w-[40px] text-right">{p.progress}%</span></div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full transition-all" style={{ width: `${p.progress}%`, backgroundColor: p.progress >= 80 ? '#10b981' : p.progress >= 50 ? '#3b82f6' : '#f59e0b' }} /></div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full transition-all" style={{ width: `${p.progress}%`, backgroundColor: p.progress >= 80 ? resolveToken('success') : p.progress >= 50 ? resolveToken('primary') : resolveToken('warning') }} /></div>
                   </div>
                 ))}
               </div>
@@ -504,7 +505,7 @@ export default function Insight() {
                       <td className="px-5 py-3 text-center">{m.projects}</td>
                       <td className="px-5 py-3 text-center">{m.tasks}</td>
                       <td className="px-5 py-3 text-center text-green-600 font-medium">{m.done}</td>
-                      <td className="px-5 py-3 text-center"><div className="inline-flex items-center gap-2"><div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${m.rate}%`, backgroundColor: m.rate >= 70 ? '#10b981' : m.rate >= 40 ? '#3b82f6' : '#f59e0b' }} /></div><span className="font-medium">{m.rate}%</span></div></td>
+                      <td className="px-5 py-3 text-center"><div className="inline-flex items-center gap-2"><div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${m.rate}%`, backgroundColor: m.rate >= 70 ? resolveToken('success') : m.rate >= 40 ? resolveToken('primary') : resolveToken('warning') }} /></div><span className="font-medium">{m.rate}%</span></div></td>
                       <td className="px-5 py-3 text-center"><span className={m.overdue > 0 ? 'text-red-600 font-medium' : 'text-muted-foreground'}>{m.overdue}</span></td>
                     </tr>
                   ))}
@@ -520,12 +521,12 @@ export default function Insight() {
                 <div className="min-w-[400px]">
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={comparisonData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 12 }} />
                       <Tooltip />
-                      <Bar dataKey="rate" name="完成率(%)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="overdue" name="逾期" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="rate" name="完成率(%)" fill={resolveToken('primary')} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="overdue" name="逾期" fill={resolveToken('destructive')} radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -537,12 +538,12 @@ export default function Insight() {
                 <div className="min-w-[400px]">
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={comparisonData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
                       <XAxis type="number" tick={{ fontSize: 12 }} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={60} />
                       <Tooltip />
-                      <Bar dataKey="done" name="已完成" fill="#10b981" stackId="a" />
-                      <Bar dataKey="tasks" name="未完成" fill="#f59e0b" stackId="a" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="done" name="已完成" fill={resolveToken('success')} stackId="a" />
+                      <Bar dataKey="tasks" name="未完成" fill={resolveToken('warning')} stackId="a" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

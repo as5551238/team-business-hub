@@ -162,8 +162,8 @@ export function AutomationTab() {
             <button onClick={() => toggleEnabled(rule.id, rule.enabled)} className="cursor-pointer">
               {rule.enabled ? <ToggleRight size={20} className="text-primary" /> : <ToggleLeft size={20} className="text-muted-foreground/40" />}
             </button>
-            <button onClick={() => startEdit(rule)} className="text-muted-foreground hover:text-primary cursor-pointer"><Edit2 size={14} /></button>
-            <button onClick={() => dispatch({ type: 'DELETE_AUTOMATION_RULE', payload: rule.id })} className="text-muted-foreground hover:text-destructive cursor-pointer"><Trash2 size={14} /></button>
+            <button onClick={() => startEdit(rule)} className="text-muted-foreground hover:text-primary cursor-pointer" aria-label="编辑规则"><Edit2 size={14} /></button>
+            <button onClick={() => dispatch({ type: 'DELETE_AUTOMATION_RULE', payload: rule.id })} className="text-muted-foreground hover:text-destructive cursor-pointer" aria-label="删除规则"><Trash2 size={14} /></button>
           </div>
         ))}
       </div>
@@ -215,7 +215,7 @@ export function AutomationTab() {
                   {act.type === 'assign' && <select className="border border-input rounded px-1.5 py-0.5" value={act.config.memberId ?? ''} onChange={e => updateAction(i, { ...act.config, memberId: e.target.value })}><option value="">选择成员</option>{state.members.filter(m => m.status === 'active').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>}
                   {act.type === 'create_subtask' && <input className="flex-1 border border-input rounded px-1.5 py-0.5" placeholder="子任务标题" value={act.config.title ?? ''} onChange={e => updateAction(i, { ...act.config, title: e.target.value })} />}
                   {act.type === 'ai_action' && <select className="border border-input rounded px-1.5 py-0.5" value={act.config.actionId ?? 'smart_assign'} onChange={e => updateAction(i, { ...act.config, actionId: e.target.value })}><option value="smart_assign">智能分配</option><option value="auto_complete_goal">自动完成目标</option><option value="get_risk_items">风险检测</option><option value="get_team_load">团队负载</option><option value="get_overdue_tasks">逾期查询</option><option value="get_goal_progress">目标进度</option></select>}
-                  <button onClick={() => removeAction(i)} className="text-muted-foreground hover:text-destructive cursor-pointer"><Trash2 size={12} /></button>
+                  <button onClick={() => removeAction(i)} className="text-muted-foreground hover:text-destructive cursor-pointer" aria-label="移除动作"><Trash2 size={12} /></button>
                 </div>
               ))}
             </div>

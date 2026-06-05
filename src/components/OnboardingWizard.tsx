@@ -8,6 +8,7 @@
  */
 import { useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import {
   isOnboarded,
   markOnboarded,
@@ -62,6 +63,9 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 
   const steps = ['选择行业', '团队规模', '核心关注', '确认配置'];
 
+  const handleSkip = useCallback(() => { markOnboarded(); onComplete(); }, [onComplete]);
+  const trapRef = useFocusTrap(true, handleSkip);
+
   const handleNext = useCallback(() => {
     if (step === 2 && industry && teamSize && focus) {
       const cfg = recommendConfig(industry, teamSize, focus);
@@ -107,8 +111,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   }, [config, dispatch, onComplete]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
-      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" role="presentation">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" role="dialog" aria-modal="true" aria-label="新手引导" ref={trapRef}>
         {/* 进度条 */}
         <div className="flex items-center gap-1 px-6 pt-5 pb-3">
           {steps.map((s, i) => (
@@ -252,7 +256,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => { markOnboarded(); onComplete(); }}
+                onClick={handleSkip}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted"
               >
                 跳过

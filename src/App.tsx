@@ -589,16 +589,17 @@ function App() {
 
   // Force SW update: detect new version and reload to bust stale PWA cache
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        // New SW has taken control — reload to use fresh code
-        window.location.reload();
-      });
-      // Also: if there's a waiting SW, force it to activate immediately
-      navigator.serviceWorker.getRegistration().then(reg => {
-        if (reg?.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); }
-      });
-    }
+    if (!('serviceWorker' in navigator)) return;
+    const onControllerChange = () => {
+      // New SW has taken control — reload to use fresh code
+      window.location.reload();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    // Also: if there's a waiting SW, force it to activate immediately
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (reg?.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); }
+    });
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
   }, []);
 
   // D7: Deep link — handle NAVIGATE messages from SW (notificationclick)

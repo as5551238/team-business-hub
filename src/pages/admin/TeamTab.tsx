@@ -269,8 +269,8 @@ export function TeamTab() {
       </div>
       {showAddDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowAddDialog(false)} />
-          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-md animate-slide-up">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowAddDialog(false)} role="presentation" />
+          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-md animate-slide-up" role="dialog" aria-modal="true" aria-label="成员编辑">
             <div className="px-6 py-4 border-b border-border"><h3 className="font-semibold">添加成员</h3></div>
             <div className="px-6 py-4 space-y-4">
               <div><label className="block text-sm font-medium mb-1">姓名 *</label><input className={inputCls} placeholder="输入成员姓名" value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} /></div>

@@ -46,6 +46,36 @@ const UNDOABLE_ACTIONS = new Set([
   'TOGGLE_SUBTASK',
 ]);
 
+/**
+ * S4-3: 为单字段 UPDATE 操作推送撤销条目
+ * 三个主实体的 UPDATE 操作之前调用，记录旧值以便撤销
+ * @param type 'UPDATE_TASK' | 'UPDATE_GOAL' | 'UPDATE_PROJECT'
+ * @param id 实体 ID
+ * @param oldValues 旧字段值对象 { field: oldValue, ... }
+ * @param newValues 新字段值对象 { field: newValue, ... }
+ * @param label 操作描述
+ */
+export function pushFieldUndo(
+  type: 'UPDATE_TASK' | 'UPDATE_GOAL' | 'UPDATE_PROJECT',
+  id: string,
+  oldValues: Record<string, unknown>,
+  newValues: Record<string, unknown>,
+  label: string
+): void {
+  if (Object.keys(oldValues).length === 0) return;
+  const inverseAction = { type, payload: { id, updates: oldValues } };
+  const originalAction = { type, payload: { id, updates: newValues } };
+  undoStack.push({
+    actions: [inverseAction],
+    originalActions: [originalAction],
+    label,
+    timestamp: Date.now(),
+  });
+  if (undoStack.length > MAX_UNDO_STACK) undoStack.shift();
+  redoStack = [];
+  persistStacks();
+}
+
 function getActionLabel(action: Action): string {
   switch (action.type) {
     case 'ADD_GOAL': return '创建目标';

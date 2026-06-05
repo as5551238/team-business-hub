@@ -54,7 +54,7 @@ export function DetailProjectSections({ project, startDate, endDate }: DetailPro
         </Section>
       )}
 
-      <Section title="关联任务" icon={<CheckSquare className="w-3.5 h-3.5" />} action={<button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={() => setShowAddTask(v => !v)}><Plus className="w-3.5 h-3.5" /></button>}>
+      <Section title="关联任务" icon={<CheckSquare className="w-3.5 h-3.5" />} action={<button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={() => setShowAddTask(v => !v)} aria-label="添加关联任务"><Plus className="w-3.5 h-3.5" /></button>}>
         <div className="space-y-1">
           {pTasks.map(t => (
             <div key={t.id} className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-accent cursor-pointer">

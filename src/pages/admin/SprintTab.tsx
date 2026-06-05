@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
-import { usePermissions } from '@/store/hooks';
+import { usePermissions, useActiveMembers } from '@/store/hooks';
 import type { Sprint, SprintStatus, Task } from '@/types';
 import { Plus, Trash2, Edit2, Play, CheckCircle, BarChart3, Clock, AlertTriangle } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { resolveToken } from '@/lib/resolveToken';
 
 const STATUS_LABELS: Record<SprintStatus, string> = { planning: '规划中', active: '进行中', completed: '已完成' };
 const STATUS_COLORS: Record<SprintStatus, string> = { planning: 'bg-gray-100 text-gray-600', active: 'bg-blue-100 text-blue-700', completed: 'bg-green-100 text-green-700' };
@@ -27,7 +28,7 @@ export function SprintTab() {
   const [form, setForm] = useState({ name: '', startDate: '', endDate: '', goalIds: [] as string[], status: 'planning' as SprintStatus });
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
 
-  const activeMembers = useMemo(() => state.members.filter(m => m.status === 'active'), [state.members]);
+  const { activeMembers } = useActiveMembers();
 
   const selectedSprint = sprints.find(sp => sp.id === selectedSprintId);
 
@@ -143,10 +144,10 @@ export function SprintTab() {
             )}
             <div className="flex items-center gap-2 mt-2">
               <div className="flex-1" />
-              {sp.status === 'planning' && <button onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_SPRINT', payload: { id: sp.id, updates: { status: 'active' } } }); }} className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer"><Play size={14} /></button>}
-              {sp.status === 'active' && <button onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_SPRINT', payload: { id: sp.id, updates: { status: 'completed' } } }); }} className="text-xs text-green-600 hover:text-green-800 cursor-pointer"><CheckCircle size={14} /></button>}
-              {canManage && <button onClick={e => { e.stopPropagation(); startEdit(sp); }} className="text-muted-foreground hover:text-primary cursor-pointer"><Edit2 size={14} /></button>}
-              {canManage && <button onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_SPRINT', payload: sp.id }); if (selectedSprintId === sp.id) setSelectedSprintId(null); }} className="text-muted-foreground hover:text-destructive cursor-pointer"><Trash2 size={14} /></button>}
+              {sp.status === 'planning' && <button onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_SPRINT', payload: { id: sp.id, updates: { status: 'active' } } }); }} className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer" aria-label="启动迭代"><Play size={14} /></button>}
+              {sp.status === 'active' && <button onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_SPRINT', payload: { id: sp.id, updates: { status: 'completed' } } }); }} className="text-xs text-green-600 hover:text-green-800 cursor-pointer" aria-label="完成迭代"><CheckCircle size={14} /></button>}
+              {canManage && <button onClick={e => { e.stopPropagation(); startEdit(sp); }} className="text-muted-foreground hover:text-primary cursor-pointer" aria-label="编辑迭代"><Edit2 size={14} /></button>}
+              {canManage && <button onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_SPRINT', payload: sp.id }); if (selectedSprintId === sp.id) setSelectedSprintId(null); }} className="text-muted-foreground hover:text-destructive cursor-pointer" aria-label="删除迭代"><Trash2 size={14} /></button>}
             </div>
           </div>
           );
@@ -181,12 +182,12 @@ export function SprintTab() {
           {burndownData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={burndownData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke={resolveToken('border')} />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Area type="monotone" dataKey="ideal" stroke="#94a3b8" fill="#f1f5f9" strokeWidth={2} strokeDasharray="5 5" name="理想线" />
-                <Area type="monotone" dataKey="actual" stroke="#3b82f6" fill="#dbeafe" strokeWidth={2} name="实际线" />
+                <Area type="monotone" dataKey="ideal" stroke={resolveToken('muted-foreground')} fill={resolveToken('muted')} strokeWidth={2} strokeDasharray="5 5" name="理想线" />
+                <Area type="monotone" dataKey="actual" stroke={resolveToken('primary')} fill={resolveToken('primary', 0.1)} strokeWidth={2} name="实际线" />
               </AreaChart>
             </ResponsiveContainer>
           ) : (

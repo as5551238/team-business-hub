@@ -220,8 +220,8 @@ export function RetroTrackingTab() {
                     {a.done ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-muted-foreground" />}
                   </button>
                   <input className="flex-1 border border-border rounded px-2 py-1 text-sm" value={a.text} onChange={e => handleUpdateAction(i, { text: e.target.value })} placeholder="输入行动项..." />
-                  <button className="p-1 hover:bg-accent rounded cursor-pointer" title="转为任务" onClick={() => handleConvertActionToTask(i)}><ArrowRight className="w-3.5 h-3.5 text-blue-600" /></button>
-                  <button className="p-1 hover:bg-destructive/10 rounded cursor-pointer" title="删除" onClick={() => handleRemoveAction(i)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                  <button className="p-1 hover:bg-accent rounded cursor-pointer" title="转为任务" onClick={() => handleConvertActionToTask(i)} aria-label="转为任务"><ArrowRight className="w-3.5 h-3.5 text-blue-600" /></button>
+                  <button className="p-1 hover:bg-destructive/10 rounded cursor-pointer" title="删除" onClick={() => handleRemoveAction(i)} aria-label="删除行动项"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
                 </div>
               ))}
               <button className="text-xs text-primary hover:underline cursor-pointer" onClick={handleAddAction}>+ 添加行动项</button>

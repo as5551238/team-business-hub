@@ -36,8 +36,8 @@ let _ruleDepth = 0;
 const DUE_ARRIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10分钟冷却
 const _dueArriveLastFired: Map<string, number> = new Map(); // key: `${taskId}:${ruleId}`
 
-export function isAutomationLocked(): boolean { return _ruleDepth >= MAX_RULE_DEPTH; }
-export function resetAutomationLock() { _executingRuleIds.clear(); _ruleDepth = 0; }
+function isAutomationLocked(): boolean { return _ruleDepth >= MAX_RULE_DEPTH; }
+function resetAutomationLock() { _executingRuleIds.clear(); _ruleDepth = 0; }
 
 // ==================== set_field 字段白名单 ====================
 const SET_FIELD_ALLOWLIST: Record<string, string[]> = {
@@ -72,7 +72,7 @@ export function hasPermission(state: AppState, memberId: string, permission: Per
 }
 
 /** Check if a member has ANY permission for a module */
-export function hasModuleAccess(state: AppState, memberId: string, module: PermissionModule): boolean {
+function hasModuleAccess(state: AppState, memberId: string, module: PermissionModule): boolean {
   const member = state.members.find(m => m.id === memberId);
   if (!member) return false;
   if (member.role === 'admin') return true;
@@ -81,7 +81,7 @@ export function hasModuleAccess(state: AppState, memberId: string, module: Permi
 }
 
 /** Backward compat: map old permission names to new ones */
-export function mapLegacyPermission(old: string): Permission | null {
+function mapLegacyPermission(old: string): Permission | null {
   const map: Record<string, Permission> = {
     'view_goals': 'goals_view', 'edit_goals': 'goals_edit', 'delete_goals': 'goals_delete',
     'view_projects': 'projects_view', 'edit_projects': 'projects_edit', 'delete_projects': 'projects_delete',
@@ -463,7 +463,7 @@ export function applyGoalProgressInfo(goal: Goal, info: GoalProgressInfo): void 
 }
 
 /** Convenience wrapper: compute + apply mutations + return progress number */
-export function calcGoalProgress(goals: Goal[], goalId: string, visited?: Set<string>): number {
+function calcGoalProgress(goals: Goal[], goalId: string, visited?: Set<string>): number {
   const info = computeGoalProgressInfo(goals, goalId, visited);
   const goal = goals.find(g => g.id === goalId);
   if (goal) applyGoalProgressInfo(goal, info);
@@ -486,7 +486,7 @@ export function calcProjectProgress(tasks: Task[], projectId: string): number {
   return Math.round(progress / pt.length);
 }
 
-export const APP_ARRAY_KEYS: readonly (keyof AppState)[] = [
+const APP_ARRAY_KEYS: readonly (keyof AppState)[] = [
   'members', 'goals', 'projects', 'tasks', 'notifications', 'activities',
   'itemLinks', 'tags', 'categories', 'templates', 'scheduleEvents', 'notes',
   'knowledge', 'savedViews', 'reviews', 'comments', 'bookmarks', 'batchOperations',
@@ -504,9 +504,9 @@ export function needMutate(state: AppState, keys?: (keyof AppState)[]): AppState
 
 export function tsNow() { return new Date().toISOString(); }
 
-export const MAX_TITLE = 200;
-export const MAX_DESC = 5000;
-export const MAX_COMMENT = 3000;
+const MAX_TITLE = 200;
+const MAX_DESC = 5000;
+const MAX_COMMENT = 3000;
 export function clampTitle(s: string | undefined): string | undefined { return s && s.length > MAX_TITLE ? s.slice(0, MAX_TITLE) : s; }
 export function clampDesc(s: string | undefined): string | undefined { return s && s.length > MAX_DESC ? s.slice(0, MAX_DESC) : s; }
 export function clampComment(s: string | undefined): string | undefined { return s && s.length > MAX_COMMENT ? s.slice(0, MAX_COMMENT) : s; }

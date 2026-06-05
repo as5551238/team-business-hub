@@ -36,7 +36,7 @@ interface ActionsContextType {
 }
 
 const StateContext = createContext<AppState | null>(null);
-const ActionsContext = createContext<ActionsContextType | null>(null);
+export const ActionsContext = createContext<ActionsContextType | null>(null);
 
 import { setAsyncDispatch } from '@/store/shared';
 import { setCollabDispatch } from '@/lib/collab';
@@ -44,7 +44,7 @@ import { trackBehavior, setBehaviorUserId } from '@/store/behaviorTracking';
 
 // Module-level dispatch bridge for collab operations (set by StoreProvider)
 let _collabDispatch: ((action: Action) => void) | null = null;
-export function collabDispatch(action: Action) { _collabDispatch?.(action); }
+function collabDispatch(action: Action) { _collabDispatch?.(action); }
 
 // Re-export batch undo for use in page components
 export { pushBatchUndo } from './undo';
@@ -426,6 +426,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const allTables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules', 'sprints', 'knowledge', 'notification_preferences'];
     const teamScopedTables = new Set(['goals', 'projects', 'tasks', 'notifications', 'activities', 'item_links', 'comments', 'categories', 'templates', 'schedule_events', 'notes', 'reviews', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules', 'sprints', 'knowledge', 'notification_preferences']);
     let polling = false;
+    let abortController = new AbortController();
     const fallbackPoll = async () => {
       if (polling || document.visibilityState === 'hidden') return;
       polling = true;
@@ -449,6 +450,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }));
         const payload: Record<string, unknown[]> = {};
         results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; } });
+        if (abortController.signal.aborted) return;
         dispatch({ type: 'MERGE_STATE', payload });
         notifySelectorListeners();
         try { bc.postMessage({ type: 'MERGE_STATE', payload }); } catch (e) { handleError(e, { module: 'store', operation: 'BC_POST_MERGE', severity: 'debug' }); }
@@ -476,7 +478,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     fallbackPoll();
 
     // Fallback timer: 120s full poll
-    const fallbackTimer = window.setInterval(fallbackPoll, 120000);
+    const fallbackTimer = window.setInterval(fallbackPoll, 300000);
 
     // Visibility change: immediate poll when tab becomes visible
     const onVisibilityChange = () => {
@@ -508,6 +510,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
 
   function cleanupRealtime() {
+    abortController.abort();
+    abortController = new AbortController();
     realtimeChannels.current.forEach(item => {
       if (typeof item === 'number') window.clearInterval(item);
       else if (typeof item === 'function') {
@@ -548,6 +552,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (connectionMode === 'supabase' && state.currentTeamId) {
       setupRealtime();
+      return cleanupRealtime;
     }
   }, [state.currentTeamId, connectionMode]);
 

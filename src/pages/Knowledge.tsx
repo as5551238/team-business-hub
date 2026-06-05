@@ -169,7 +169,7 @@ function EntriesView() {
           {filterTag && (
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-primary/10 text-primary">
               <Tag size={10} /> {filterTag}
-              <button onClick={() => setFilterTag(null)} className="hover:text-destructive"><X size={12} /></button>
+              <button onClick={() => setFilterTag(null)} className="hover:text-destructive" aria-label="清除标签筛选"><X size={12} /></button>
             </span>
           )}
           <button onClick={startCreate} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 flex-shrink-0"><Plus size={14} /> 新建条目</button>
@@ -213,7 +213,7 @@ function EntriesView() {
                     <Link2 size={12} className="text-muted-foreground" />
                     <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">{r.itemType === 'goal' ? '目标' : r.itemType === 'project' ? '项目' : '任务'}</span>
                     <span className="truncate flex-1">{getItemTitle(r.itemId, r.itemType)}</span>
-                    <button onClick={() => removeRelatedItem(r.itemId, r.itemType)} className="text-muted-foreground hover:text-destructive"><X size={14} /></button>
+                    <button onClick={() => removeRelatedItem(r.itemId, r.itemType)} className="text-muted-foreground hover:text-destructive" aria-label="移除关联项"><X size={14} /></button>
                   </div>
                 ))}
                 <div className="flex gap-2 flex-wrap">
@@ -251,7 +251,7 @@ function EntriesView() {
                   <div key={k.id} className={cn('border border-border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group relative overflow-hidden', k.color && k.color !== NOTE_COLORS[0] && 'border-l-4')} style={{ borderLeftColor: k.color === NOTE_COLORS[0] ? undefined : k.color }} onClick={() => startEdit(k)}>
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h3 className="text-sm font-medium truncate flex-1">{k.title}</h3>
-                      <button onClick={e => { e.stopPropagation(); handleDelete(k.id, k.title); }} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-opacity"><Trash2 size={13} /></button>
+                      <button onClick={e => { e.stopPropagation(); handleDelete(k.id, k.title); }} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-opacity" aria-label="删除笔记"><Trash2 size={13} /></button>
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-3 mb-2 whitespace-pre-wrap">{k.content || '暂无内容'}</p>
                     <div className="flex items-center gap-1 flex-wrap mb-2">

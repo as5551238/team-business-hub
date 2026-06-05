@@ -90,7 +90,7 @@ return (
                   ) : (
                     <span className="flex-1 text-sm cursor-pointer hover:text-primary" onClick={() => { setEditingKrId(kr.id); setKrDraft({ title: kr.title }); }}>{kr.title}</span>
                   )}
-                  <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" onClick={() => handleDeleteKR(kr.id)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                  <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" onClick={() => handleDeleteKR(kr.id)} aria-label="删除关键结果"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
                 </div>
                 {hasLinkedTasks ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -152,7 +152,7 @@ return (
         </div>
       </Section>
 
-      <Section title="关联项目" icon={<FolderKanban className="w-3.5 h-3.5" />} action={<button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={() => setShowAddProject(v => !v)}><Plus className="w-3.5 h-3.5" /></button>}>
+      <Section title="关联项目" icon={<FolderKanban className="w-3.5 h-3.5" />} action={<button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={() => setShowAddProject(v => !v)} aria-label="添加关联项目"><Plus className="w-3.5 h-3.5" /></button>}>
         <div className="space-y-1">
           {state.projects.filter(p => p.goalId === goal.id).map(p => (
             <div key={p.id} className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-accent cursor-pointer">

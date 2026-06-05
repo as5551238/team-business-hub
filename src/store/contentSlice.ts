@@ -19,7 +19,7 @@ export function contentReducer(state: AppState, action: Action): AppState | null
       const s = needMutate(state, ['savedViews']);
       const now = tsNow();
       const idx = s.savedViews.findIndex(v => v.id === action.payload.id);
-      if (idx !== -1) { s.savedViews[idx] = { ...s.savedViews[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('saved_views', action.payload.id, { ...action.payload.updates, updated_at: now }); }
+      if (idx !== -1) { const oldUpdatedAt = s.savedViews[idx].updatedAt; s.savedViews[idx] = { ...s.savedViews[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('saved_views', action.payload.id, { ...action.payload.updates, updated_at: now }, oldUpdatedAt); }
       return s;
     }
     case 'DELETE_SAVED_VIEW': {
@@ -54,7 +54,7 @@ export function contentReducer(state: AppState, action: Action): AppState | null
         const isAdmin = state.currentUser.role === 'admin';
         if (!isOwnOrTeam && !isAdmin) return state;
         s.reviews[idx] = { ...existing, ...action.payload.updates, updatedAt: now };
-        supabaseUpdate('reviews', action.payload.id, { ...action.payload.updates, updated_at: now });
+        supabaseUpdate('reviews', action.payload.id, { ...action.payload.updates, updated_at: now }, existing.updatedAt);
       }
       return s;
     }
@@ -78,7 +78,7 @@ export function contentReducer(state: AppState, action: Action): AppState | null
       const s = needMutate(state, ['templates']);
       const now = tsNow();
       const idx = s.templates.findIndex(t => t.id === action.payload.id);
-      if (idx !== -1) { s.templates[idx] = { ...s.templates[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('templates', action.payload.id, { ...action.payload.updates, updated_at: now }); }
+      if (idx !== -1) { const oldUpdatedAt = s.templates[idx].updatedAt; s.templates[idx] = { ...s.templates[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('templates', action.payload.id, { ...action.payload.updates, updated_at: now }, oldUpdatedAt); }
       return s;
     }
     case 'DELETE_TEMPLATE': {
@@ -101,7 +101,7 @@ export function contentReducer(state: AppState, action: Action): AppState | null
       const s = needMutate(state, ['scheduleEvents']);
       const now = tsNow();
       const idx = s.scheduleEvents.findIndex(e => e.id === action.payload.id);
-      if (idx !== -1) { s.scheduleEvents[idx] = { ...s.scheduleEvents[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('schedule_events', action.payload.id, { ...action.payload.updates, updated_at: now }); }
+      if (idx !== -1) { const oldUpdatedAt = s.scheduleEvents[idx].updatedAt; s.scheduleEvents[idx] = { ...s.scheduleEvents[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('schedule_events', action.payload.id, { ...action.payload.updates, updated_at: now }, oldUpdatedAt); }
       return s;
     }
     case 'DELETE_SCHEDULE_EVENT': {
@@ -126,7 +126,7 @@ export function contentReducer(state: AppState, action: Action): AppState | null
       const s = needMutate(state, ['notes']);
       const now = tsNow();
       const idx = s.notes.findIndex(n => n.id === action.payload.id);
-      if (idx !== -1) { s.notes[idx] = { ...s.notes[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('notes', action.payload.id, { ...action.payload.updates, updated_at: now }); }
+      if (idx !== -1) { const oldUpdatedAt = s.notes[idx].updatedAt; s.notes[idx] = { ...s.notes[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('notes', action.payload.id, { ...action.payload.updates, updated_at: now }, oldUpdatedAt); }
       return s;
     }
     case 'DELETE_NOTE': {
@@ -149,7 +149,8 @@ export function contentReducer(state: AppState, action: Action): AppState | null
     case 'UPDATE_BOOKMARK': {
       const s = needMutate(state, ['bookmarks']);
       const idx = s.bookmarks.findIndex(b => b.id === action.payload.id);
-      if (idx !== -1) { s.bookmarks[idx] = { ...s.bookmarks[idx], ...action.payload.updates }; supabaseUpdate('bookmarks', action.payload.id, action.payload.updates); }
+      const old = s.bookmarks.find(b => b.id === action.payload.id);
+      if (idx !== -1) { s.bookmarks[idx] = { ...s.bookmarks[idx], ...action.payload.updates, updatedAt: tsNow() }; supabaseUpdate('bookmarks', action.payload.id, { ...action.payload.updates, updated_at: tsNow() }, old?.updatedAt); }
       return s;
     }
     case 'DELETE_BOOKMARK': {
@@ -187,8 +188,9 @@ export function contentReducer(state: AppState, action: Action): AppState | null
       const now = tsNow();
       const kIdx = s.knowledge.findIndex(k => k.id === action.payload.id);
       if (kIdx !== -1) {
+        const oldUpdatedAt = s.knowledge[kIdx].updatedAt;
         s.knowledge[kIdx] = { ...s.knowledge[kIdx], ...action.payload.updates, updatedAt: now };
-        supabaseUpdate('knowledge', action.payload.id, { ...action.payload.updates, updated_at: now });
+        supabaseUpdate('knowledge', action.payload.id, { ...action.payload.updates, updated_at: now }, oldUpdatedAt);
       }
       return s;
     }
