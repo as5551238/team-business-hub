@@ -208,6 +208,86 @@ export async function callLLM(prompt: string, config: AIConfig, complexity?: Tas
   }
 }
 
+/** 流式 LLM 调用 — 返回 ReadableStream，逐步输出 token */
+export async function callLLMStream(
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  config: AIConfig,
+  onChunk: (text: string) => void,
+  options?: { complexity?: TaskComplexity; signal?: AbortSignal }
+): Promise<string> {
+  const preset = PROVIDER_PRESETS[config.provider];
+  const baseUrl = (config.baseUrl || preset.baseUrl).replace(/\/+$/, '');
+  const detectedComplexity = options?.complexity || detectTaskComplexity(messages[messages.length - 1]?.content || '');
+  let model = config.model || preset.model;
+  if (config.costRouting && COST_ROUTING_MAP[config.provider]) {
+    const routedModel = COST_ROUTING_MAP[config.provider][detectedComplexity];
+    if (routedModel) model = routedModel;
+  }
+  const maxTokens = detectedComplexity === 'complex' ? 4000 : detectedComplexity === 'moderate' ? 3000 : 1500;
+  const url = `${baseUrl}/chat/completions`;
+  const requestBody = { model, messages, temperature: 0.3, max_tokens: maxTokens, stream: true };
+
+  // Try streaming fetch first
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
+      body: JSON.stringify(requestBody),
+      signal: options?.signal,
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      throw new Error(`API ${resp.status}: ${errText.slice(0, 200)}`);
+    }
+    const reader = resp.body?.getReader();
+    if (!reader) throw new Error('No readable stream');
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const parsed = JSON.parse(trimmed.slice(6));
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              fullText += content;
+              onChunk(content);
+            }
+          } catch { /* skip malformed chunks */ }
+        }
+      }
+    }
+    return fullText;
+  } catch (streamErr) {
+    // Fallback: non-streaming call
+    const isNetworkError = streamErr instanceof TypeError && streamErr.message === 'Failed to fetch';
+    if (!isNetworkError && !(streamErr instanceof DOMException)) {
+      throw streamErr; // re-throw auth/404 etc
+    }
+    // Non-stream fallback
+    const nonStreamBody = { ...requestBody, stream: false };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
+      body: JSON.stringify(nonStreamBody),
+      signal: options?.signal,
+    });
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+    const data = await resp.json();
+    const result = data.choices?.[0]?.message?.content || '';
+    onChunk(result);
+    return result;
+  }
+}
+
 /** 解析 LLM 返回的 JSON（可能包含 markdown 代码块） */
 function parseLLMJSON(text: string): LLMResponse | null {
   try {
