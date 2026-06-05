@@ -1139,6 +1139,126 @@ create policy "Cost entries: admin can delete" on cost_entries
 create trigger audit_cost_entries after insert or update or delete on cost_entries
   for each row execute function audit_trigger_func();
 
+-- ==================== R3: 绩效与有效性 ====================
+
+create table if not exists performance_reviews (
+  id text primary key default gen_random_uuid()::text,
+  season_id text references okr_seasons(id) on delete set null,
+  reviewee_id text not null references members(id),
+  status text not null default 'pending',
+  self_review jsonb,
+  peer_reviews jsonb not null default '[]'::jsonb,
+  manager_review jsonb,
+  direct_report_reviews jsonb not null default '[]'::jsonb,
+  ai_summary text,
+  final_score numeric,
+  team_id text not null,
+  created_at timestamptz default now(),
+  completed_at timestamptz
+);
+
+alter table performance_reviews enable row level security;
+create policy "Perf reviews: team members can read" on performance_reviews for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "Perf reviews: admin can insert" on performance_reviews for insert with check (team_id = app_current_team_id() and is_team_admin(team_id));
+create policy "Perf reviews: admin can update" on performance_reviews for update using (team_id = app_current_team_id() and is_team_admin(team_id));
+create policy "Perf reviews: admin can delete" on performance_reviews for delete using (team_id = app_current_team_id() and is_team_admin(team_id));
+
+create table if not exists effectiveness_metrics (
+  id text primary key default gen_random_uuid()::text,
+  goal_id text not null references goals(id) on delete cascade,
+  business_value numeric not null default 0,
+  effort_hours numeric not null default 0,
+  impact_score numeric not null default 0,
+  roi numeric,
+  measured_at timestamptz default now(),
+  team_id text not null
+);
+
+alter table effectiveness_metrics enable row level security;
+create policy "Eff metrics: team members can read" on effectiveness_metrics for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "Eff metrics: admin can write" on effectiveness_metrics for insert with check (team_id = app_current_team_id() and is_team_admin(team_id));
+create policy "Eff metrics: admin can update" on effectiveness_metrics for update using (team_id = app_current_team_id() and is_team_admin(team_id));
+
+create table if not exists ai_suggestions (
+  id text primary key default gen_random_uuid()::text,
+  source_type text not null default 'review',
+  source_id text,
+  content text not null,
+  status text not null default 'suggested',
+  adopted_at timestamptz,
+  outcome_rating numeric,
+  outcome_note text,
+  team_id text not null,
+  created_at timestamptz default now()
+);
+
+alter table ai_suggestions enable row level security;
+create policy "AI suggestions: team members can read" on ai_suggestions for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "AI suggestions: team members can insert" on ai_suggestions for insert with check (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "AI suggestions: admin can update" on ai_suggestions for update using (team_id = app_current_team_id() and is_team_admin(team_id));
+
+create table if not exists review_knowledge (
+  id text primary key default gen_random_uuid()::text,
+  source_session_id text not null,
+  pattern text not null,
+  context text not null default '',
+  related_patterns jsonb not null default '[]'::jsonb,
+  ai_extracted boolean not null default false,
+  team_id text not null,
+  created_at timestamptz default now()
+);
+
+alter table review_knowledge enable row level security;
+create policy "Review knowledge: team members can read" on review_knowledge for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "Review knowledge: admin can insert" on review_knowledge for insert with check (team_id = app_current_team_id() and is_team_admin(team_id));
+
+-- ==================== R4: 产能与DSTE ====================
+
+create table if not exists capacity_plans (
+  id text primary key default gen_random_uuid()::text,
+  period text not null,
+  available_hours numeric not null default 0,
+  planned_hours numeric not null default 0,
+  forecast_hours numeric not null default 0,
+  gap numeric not null default 0,
+  team_id text not null,
+  created_at timestamptz default now()
+);
+
+alter table capacity_plans enable row level security;
+create policy "Capacity: team members can read" on capacity_plans for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "Capacity: admin can write" on capacity_plans for insert with check (team_id = app_current_team_id() and is_team_admin(team_id));
+
+create table if not exists dste_phases (
+  id text primary key default gen_random_uuid()::text,
+  season_id text references okr_seasons(id) on delete cascade,
+  phase text not null,
+  status text not null default 'not_started',
+  ai_auto_progress boolean not null default false,
+  completed_at timestamptz,
+  checklist jsonb not null default '[]'::jsonb,
+  team_id text not null
+);
+
+alter table dste_phases enable row level security;
+create policy "DSTE: team members can read" on dste_phases for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "DSTE: admin can write" on dste_phases for insert with check (team_id = app_current_team_id() and is_team_admin(team_id));
+
+create table if not exists business_values (
+  id text primary key default gen_random_uuid()::text,
+  goal_id text not null references goals(id) on delete cascade,
+  input_cost numeric not null default 0,
+  output_value numeric not null default 0,
+  roi numeric not null default 0,
+  value_stream text not null default '',
+  measured_at timestamptz default now(),
+  team_id text not null
+);
+
+alter table business_values enable row level security;
+create policy "BV: team members can read" on business_values for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "BV: admin can write" on business_values for insert with check (team_id = app_current_team_id() and is_team_admin(team_id));
+
 -- ==================== 审计触发器 ====================
 
 /** 通用审计日志触发器函数 */
@@ -1220,6 +1340,9 @@ alter publication supabase_realtime add table sprints;
 alter publication supabase_realtime add table okr_seasons;
 alter publication supabase_realtime add table budgets;
 alter publication supabase_realtime add table cost_entries;
+alter publication supabase_realtime add table performance_reviews;
+alter publication supabase_realtime add table effectiveness_metrics;
+alter publication supabase_realtime add table ai_suggestions;
 alter publication supabase_realtime add table knowledge;
 alter publication supabase_realtime add table notification_preferences;
 

@@ -1,4 +1,4 @@
-import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark, StatusFlowRule, AutomationRule, Sprint, Knowledge, Team, TeamMember, Subscription, ApprovalAudit, OKRSeason, ReviewSession, Budget, CostEntry } from '@/types';
+import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark, StatusFlowRule, AutomationRule, Sprint, Knowledge, Team, TeamMember, Subscription, ApprovalAudit, OKRSeason, ReviewSession, Budget, CostEntry, PerformanceReview, SkillRating, EffectivenessMetric, AISuggestion, ReviewKnowledge, OKRScore, CapacityPlan, DSTEPhase, BusinessValueEntry } from '@/types';
 
 export const STORAGE_KEY = 'tbh-data';
 const LEGACY_STORAGE_KEY = 'team-business-hub-data';
@@ -114,6 +114,24 @@ export type Action =
   | { type: 'ADD_COST_ENTRY'; payload: Omit<CostEntry, 'id' | 'createdAt'> }
   | { type: 'UPDATE_COST_ENTRY'; payload: { id: string; updates: Partial<CostEntry> } }
   | { type: 'DELETE_COST_ENTRY'; payload: string }
+  | { type: 'ADD_PERFORMANCE_REVIEW'; payload: Omit<PerformanceReview, 'id' | 'createdAt'> }
+  | { type: 'UPDATE_PERFORMANCE_REVIEW'; payload: { id: string; updates: Partial<PerformanceReview> } }
+  | { type: 'DELETE_PERFORMANCE_REVIEW'; payload: string }
+  | { type: 'ADD_SKILL_RATING'; payload: SkillRating }
+  | { type: 'UPDATE_SKILL_RATING'; payload: { memberId: string; skillId: string; updates: Partial<SkillRating> } }
+  | { type: 'ADD_EFFECTIVENESS_METRIC'; payload: Omit<EffectivenessMetric, 'id' | 'measuredAt'> }
+  | { type: 'UPDATE_EFFECTIVENESS_METRIC'; payload: { id: string; updates: Partial<EffectivenessMetric> } }
+  | { type: 'DELETE_EFFECTIVENESS_METRIC'; payload: string }
+  | { type: 'ADD_AI_SUGGESTION'; payload: Omit<AISuggestion, 'id' | 'createdAt'> }
+  | { type: 'UPDATE_AI_SUGGESTION'; payload: { id: string; updates: Partial<AISuggestion> } }
+  | { type: 'ADD_REVIEW_KNOWLEDGE'; payload: Omit<ReviewKnowledge, 'id' | 'createdAt'> }
+  | { type: 'ADD_OKR_SCORE'; payload: OKRScore }
+  | { type: 'ADD_CAPACITY_PLAN'; payload: Omit<CapacityPlan, 'id' | 'createdAt'> }
+  | { type: 'UPDATE_CAPACITY_PLAN'; payload: { id: string; updates: Partial<CapacityPlan> } }
+  | { type: 'ADD_DSTE_PHASE'; payload: Omit<DSTEPhase, 'id'> }
+  | { type: 'UPDATE_DSTE_PHASE'; payload: { id: string; updates: Partial<DSTEPhase> } }
+  | { type: 'ADD_BUSINESS_VALUE'; payload: Omit<BusinessValueEntry, 'id'> }
+  | { type: 'DELETE_BUSINESS_VALUE'; payload: string }
   | { type: 'CLEAR_OUTLOOK_DATA' }
   | { type: 'UPDATE_GOAL'; payload: { id: string; updates: Partial<Goal> }; _skipUndo?: boolean }
   | { type: 'UPDATE_PROJECT'; payload: { id: string; updates: Partial<Project> }; _skipUndo?: boolean }
@@ -177,6 +195,15 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: Memb
     reviewSessions: arr(data.reviewSessions),
     budgets: arr(data.budgets),
     costEntries: arr(data.costEntries),
+    performanceReviews: arr(data.performanceReviews),
+    skillRatings: arr(data.skillRatings),
+    effectivenessMetrics: arr(data.effectivenessMetrics),
+    aiSuggestions: arr(data.aiSuggestions),
+    reviewKnowledge: arr(data.reviewKnowledge),
+    okrScores: arr(data.okrScores),
+    capacityPlans: arr(data.capacityPlans),
+    dstePhases: arr(data.dstePhases),
+    businessValues: arr(data.businessValues),
     currentTeamId: data.currentTeamId || null,
   };
   result.goals = result.goals.map((g: Goal) => ({

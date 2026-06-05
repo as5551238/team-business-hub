@@ -13,6 +13,7 @@ import { coreReducer } from './coreSlice';
 import { outlookReducer } from './outlookSlice';
 import { seasonReducer } from './seasonSlice';
 import { budgetReducer } from './budgetSlice';
+import { performanceReducer } from './performanceSlice';
 
 // Re-export hasPermission for external consumers
 export { hasPermission } from './shared';
@@ -62,6 +63,13 @@ const TABLE_TO_STATE_KEY: Record<string, string> = {
   okr_seasons: 'seasons',
   budgets: 'budgets',
   cost_entries: 'costEntries',
+  performance_reviews: 'performanceReviews',
+  effectiveness_metrics: 'effectivenessMetrics',
+  ai_suggestions: 'aiSuggestions',
+  review_knowledge: 'reviewKnowledge',
+  capacity_plans: 'capacityPlans',
+  dste_phases: 'dstePhases',
+  business_values: 'businessValues',
 };
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -79,6 +87,8 @@ export function reducer(state: AppState, action: Action): AppState {
   if (seasonResult !== null) return seasonResult;
   const budgetResult = budgetReducer(state, action);
   if (budgetResult !== null) return budgetResult;
+  const perfResult = performanceReducer(state, action);
+  if (perfResult !== null) return perfResult;
   switch (action.type) {
     case 'SET_STATE':
       return ensureAppStateDefaults(action.payload);
@@ -91,8 +101,8 @@ export function reducer(state: AppState, action: Action): AppState {
       const s = needMutate(state, mergeKeys);
       const payload = action.payload;
       cleanPendingDeletes();
-      const pruneTables = new Set(['goals', 'projects', 'tasks', 'members', 'tags', 'statusFlowRules', 'automationRules', 'sprints', 'seasons', 'budgets', 'costEntries']);
-      const teamScopedTables = new Set(['goals', 'projects', 'tasks', 'notifications', 'activities', 'itemLinks', 'comments', 'categories', 'templates', 'scheduleEvents', 'notes', 'reviews', 'tags', 'bookmarks', 'savedViews', 'statusFlowRules', 'automationRules', 'sprints', 'knowledge', 'seasons', 'budgets', 'costEntries']);
+      const pruneTables = new Set(['goals', 'projects', 'tasks', 'members', 'tags', 'statusFlowRules', 'automationRules', 'sprints', 'seasons', 'budgets', 'costEntries', 'performanceReviews', 'effectivenessMetrics', 'aiSuggestions', 'reviewKnowledge', 'capacityPlans', 'dstePhases', 'businessValues']);
+      const teamScopedTables = new Set(['goals', 'projects', 'tasks', 'notifications', 'activities', 'itemLinks', 'comments', 'categories', 'templates', 'scheduleEvents', 'notes', 'reviews', 'tags', 'bookmarks', 'savedViews', 'statusFlowRules', 'automationRules', 'sprints', 'knowledge', 'seasons', 'budgets', 'costEntries', 'performanceReviews', 'effectivenessMetrics', 'aiSuggestions', 'reviewKnowledge', 'capacityPlans', 'dstePhases', 'businessValues']);
       const currentTeam = s.currentTeamId;
       const now = Date.now();
       let conflictCount = 0;

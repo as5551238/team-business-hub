@@ -476,6 +476,128 @@ export interface ReviewSession {
   completedAt: string | null;
 }
 
+// ==================== R3: 绩效与有效性 ====================
+export type ReviewRole = 'self' | 'peer' | 'manager' | 'direct_report';
+
+export interface ReviewAnswer {
+  reviewerId: string;
+  role: ReviewRole;
+  ratings: Record<string, number>;
+  strengths: string;
+  improvements: string;
+  submittedAt: string;
+}
+
+export interface PerformanceReview {
+  id: string;
+  seasonId: string | null;
+  revieweeId: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  selfReview: ReviewAnswer | null;
+  peerReviews: ReviewAnswer[];
+  managerReview: ReviewAnswer | null;
+  directReportReviews: ReviewAnswer[];
+  aiSummary: string | null;
+  finalScore: number | null;
+  teamId: string;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface SkillRating {
+  memberId: string;
+  skillId: string;
+  level: number; // 0-5
+  updatedAt: string;
+}
+
+export interface SkillDefinition {
+  id: string;
+  name: string;
+  category: string;
+  targetLevel: number; // team target
+}
+
+export interface EffectivenessMetric {
+  id: string;
+  goalId: string;
+  businessValue: number; // 1-10
+  effortHours: number;
+  impactScore: number; // 1-10
+  roi: number | null;
+  measuredAt: string;
+  teamId: string;
+}
+
+export interface AISuggestion {
+  id: string;
+  sourceType: 'review' | 'dashboard' | 'automation' | 'coaching';
+  sourceId: string | null;
+  content: string;
+  status: 'suggested' | 'adopted' | 'dismissed' | 'partially_adopted';
+  adoptedAt: string | null;
+  outcomeRating: number | null; // 1-5
+  outcomeNote: string | null;
+  teamId: string;
+  createdAt: string;
+}
+
+// ==================== R4: 知识图谱与自动化 ====================
+export interface ReviewKnowledge {
+  id: string;
+  sourceSessionId: string;
+  pattern: string;
+  context: string;
+  relatedPatterns: string[];
+  aiExtracted: boolean;
+  teamId: string;
+  createdAt: string;
+}
+
+export interface OKRScore {
+  goalId: string;
+  seasonId: string;
+  score: number; // 0.0-1.0
+  confidence: number; // 0-100
+  previousConfidence: number | null;
+  scorerId: string;
+  scoredAt: string;
+  deviationNote: string | null;
+}
+
+export interface CapacityPlan {
+  id: string;
+  period: string; // "2026-Q3"
+  availableHours: number;
+  plannedHours: number;
+  forecastHours: number; // AI predicted
+  gap: number;
+  teamId: string;
+  createdAt: string;
+}
+
+export interface DSTEPhase {
+  id: string;
+  seasonId: string;
+  phase: 'strategy' | 'decode' | 'execute' | 'evaluate';
+  status: 'not_started' | 'in_progress' | 'completed';
+  aiAutoProgress: boolean;
+  completedAt: string | null;
+  checklist: { item: string; done: boolean }[];
+  teamId: string;
+}
+
+export interface BusinessValueEntry {
+  id: string;
+  goalId: string;
+  inputCost: number;
+  outputValue: number;
+  roi: number;
+  valueStream: string;
+  measuredAt: string;
+  teamId: string;
+}
+
 // ==================== 预算与成本管理 ====================
 export type BudgetCategory = 'labor' | 'material' | 'outsourcing' | 'travel' | 'other';
 export type BudgetStatus = 'draft' | 'approved' | 'active' | 'closed';
@@ -753,6 +875,15 @@ export interface AppState {
   reviewSessions: ReviewSession[];
   budgets: Budget[];
   costEntries: CostEntry[];
+  performanceReviews: PerformanceReview[];
+  skillRatings: SkillRating[];
+  effectivenessMetrics: EffectivenessMetric[];
+  aiSuggestions: AISuggestion[];
+  reviewKnowledge: ReviewKnowledge[];
+  okrScores: OKRScore[];
+  capacityPlans: CapacityPlan[];
+  dstePhases: DSTEPhase[];
+  businessValues: BusinessValueEntry[];
   teams: Team[];
   teamMembers: TeamMember[];
   subscriptions: Subscription[];

@@ -1,10 +1,19 @@
 import { handleError } from '@/lib/errorHandler';
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState, useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState, useMemo, type ReactNode } from 'react';
 import type { AppState } from '@/types';
 import { getSupabaseClient, initSupabase, resetSupabase } from '@/supabase/client';
 import type { ConnectionMode, SupabaseConfig, Action } from './types';
 import { SUPABASE_CONFIG_KEY, ensureAppStateDefaults } from './types';
 import { replayFailedWrites } from './supabase';
+import { toCamel } from './types';
+import { reducer } from './reducer';
+import { pushUndo, popUndo, popRedo, canUndo, canRedo, getUndoLabel, getRedoLabel, clearUndoStack } from './undo';
+import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError, setOnConflict, setCurrentTeamId } from './supabase';
+import { setRLSContext } from '@/supabase/client';
+import { CURRENT_USER_KEY } from './types';
+import { generateAllData } from '@/data/dataGenerator';
+import { ACTION_TO_TABLE, ACTION_TO_EVENT } from './actionMaps';
+import { notifySelectorListeners } from './selectorSystem';
 
 // Timeout wrapper for fetch operations — prevents infinite "连接中..." when Supabase is down
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -13,13 +22,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
     new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} 超时(${ms / 1000}s)`)), ms)),
   ]);
 }
-import { toCamel } from './types';
-import { reducer, hasPermission } from './reducer';
-import { pushUndo, pushBatchUndo, popUndo, popRedo, canUndo, canRedo, getUndoLabel, getRedoLabel, clearUndoStack } from './undo';
-import { loadLocalState, saveLocalStateImmediate, fetchAllFromSupabase, supabaseUpsert, setOnWriteError, setOnConflict, setCurrentTeamId } from './supabase';
-import { setRLSContext } from '@/supabase/client';
-import { CURRENT_USER_KEY } from './types';
-import { generateAllData } from '@/data/dataGenerator';
 
 // --- Split Context Pattern ---
 // StateContext: only changes when state changes (consumed by components needing data)
@@ -48,6 +50,8 @@ function collabDispatch(action: Action) { _collabDispatch?.(action); }
 
 // Re-export batch undo for use in page components
 export { pushBatchUndo } from './undo';
+// Re-export selector system for consumer use
+export { useStoreSelector } from './selectorSystem';
 
 // Store context approach (stable and proven)
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -590,87 +594,4 @@ export function useStore() {
     ? state
     : ensureAppStateDefaults(state);
   return { state: safeState, ...actions };
-}
-
-/**
- * Selector-based subscription: components only re-render when the selected slice changes.
- * Uses a pub/sub pattern with useSyncExternalStore to completely avoid StateContext subscriptions.
- * Components using this hook are NOT triggered by unrelated state changes.
- * Supports shallow equality check to prevent re-renders when array/object contents haven't changed.
- *
- * Usage: const tasks = useStoreSelector(s => s.tasks);
- */
-// Global listener registry for selector-based subscriptions
-const selectorListeners = new Set<() => void>();
-let selectorStateVersion = 0;
-
-function subscribeToSelectors(listener: () => void): () => void {
-  selectorListeners.add(listener);
-  return () => selectorListeners.delete(listener);
-}
-
-function getSelectorVersion(): number {
-  return selectorStateVersion;
-}
-
-// Called after every dispatch to notify selector subscribers
-function notifySelectorListeners() {
-  selectorStateVersion++;
-  selectorListeners.forEach(l => l());
-}
-
-// Shallow equality comparison (handles Date and NaN)
-function shallowEqual<T>(a: T, b: T): boolean {
-  if (a === b) return true;
-  // Handle NaN
-  if (a !== a && b !== b) return true; // NaN check
-  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false;
-  // Handle Date
-  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) { if (a[i] !== b[i] && !(a[i] !== a[i] && b[i] !== b[i])) return false; }
-    return true;
-  }
-  const keysA = Object.keys(a as Record<string, unknown>);
-  const keysB = Object.keys(b as Record<string, unknown>);
-  if (keysA.length !== keysB.length) return false;
-  for (const k of keysA) {
-    const va = (a as Record<string, unknown>)[k];
-    const vb = (b as Record<string, unknown>)[k];
-    if (va !== vb && !(va !== va && vb !== vb)) return false;
-  }
-  return true;
-}
-
-export function useStoreSelector<T>(selector: (state: AppState) => T): T {
-  const actions = useContext(ActionsContext);
-  if (!actions) throw new Error('useStoreSelector must be used within StoreProvider');
-
-  const selectorRef = useRef(selector);
-  selectorRef.current = selector;
-  const stateRef = actions.stateRef as React.MutableRefObject<AppState>;
-  const prevRef = useRef<T | null>(null);
-
-  const getSnapshot = useCallback((): T => {
-    const s = stateRef.current;
-    const safeState = (s && Array.isArray(s.members)) ? s : ensureAppStateDefaults(s || ({} as AppState));
-    const result = selectorRef.current(safeState);
-    // Shallow equal check: if the selected slice hasn't meaningfully changed, return previous reference
-    // This prevents downstream re-renders when only unrelated state changed
-    if (prevRef.current !== null && shallowEqual(result, prevRef.current)) {
-      return prevRef.current;
-    }
-    prevRef.current = result;
-    return result;
-  }, [stateRef]);
-
-  const version = useSyncExternalStore(
-    subscribeToSelectors,
-    getSelectorVersion,
-    getSelectorVersion,
-  );
-
-  // version change triggers re-read via getSnapshot
-  return getSnapshot();
 }

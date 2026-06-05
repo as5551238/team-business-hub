@@ -2,7 +2,7 @@ import { handleError } from '@/lib/errorHandler';
 import type { AppState, Goal, Project, Task, Member, SubTask } from '@/types';
 import { getSupabaseClient } from '@/supabase/client';
 import { STORAGE_KEY, CURRENT_USER_KEY, ensureAppStateDefaults, toCamel, toSnake } from './types';
-import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge, NotificationPreference, OKRSeason, Budget, CostEntry } from '@/types';
+import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge, NotificationPreference, OKRSeason, Budget, CostEntry, PerformanceReview, EffectivenessMetric, AISuggestion } from '@/types';
 import { initFactoryRulesIfNeeded } from './shared';
 
 export function saveLocalStateImmediate(state: AppState) {
@@ -74,7 +74,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
   if (!sb) return null;
   const tid = teamId || _currentTeamId || '__default__';
   try {
-    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes, notifPrefsRes, seasonsRes, budgetsRes, costEntriesRes] = await Promise.allSettled([
+    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes, notifPrefsRes, seasonsRes, budgetsRes, costEntriesRes, perfReviewsRes, effMetricsRes, aiSuggRes] = await Promise.allSettled([
       sb.from('members').select('*').eq('status', 'active').order('join_date'),
       sb.from('goals').select('*').eq('team_id', tid).order('level'),
       sb.from('projects').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
@@ -101,6 +101,9 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       sb.from('okr_seasons').select('*').eq('team_id', tid).order('start_date', { ascending: false }),
       sb.from('budgets').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
       sb.from('cost_entries').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
+      sb.from('performance_reviews').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
+      sb.from('effectiveness_metrics').select('*').eq('team_id', tid).order('measured_at', { ascending: false }),
+      sb.from('ai_suggestions').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
     ]);
     const val = (r: PromiseSettledResult<unknown>) => r.status === 'fulfilled' ? r.value : null;
     const data = (r: { data?: unknown } | null) => Array.isArray(r?.data) ? r.data : [];
@@ -145,6 +148,15 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
         ...b, items: typeof b.items === 'string' ? JSON.parse(b.items) : (Array.isArray(b.items) ? b.items : []),
       })),
       costEntries: data(val(costEntriesRes)).map(toCamel) as CostEntry[],
+      performanceReviews: (data(val(perfReviewsRes)).map(toCamel) as (PerformanceReview & Record<string, unknown>)[]).map(r => ({
+        ...r, status: r.status ?? 'pending', selfReview: typeof r.selfReview === 'string' ? JSON.parse(r.selfReview) : r.selfReview ?? null,
+        peerReviews: typeof r.peerReviews === 'string' ? JSON.parse(r.peerReviews) : Array.isArray(r.peerReviews) ? r.peerReviews : [],
+        managerReview: typeof r.managerReview === 'string' ? JSON.parse(r.managerReview) : r.managerReview ?? null,
+        directReportReviews: typeof r.directReportReviews === 'string' ? JSON.parse(r.directReportReviews) : Array.isArray(r.directReportReviews) ? r.directReportReviews : [],
+        aiSummary: r.aiSummary ?? null, finalScore: r.finalScore ?? null, completedAt: r.completedAt ?? null,
+      })),
+      effectivenessMetrics: data(val(effMetricsRes)).map(toCamel) as EffectivenessMetric[],
+      aiSuggestions: data(val(aiSuggRes)).map(toCamel) as AISuggestion[],
       teams: data(val(teamsRes)).map(toCamel),
       teamMembers: teamMemberLinks,
       currentTeamId: tid,
@@ -321,6 +333,13 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   okr_seasons: new Set(['id','name','type','start_date','end_date','status','team_id','created_at','updated_at']),
   budgets: new Set(['id','project_id','season_id','name','total_amount','currency','status','items','approved_by','team_id','created_at','updated_at']),
   cost_entries: new Set(['id','budget_id','project_id','task_id','category','amount','description','recorded_by','recorded_at','approved_by','status','team_id','created_at']),
+  performance_reviews: new Set(['id','season_id','reviewee_id','status','self_review','peer_reviews','manager_review','direct_report_reviews','ai_summary','final_score','team_id','created_at','completed_at']),
+  effectiveness_metrics: new Set(['id','goal_id','business_value','effort_hours','impact_score','roi','measured_at','team_id']),
+  ai_suggestions: new Set(['id','source_type','source_id','content','status','adopted_at','outcome_rating','outcome_note','team_id','created_at']),
+  review_knowledge: new Set(['id','source_session_id','pattern','context','related_patterns','ai_extracted','team_id','created_at']),
+  capacity_plans: new Set(['id','period','available_hours','planned_hours','forecast_hours','gap','team_id','created_at']),
+  dste_phases: new Set(['id','season_id','phase','status','ai_auto_progress','completed_at','checklist','team_id']),
+  business_values: new Set(['id','goal_id','input_cost','output_value','roi','value_stream','measured_at','team_id']),
 };
 
 /** Columns that reference other tables via FK — empty strings must become null */

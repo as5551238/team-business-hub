@@ -1,7 +1,7 @@
 import type { Member, Template } from '@/types';
 import { handleError } from '@/lib/errorHandler';
 
-export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'okrseason' | 'review' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates' | 'privacy' | 'budget';
+export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'okrseason' | 'review' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates' | 'privacy' | 'budget' | 'performance' | 'skillmatrix' | 'effectiveness' | 'dste';
 
 export const tabItems: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'team', label: '团队', icon: 'Users' },
@@ -20,6 +20,10 @@ export const tabItems: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'templates', label: '模板市场', icon: 'LayoutTemplate' },
   { key: 'deploy', label: '部署', icon: 'Server' },
   { key: 'budget', label: '预算管理', icon: 'CreditCard' },
+  { key: 'performance', label: '绩效评估', icon: 'Award' },
+  { key: 'skillmatrix', label: '技能矩阵', icon: 'LayoutGrid' },
+  { key: 'effectiveness', label: '有效性度量', icon: 'Activity' },
+  { key: 'dste', label: 'DSTE闭环', icon: 'RefreshCw' },
   { key: 'toolbox', label: '工具箱', icon: 'Wrench' },
   { key: 'schedule', label: '日程', icon: 'Calendar' },
   { key: 'settings', label: '设置', icon: 'SettingsIcon' },
