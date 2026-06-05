@@ -84,7 +84,7 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
             newValues[k] = (updates as Record<string, unknown>)[k];
           }
           const fieldLabel = changedKeys.length === 1 ? fieldLabelMap[changedKeys[0]] || changedKeys[0] : `${changedKeys.length}个字段`;
-          pushFieldUndo('UPDATE_TASK', action.payload.id, oldValues, newValues, `更新任务${fieldLabel}`);
+          pushFieldUndo('UPDATE_TASK', action.payload.id, oldValues, newValues, `更新任务${fieldLabel}`, (action as Action & { _skipUndo?: boolean })._skipUndo);
         }
         if (updates.title) updates.title = clampTitle(updates.title) ?? updates.title;
         if (updates.description) updates.description = clampDesc(updates.description) ?? updates.description;

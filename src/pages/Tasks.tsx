@@ -62,13 +62,12 @@ export default function Tasks() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
 
-  // Apply URL filter params on mount (one-time, for statuses/persons that may not have been in initial state)
+  // Apply URL filter params when URL changes
   useEffect(() => {
     if (urlFilters.statuses && urlFilters.statuses.size > 0) setSelectedStatuses(urlFilters.statuses);
     if (urlFilters.timeFilter) setTimeFilter(urlFilters.timeFilter);
     if (urlFilters.persons && urlFilters.persons.length > 0) setSelectedPersons(new Set(urlFilters.persons));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [urlFilters]);
   const [groupByDate, setGroupByDate] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
@@ -264,7 +263,7 @@ export default function Tasks() {
   }
 
   const handleDropToQuadrant = useCallback((taskId: string, quadrant: string) => {
-    if (!can('edit_tasks')) return;
+    if (!can('tasks_edit')) return;
     let np: TaskPriority = 'low';
     if (quadrant === '紧急重要') np = 'urgent'; else if (quadrant === '重要不紧急') np = 'high'; else if (quadrant === '紧急不重要') np = 'medium';
     dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { priority: np } } });
@@ -323,7 +322,7 @@ export default function Tasks() {
           {cols.map(col => {
             const items = getItems(col.key);
             return (
-              <div key={col.key} className={`w-[260px] sm:w-[300px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={(e: React.DragEvent) => e.preventDefault()}               onDrop={(e: React.DragEvent) => { e.preventDefault(); const taskId = e.dataTransfer.getData('text/plain'); if (!taskId || !can('edit_tasks')) return; if (onDropCustom) { onDropCustom(taskId, col.key); return; } if (enableDrag) { const validStatuses: Record<string, TaskStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done', blocked: 'blocked', cancelled: 'cancelled' }; const newStatus = validStatuses[col.key]; if (newStatus) { const t = state.tasks.find(x => x.id === taskId); dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'task', entityId: taskId, field: 'status', oldValue: t?.status || '', newValue: newStatus }); } } }}>
+              <div key={col.key} className={`w-[260px] sm:w-[300px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={(e: React.DragEvent) => e.preventDefault()}               onDrop={(e: React.DragEvent) => { e.preventDefault(); const taskId = e.dataTransfer.getData('text/plain'); if (!taskId || !can('tasks_edit')) return; if (onDropCustom) { onDropCustom(taskId, col.key); return; } if (enableDrag) { const validStatuses: Record<string, TaskStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done', blocked: 'blocked', cancelled: 'cancelled' }; const newStatus = validStatuses[col.key]; if (newStatus) { const t = state.tasks.find(x => x.id === taskId); dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'task', entityId: taskId, field: 'status', oldValue: t?.status || '', newValue: newStatus }); } } }}>
                 <div className={`flex items-center gap-2 px-4 pb-2 border-b-2 mx-3 mb-3 ${col.color || 'border-t-gray-400'}`}><span className="font-semibold text-sm">{col.label}</span><span className="text-xs text-muted-foreground ml-auto">{items.length}</span></div>
                 <div className="px-3 pb-3 space-y-2 max-h-[calc(100vh-320px)] overflow-y-auto">{items.length === 0 && <EmptyState title="暂无任务" compact />}{items.map(task => <TaskCard key={task.id} task={task} compact tags={tags} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={onOpenDetail} getName={getName} getAvatar={getAvatar} enableDrag={!!enableDrag || !!onDropCustom} />)}</div>
               </div>
@@ -456,7 +455,7 @@ export default function Tasks() {
     const onOpenDetail = (task: Task) => setDetailItem({ type: 'task', id: task.id });
     const onToggleExpand = (id: string) => setExpandedTask(prev => prev === id ? null : id);
     const onToggleSubtask = (taskId: string, subtaskId: string) => dispatch({ type: 'TOGGLE_SUBTASK', payload: { taskId, subtaskId } });
-    const onUpdateStatus = (taskId: string, status: TaskStatus) => { if (!can('edit_tasks')) return; dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status } } }); };
+    const onUpdateStatus = (taskId: string, status: TaskStatus) => { if (!can('tasks_edit')) return; dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status } } }); };
     const allShownTaskIds = topTasks.filter(t => !shownIds || shownIds.has(t.id)).map(t => t.id);
     const allSelected = allShownTaskIds.length > 0 && allShownTaskIds.every(id => selectedIds.has(id));
     const someSelected = allShownTaskIds.some(id => selectedIds.has(id));
@@ -599,8 +598,8 @@ export default function Tasks() {
                   onBatchRemoveTags={(_ids, tags) => batchRemoveTags(tags)}
                   onBatchSetDate={(_ids, field, value) => batchSetDate(field, value)}
                   onBatchMove={(_ids, targetId) => batchMoveToProject(targetId)}
-                  canDelete={can('delete_tasks')}
-                  canEdit={can('edit_tasks')}
+                  canDelete={can('tasks_delete')}
+                  canEdit={can('tasks_edit')}
                 />
               )}
               <button onClick={() => batchSel.toggleBatchMode()} className={cn('inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border transition-colors', batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted')}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>

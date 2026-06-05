@@ -1,13 +1,15 @@
 import type { Member, Template } from '@/types';
 import { handleError } from '@/lib/errorHandler';
 
-export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates' | 'privacy';
+export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'okrseason' | 'review' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates' | 'privacy' | 'budget';
 
 export const tabItems: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'team', label: '团队', icon: 'Users' },
   { key: 'flow', label: '流程配置', icon: 'GitBranch' },
   { key: 'automation', label: '自动化', icon: 'Zap' },
   { key: 'kpi', label: 'KPI', icon: 'Target' },
+  { key: 'okrseason', label: 'OKR赛季', icon: 'Trophy' },
+  { key: 'review', label: '复盘中心', icon: 'BookOpen' },
   { key: 'riskradar', label: '风险雷达', icon: 'Shield' },
   { key: 'agent', label: 'Agent审计', icon: 'Bot' },
   { key: 'integrations', label: '集成', icon: 'Globe' },
@@ -17,6 +19,7 @@ export const tabItems: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'collab', label: '实时协作', icon: 'Radio' },
   { key: 'templates', label: '模板市场', icon: 'LayoutTemplate' },
   { key: 'deploy', label: '部署', icon: 'Server' },
+  { key: 'budget', label: '预算管理', icon: 'CreditCard' },
   { key: 'toolbox', label: '工具箱', icon: 'Wrench' },
   { key: 'schedule', label: '日程', icon: 'Calendar' },
   { key: 'settings', label: '设置', icon: 'SettingsIcon' },

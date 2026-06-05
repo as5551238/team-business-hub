@@ -1,7 +1,7 @@
 import type { AppState, Goal, Project, Task } from '@/types';
 import { supabaseUpdate } from './supabase';
 import { genId } from './utils';
-import { computeGoalProgressInfo, applyGoalProgressInfo, calcProjectProgress, notifyAssigned, diffAssigned, executeAutomationActions, validateStatusFlow } from './shared';
+import { computeGoalProgressInfo, applyGoalProgressInfo, calcProjectProgress, notifyAssigned, diffAssigned, executeAutomationActions, validateStatusFlow, tsNow } from './shared';
 
 export function cascadeAddTask(
   s: AppState,
@@ -199,7 +199,7 @@ export function cascadeGoalStatusChange(
   newStatus: string,
 ): void {
   if (!['done', 'blocked', 'cancelled'].includes(newStatus)) return;
-  const now = new Date().toISOString();
+  const now = tsNow();
   const cascadeStatus = newStatus === 'done' ? 'done' : newStatus === 'blocked' ? 'blocked' : 'cancelled';
   s.projects.filter(p => p.goalId === goalId && !p.deletedAt).forEach(p => {
     if (p.status !== cascadeStatus) {

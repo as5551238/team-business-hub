@@ -32,13 +32,17 @@ export function useDetailFromUrl(options: UseDetailFromUrlOptions) {
  * 替代 tbh-nav-filter DOM 事件
  */
 import { useSearchParams } from 'react-router-dom';
+import { useMemo } from 'react';
 
 export function useFiltersFromUrl() {
   const [searchParams] = useSearchParams();
 
-  const statuses = searchParams.get('statuses') ? new Set(searchParams.get('statuses')!.split(',')) : undefined;
-  const timeFilter = searchParams.get('timeFilter') || undefined;
-  const persons = searchParams.get('persons') ? searchParams.get('persons')!.split(',') : undefined;
+  const filters = useMemo(() => {
+    const statuses = searchParams.get('statuses') ? new Set(searchParams.get('statuses')!.split(',')) : undefined;
+    const timeFilter = searchParams.get('timeFilter') || undefined;
+    const persons = searchParams.get('persons') ? searchParams.get('persons')!.split(',') : undefined;
+    return { statuses, timeFilter, persons };
+  }, [searchParams]);
 
-  return { statuses, timeFilter, persons };
+  return filters;
 }

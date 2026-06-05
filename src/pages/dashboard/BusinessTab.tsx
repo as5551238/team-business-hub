@@ -56,6 +56,8 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
 
   const activeGoals = useMemo(() => memberGoals.filter(g => g.status === 'in_progress'), [memberGoals]);
 
+  const funnelMetrics = useMemo(() => getFunnelMetrics(), []);
+
   const trendData = useMemo(() => {
     const days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - (6 - i));
@@ -211,7 +213,7 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
       </div>
 
       {/* 管理员效能概览 */}
-      {state.currentUser?.role === 'admin' && (() => { const m = getFunnelMetrics(); return m.totalSessions > 0 ? (<div className="bg-card rounded-xl border border-border shadow-sm p-4"><div className="flex items-center gap-2 mb-2"><BarChart3 size={16} className="text-indigo-500" /><span className="text-xs font-semibold text-muted-foreground">效能概览</span></div><div className="text-xs text-muted-foreground space-y-1"><p>平均步数 <span className="font-medium text-foreground">{m.avgSteps.toFixed(1)}</span> · 平均耗时 <span className="font-medium text-foreground">{(m.avgDurationMs / 1000).toFixed(0)}s</span> · 闭环率 <span className="font-medium text-foreground">{(m.completionRate * 100).toFixed(0)}%</span></p><p>共 <span className="font-medium text-foreground">{m.totalSessions}</span> 个会话</p></div></div>) : null; })()}
+      {state.currentUser?.role === 'admin' && funnelMetrics.totalSessions > 0 && (<div className="bg-card rounded-xl border border-border shadow-sm p-4"><div className="flex items-center gap-2 mb-2"><BarChart3 size={16} className="text-indigo-500" /><span className="text-xs font-semibold text-muted-foreground">效能概览</span></div><div className="text-xs text-muted-foreground space-y-1"><p>平均步数 <span className="font-medium text-foreground">{funnelMetrics.avgSteps.toFixed(1)}</span> · 平均耗时 <span className="font-medium text-foreground">{(funnelMetrics.avgDurationMs / 1000).toFixed(0)}s</span> · 闭环率 <span className="font-medium text-foreground">{(funnelMetrics.completionRate * 100).toFixed(0)}%</span></p><p>共 <span className="font-medium text-foreground">{funnelMetrics.totalSessions}</span> 个会话</p></div></div>)}
 
       {/* AI 关注焦点 */}
       <AIFocusWidget />

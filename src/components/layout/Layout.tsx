@@ -379,11 +379,14 @@ export default function Layout({ children, currentUser }: LayoutProps) {
   const handleContextAction = useCallback((action: string) => {
     if (!contextMenu) return;
     const { targetId, targetType } = contextMenu;
-    if (action === 'open' || action === 'edit') { window.dispatchEvent(new CustomEvent('tbh-open-detail', { detail: { itemId: targetId, itemType: targetType } })); }
+    if (action === 'open' || action === 'edit') {
+      const basePath = targetType === 'goal' ? '/goals' : targetType === 'project' ? '/projects' : '/tasks';
+      navigate(`${basePath}/${targetId}`);
+    }
     else if (action === 'toggle') { if (targetId) window.dispatchEvent(new CustomEvent('tbh-complete-selected', { detail: { itemId: targetId, itemType: targetType } })); }
     else if (action === 'delete') { if (targetId) window.dispatchEvent(new CustomEvent('tbh-delete-selected', { detail: { itemId: targetId, itemType: targetType } })); }
     setContextMenu(null);
-  }, [contextMenu]);
+  }, [contextMenu, navigate]);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   useKeyboardShortcuts({

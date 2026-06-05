@@ -122,6 +122,8 @@ export interface Goal {
   discussionThreadId: string | null;
   summary: string;
   teamId: string;
+  seasonId: string | null;
+  strategyLevel: 'vision' | 'annual' | 'quarter' | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -434,6 +436,118 @@ export interface AutomationRule {
   updatedAt: string;
 }
 
+// ==================== 复盘模型库 ====================
+export type ReviewModelCategory = 'strategy' | 'process' | 'goal' | 'problem' | 'lightweight' | 'comprehensive';
+
+export interface ReviewModelStep {
+  index: number;
+  title: string;
+  description: string;
+  inputType: 'text' | 'select' | 'matrix' | 'list';
+  inputOptions?: string[];
+  placeholder?: string;
+  aiAutoFill?: boolean;
+}
+
+export interface ReviewModel {
+  id: string;
+  name: string;
+  nameEn: string;
+  category: ReviewModelCategory;
+  description: string;
+  steps: ReviewModelStep[];
+  applicableScenarios: string[];
+  aiPrompt: string;
+}
+
+export interface ReviewSession {
+  id: string;
+  modelId: string;
+  seasonId: string | null;
+  goalId: string | null;
+  projectId: string | null;
+  memberId: string | null;
+  teamId: string;
+  status: 'in_progress' | 'completed';
+  inputs: Record<string, string | string[]>;
+  aiInsights: string | null;
+  actionItems: ReviewActionItem[];
+  createdAt: string;
+  completedAt: string | null;
+}
+
+// ==================== 预算与成本管理 ====================
+export type BudgetCategory = 'labor' | 'material' | 'outsourcing' | 'travel' | 'other';
+export type BudgetStatus = 'draft' | 'approved' | 'active' | 'closed';
+export type CostEntryStatus = 'pending' | 'approved' | 'rejected';
+
+export interface BudgetItem {
+  id: string;
+  category: BudgetCategory;
+  name: string;
+  plannedAmount: number;
+  actualAmount: number;
+  notes: string | null;
+}
+
+export interface Budget {
+  id: string;
+  projectId: string | null;
+  seasonId: string | null;
+  name: string;
+  totalAmount: number;
+  currency: string;
+  status: BudgetStatus;
+  items: BudgetItem[];
+  approvedBy: string | null;
+  teamId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CostEntry {
+  id: string;
+  budgetId: string;
+  projectId: string | null;
+  taskId: string | null;
+  category: BudgetCategory;
+  amount: number;
+  description: string;
+  recordedBy: string;
+  recordedAt: string;
+  approvedBy: string | null;
+  status: CostEntryStatus;
+  teamId: string;
+  createdAt: string;
+}
+
+// ==================== 复盘行动项 ====================
+export interface ReviewActionItem {
+  id: string;
+  content: string;
+  assigneeId: string | null;
+  dueDate: string | null;
+  linkedTaskId: string | null;
+  status: 'pending' | 'in_progress' | 'completed' | 'verified';
+  verifiedAt: string | null;
+}
+
+// ==================== OKR周期/Season ====================
+export type SeasonStatus = 'draft' | 'planning' | 'executing' | 'scoring' | 'reviewing' | 'closed';
+export type SeasonType = 'quarter' | 'annual' | 'custom';
+
+export interface OKRSeason {
+  id: string;
+  name: string;
+  type: SeasonType;
+  startDate: string;
+  endDate: string;
+  status: SeasonStatus;
+  teamId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ==================== 迭代/Sprint ====================
 export type SprintStatus = 'planning' | 'active' | 'completed';
 
@@ -635,6 +749,10 @@ export interface AppState {
   statusFlowRules: StatusFlowRule[];
   automationRules: AutomationRule[];
   sprints: Sprint[];
+  seasons: OKRSeason[];
+  reviewSessions: ReviewSession[];
+  budgets: Budget[];
+  costEntries: CostEntry[];
   teams: Team[];
   teamMembers: TeamMember[];
   subscriptions: Subscription[];

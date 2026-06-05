@@ -1,11 +1,12 @@
 // TeamTab 组件 - 团队管理
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { usePermissions } from '@/store/hooks';
-import { Users, Plus, Shield, Briefcase, Mail, Calendar, Trash2, ChevronDown, ChevronUp, Edit2, Save, X, Phone, MessageCircle, User, Copy, RefreshCw, Check } from 'lucide-react';
+import { Users, Plus, Shield, Briefcase, Mail, Calendar, Trash2, ChevronDown, ChevronUp, Edit2, Save, X, Phone, MessageCircle, User, Copy, RefreshCw, Check, Search } from 'lucide-react';
 import type { MemberRole, Permission, PermissionModule, Member } from '@/types';
 import { inputCls, roleLabels, roleColors, permissionDesc, allPermissions, getRoleDefaultPermission, memberToEditForm, type EditForm } from './constants';
 import { handleError } from '@/lib/errorHandler';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 export function TeamTab() {
   const { state, dispatch } = useStore();
@@ -18,6 +19,10 @@ export function TeamTab() {
   const [addForm, setAddForm] = useState({ name: '', nickname: '', wechatId: '', phone: '', email: '', role: 'member' as MemberRole, department: '' });
   const [copied, setCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+
+  const addDialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(showAddDialog, () => setShowAddDialog(false), addDialogRef);
 
   const currentTeam = state.teams.find(t => t.id === state.currentTeamId);
 
@@ -45,6 +50,27 @@ export function TeamTab() {
 
   const activeMembers = members.filter(m => m.status === 'active');
   const inactiveMembers = members.filter(m => m.status === 'inactive');
+  const filteredActive = useMemo(() => {
+    if (!memberSearch.trim()) return activeMembers;
+    const q = memberSearch.trim().toLowerCase();
+    return activeMembers.filter(m =>
+      m.name.toLowerCase().includes(q) ||
+      (m.nickname && m.nickname.toLowerCase().includes(q)) ||
+      (m.email && m.email.toLowerCase().includes(q)) ||
+      (m.department && m.department.toLowerCase().includes(q)) ||
+      m.role.toLowerCase().includes(q)
+    );
+  }, [activeMembers, memberSearch]);
+  const filteredInactive = useMemo(() => {
+    if (!memberSearch.trim()) return inactiveMembers;
+    const q = memberSearch.trim().toLowerCase();
+    return inactiveMembers.filter(m =>
+      m.name.toLowerCase().includes(q) ||
+      (m.nickname && m.nickname.toLowerCase().includes(q)) ||
+      (m.email && m.email.toLowerCase().includes(q)) ||
+      (m.department && m.department.toLowerCase().includes(q))
+    );
+  }, [inactiveMembers, memberSearch]);
   const deptStats = members.reduce<Record<string, number>>((acc, m) => { acc[m.department] = (acc[m.department] || 0) + 1; return acc; }, {});
 
   const memberStatsMap = useMemo(() => {
@@ -262,15 +288,19 @@ export function TeamTab() {
       )}
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-border"><h3 className="font-semibold text-sm flex items-center gap-2"><Users size={16} className="text-primary" />成员列表</h3></div>
+        <div className="px-5 py-3 border-b border-border">
+          <div className="relative"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><input className="w-full pl-8 pr-3 py-1.5 text-xs border border-input rounded-lg bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary/20" placeholder="搜索成员姓名、昵称、邮箱、部门..." value={memberSearch} onChange={e => setMemberSearch(e.target.value)} /></div>
+        </div>
         <div className="divide-y divide-border">
-          {activeMembers.map(m => renderMemberCard(m, true))}
-          {inactiveMembers.length > 0 && <div className="px-5 py-3 bg-muted/30"><div className="text-xs font-medium text-muted-foreground mb-2">已停用</div>{inactiveMembers.map(m => renderMemberCard(m, false))}</div>}
+          {filteredActive.map(m => renderMemberCard(m, true))}
+          {filteredInactive.length > 0 && <div className="px-5 py-3 bg-muted/30"><div className="text-xs font-medium text-muted-foreground mb-2">已停用</div>{filteredInactive.map(m => renderMemberCard(m, false))}</div>}
+          {filteredActive.length === 0 && filteredInactive.length === 0 && <div className="px-5 py-8 text-center text-muted-foreground text-sm">{memberSearch ? '没有匹配的成员' : '暂无成员'}</div>}
         </div>
       </div>
       {showAddDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => setShowAddDialog(false)} role="presentation" />
-          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-md animate-slide-up" role="dialog" aria-modal="true" aria-label="成员编辑">
+          <div ref={addDialogRef} className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-md animate-slide-up" role="dialog" aria-modal="true" aria-label="成员编辑">
             <div className="px-6 py-4 border-b border-border"><h3 className="font-semibold">添加成员</h3></div>
             <div className="px-6 py-4 space-y-4">
               <div><label className="block text-sm font-medium mb-1">姓名 *</label><input className={inputCls} placeholder="输入成员姓名" value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} /></div>

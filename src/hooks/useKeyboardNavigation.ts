@@ -1,5 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
-import type { Action } from '@/store/types';
+import { useEffect, useRef } from 'react';
 
 interface KeyboardNavConfig {
   /** e.g. 'UPDATE_GOAL' | 'UPDATE_TASK' | 'UPDATE_PROJECT' */
@@ -34,15 +33,25 @@ interface KeyboardNavConfig {
   setDetailItem?: (item: { type: string; id: string }) => void;
   /** Item type for setDetailItem, e.g. 'goal' */
   itemType?: string;
-  /** Switch view handler */
-  switchView?: () => void;
+  /** Switch view handler — receives mode string from CustomEvent.detail if present */
+  switchView?: (mode?: string) => void;
   /** Focus filter input */
   focusFilter?: () => void;
+  /** Override the default complete behavior (set status=done). Allows toggle logic. */
+  onCompleteOverride?: (focusedId: string) => void;
 }
 
 /**
  * Centralized keyboard navigation hook for entity list pages (Goals/Tasks/Projects).
  * Uses refs internally to avoid re-registering event listeners on every filter/change.
+ *
+ * Features:
+ * - j/k navigation through filtered items
+ * - Edit/Open focused item via detail panel
+ * - Delete with confirmation
+ * - Complete (or custom via onCompleteOverride)
+ * - Focus filter input, switch view, batch toggle/select-all
+ * - Auto-reset focusedId when item leaves filtered list
  */
 export function useKeyboardNavigation(config: KeyboardNavConfig) {
   const {
@@ -52,6 +61,7 @@ export function useKeyboardNavigation(config: KeyboardNavConfig) {
     dispatch, can, batchMode, onToggleSelect,
     onSelectAll, clearSelection, toggleBatchMode,
     setDetailItem, itemType, switchView, focusFilter,
+    onCompleteOverride,
   } = config;
 
   // Use refs for values that change frequently but shouldn't re-register listeners
@@ -61,6 +71,13 @@ export function useKeyboardNavigation(config: KeyboardNavConfig) {
   focusedIdRef.current = focusedId;
   const batchModeRef = useRef(batchMode);
   batchModeRef.current = batchMode;
+
+  // Auto-reset focusedId when the focused item leaves the filtered list
+  useEffect(() => {
+    if (focusedId && !filteredItems.some(i => i.id === focusedId)) {
+      setFocusedId(null);
+    }
+  }, [filteredItems, focusedId, setFocusedId]);
 
   useEffect(() => {
     const ids = () => filteredItemsRef.current.map(i => i.id);
@@ -98,16 +115,23 @@ export function useKeyboardNavigation(config: KeyboardNavConfig) {
     const onComplete = () => {
       const fId = focusedIdRef.current;
       if (!fId || !can(editPermission)) return;
-      dispatch({ type: updateActionType, payload: { id: fId, updates: { status: 'done' } } });
+      if (onCompleteOverride) {
+        onCompleteOverride(fId);
+      } else {
+        dispatch({ type: updateActionType, payload: { id: fId, updates: { status: 'done' } } });
+      }
     };
     const onFocusFilter = () => { focusFilter?.(); };
-    const onSwitchView = () => { switchView?.(); };
+    const onSwitchView = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      switchView?.(detail);
+    };
     const onToggleBatch = () => { toggleBatchMode(); };
-    const onSelectAll = () => {
+    const onBatchSelectAll = () => {
       if (batchModeRef.current) { onSelectAll(); } else { toggleBatchMode(); setTimeout(onSelectAll, 0); }
     };
 
-    const handlers: Record<string, () => void> = {
+    const handlers: Record<string, (e?: Event) => void> = {
       'tbh-nav-down': onNavDown,
       'tbh-nav-up': onNavUp,
       'tbh-edit-selected': onEdit,
@@ -117,7 +141,7 @@ export function useKeyboardNavigation(config: KeyboardNavConfig) {
       'tbh-focus-filter': onFocusFilter,
       'tbh-switch-view': onSwitchView,
       'tbh-toggle-batch': onToggleBatch,
-      'tbh-select-all': onSelectAll,
+      'tbh-select-all': onBatchSelectAll,
     };
 
     const entries = Object.entries(handlers);
@@ -126,5 +150,5 @@ export function useKeyboardNavigation(config: KeyboardNavConfig) {
     return () => {
       entries.forEach(([event, handler]) => window.removeEventListener(event, handler));
     };
-  }, [updateActionType, deleteActionType, editPermission, deletePermission, dispatch, can, onToggleSelect, onSelectAll, clearSelection, toggleBatchMode, setDetailItem, itemType, switchView, focusFilter, setFocusedId]);
+  }, [updateActionType, deleteActionType, editPermission, deletePermission, dispatch, can, onToggleSelect, onSelectAll, clearSelection, toggleBatchMode, setDetailItem, itemType, switchView, focusFilter, setFocusedId, onCompleteOverride]);
 }

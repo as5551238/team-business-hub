@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useStore } from '@/store/useStore';
 import { useKnowledge } from '@/store/hooks';
 import type { Knowledge, ItemType } from '@/types';
@@ -10,6 +10,7 @@ import { NotesView } from '@/pages/knowledge/NotesView';
 import { NOTE_COLORS } from './admin/constants';
 import { cn } from '@/lib/utils';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
+import { useAutoSave } from '@/hooks/useAutoSave';
 
 export default function KnowledgePage() {
   const [activeTab, setActiveTab] = useState<'entries' | 'notes'>('entries');
@@ -47,6 +48,28 @@ function EntriesView() {
   const [editColor, setEditColor] = useState(NOTE_COLORS[0]);
   const [editRelatedItems, setEditRelatedItems] = useState<{ itemId: string; itemType: ItemType }[]>([]);
   const [markdownPreview, setMarkdownPreview] = useState(false);
+
+  // Auto-save content when editing an existing entry
+  const lastSavedContentRef = useRef('');
+  const lastSavedTitleRef = useRef('');
+  const { flush: flushContent } = useAutoSave(editContent, {
+    delay: 1200,
+    enabled: showEditor && !!selectedId && editContent !== lastSavedContentRef.current,
+    onSave: (val) => {
+      if (!selectedId || val === lastSavedContentRef.current) return;
+      lastSavedContentRef.current = val;
+      updateKnowledge(selectedId, { content: val });
+    },
+  });
+  const { flush: flushTitle } = useAutoSave(editTitle, {
+    delay: 1200,
+    enabled: showEditor && !!selectedId && editTitle !== lastSavedTitleRef.current,
+    onSave: (val) => {
+      if (!selectedId || val === lastSavedTitleRef.current) return;
+      lastSavedTitleRef.current = val;
+      updateKnowledge(selectedId, { title: val.trim() || '无标题' });
+    },
+  });
 
   const myKnowledge = useMemo(() => {
     if (!currentUser) return [];
@@ -93,10 +116,15 @@ function EntriesView() {
   }
 
   function startEdit(k: Knowledge) {
+    // Flush any pending auto-save before switching
+    flushContent();
+    flushTitle();
     setSelectedId(k.id);
     setShowEditor(true);
     setEditTitle(k.title);
     setEditContent(k.content);
+    lastSavedTitleRef.current = k.title;
+    lastSavedContentRef.current = k.content;
     setEditTags((k.tags ?? []).join(', '));
     setEditColor(k.color || NOTE_COLORS[0]);
     setEditRelatedItems(k.relatedItems || []);
@@ -234,7 +262,7 @@ function EntriesView() {
             </div>
             <div className="flex items-center gap-2 pt-2">
               <button onClick={handleSave} className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90">保存</button>
-              <button onClick={() => { setShowEditor(false); setSelectedId(null); }} className="px-4 py-2 rounded-lg text-sm font-medium border border-border hover:bg-muted">取消</button>
+              <button onClick={() => { flushContent(); flushTitle(); setShowEditor(false); setSelectedId(null); }} className="px-4 py-2 rounded-lg text-sm font-medium border border-border hover:bg-muted">取消</button>
             </div>
           </div>
         ) : (

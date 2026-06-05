@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '@/supabase/client';
+import { getSupabaseClient, isSupabaseConfigured } from '@/supabase/client';
 
 export const BUCKET_NAMES = {
   attachments: 'attachments',
@@ -61,8 +61,12 @@ export async function uploadFile(
 export async function deleteFile(bucket: string, paths: string[]): Promise<boolean> {
   const supabase = getSupabaseClient();
   if (!supabase) {
-    console.error('Supabase client not initialized');
-    return false;
+    console.error('Supabase client not initialized — file upload requires Supabase configuration');
+    return null;
+  }
+  if (!isSupabaseConfigured()) {
+    console.error('Supabase not configured — please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+    return null;
   }
   try {
     const { error } = await supabase.storage.from(bucket).remove(paths);

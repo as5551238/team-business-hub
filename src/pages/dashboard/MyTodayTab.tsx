@@ -296,11 +296,11 @@ export default function MyTodayTab({ onOpenDetail, onPageChange }: MyTodayTabPro
                 </div>
               ))}
               {recentActivity.map(a => (
-                <div key={a.id} onClick={() => { if (a.itemId && a.itemType) onOpenDetail(a.itemId, (a.itemType as 'task' | 'goal' | 'project') || 'task'); }} className="flex items-center gap-3 p-2 rounded-lg bg-card border border-border cursor-pointer hover:border-primary/30 transition-colors">
+                <div key={a.id} onClick={() => { if (a.targetId && a.targetType) onOpenDetail(a.targetId, (a.targetType as 'task' | 'goal' | 'project') || 'task'); }} className="flex items-center gap-3 p-2 rounded-lg bg-card border border-border cursor-pointer hover:border-primary/30 transition-colors">
                   <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold shrink-0">
-                    {a.memberName?.charAt(0) || '?'}
+                    {a.targetTitle?.charAt(0) || '?'}
                   </div>
-                  <span className="text-sm truncate flex-1">{a.description || a.action}</span>
+                  <span className="text-sm truncate flex-1">{a.details || a.action}</span>
                   <span className="text-[10px] text-muted-foreground shrink-0">{a.createdAt ? new Date(a.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                 </div>
               ))}

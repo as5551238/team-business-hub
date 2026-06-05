@@ -60,9 +60,10 @@ export function pushFieldUndo(
   id: string,
   oldValues: Record<string, unknown>,
   newValues: Record<string, unknown>,
-  label: string
+  label: string,
+  skipUndo?: boolean
 ): void {
-  if (Object.keys(oldValues).length === 0) return;
+  if (skipUndo || Object.keys(oldValues).length === 0) return;
   const inverseAction = { type, payload: { id, updates: oldValues } };
   const originalAction = { type, payload: { id, updates: newValues } };
   undoStack.push({

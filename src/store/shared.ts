@@ -250,8 +250,9 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
           const allowed = SET_FIELD_ALLOWLIST[itemType] ?? [];
           if (!allowed.includes(act.config.field)) { console.warn(`set_field: field "${act.config.field}" not in allowlist for ${itemType}`); continue; }
           const items = itemType === 'goal' ? s.goals : itemType === 'project' ? s.projects : s.tasks;
-          const item = items.find(i => i.id === itemId) as Record<string, unknown> | undefined;
-          if (!item) continue;
+          const itemIdx = items.findIndex(i => i.id === itemId);
+          if (itemIdx === -1) continue;
+          const item = items[itemIdx] as Record<string, unknown>;
           const oldValue = item[act.config.field];
           if (oldValue === act.config.value) continue;
           if (act.config.field === 'status') {
@@ -259,14 +260,14 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
             if (!flowOk) continue;
           }
           const oldUpdatedAt = item.updatedAt as string;
-          item[act.config.field] = act.config.value;
-          item.updatedAt = new Date().toISOString();
+          const now = tsNow();
+          items[itemIdx] = { ...item, [act.config.field]: act.config.value, updatedAt: now } as typeof items[number];
           const tableName = itemType === 'goal' ? 'goals' : itemType === 'project' ? 'projects' : 'tasks';
           const snakeField = act.config.field.replace(/([A-Z])/g, '_$1').toLowerCase();
-          supabaseUpdate(tableName, itemId, { [snakeField]: act.config.value, updated_at: new Date().toISOString() }, oldUpdatedAt);
+          supabaseUpdate(tableName, itemId, { [snakeField]: act.config.value, updated_at: now }, oldUpdatedAt);
           if (act.config.field === 'status' && act.config.value === 'done') {
-            item.completedAt = new Date().toISOString();
-            supabaseUpdate(tableName, itemId, { completed_at: new Date().toISOString() }, oldUpdatedAt);
+            (items[itemIdx] as Record<string, unknown>).completedAt = now;
+            supabaseUpdate(tableName, itemId, { completed_at: now }, oldUpdatedAt);
           }
         } else if (act.type === 'create_subtask') {
           if (itemType !== 'task' || !act.config.title) continue;
@@ -494,9 +495,14 @@ const APP_ARRAY_KEYS: readonly (keyof AppState)[] = [
 ];
 
 export function needMutate(state: AppState, keys?: (keyof AppState)[]): AppState {
-  if (!keys) return structuredClone(state);
+  // Always deep-clone all APP array keys to prevent cross-slice mutation
+  // when cascade handlers modify arrays not in the explicit keys list
+  const cloneKeys = new Set(keys ?? []);
+  for (const key of APP_ARRAY_KEYS) {
+    cloneKeys.add(key);
+  }
   const s = { ...state } as AppState;
-  for (const key of keys) {
+  for (const key of cloneKeys) {
     (s as Record<string, unknown>)[key] = structuredClone(state[key]);
   }
   return s;

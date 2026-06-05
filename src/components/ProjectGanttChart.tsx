@@ -25,8 +25,9 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
   const canEditTasks = can('tasks_edit');
   const canDeleteTasks = can('tasks_delete');
 
-  const { zoom, scrollOffset, toggleZoom, scrollBy } = useGanttScale('week');
+  const { zoom, toggleZoom } = useGanttScale('week');
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
 
   const projectTasks = useMemo(() => state.tasks.filter(t => t.projectId === projectId), [state.tasks, projectId]);
   const { activeMembers } = useActiveMembers();
@@ -138,8 +139,8 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
         <button onClick={handleAddTask} className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"><Plus size={14} />添加任务</button>
         {cpmResult.criticalTaskIds.size > 0 && <span className="text-[10px] text-red-500 font-medium">关键路径 {cpmResult.criticalPath.length} 项 | 工期 {cpmResult.projectDuration} 天</span>}
         <div className="flex-1" />
-        <button onClick={() => scrollBy(-200)} className="p-1 rounded hover:bg-muted" aria-label="向左滚动"><ChevronLeft size={16} /></button>
-        <button onClick={() => scrollBy(200)} className="p-1 rounded hover:bg-muted" aria-label="向右滚动"><ChevronRight size={16} /></button>
+        <button onClick={() => { if (timelineScrollRef.current) timelineScrollRef.current.scrollLeft -= 200; }} className="p-1 rounded hover:bg-muted" aria-label="向左滚动"><ChevronLeft size={16} /></button>
+        <button onClick={() => { if (timelineScrollRef.current) timelineScrollRef.current.scrollLeft += 200; }} className="p-1 rounded hover:bg-muted" aria-label="向右滚动"><ChevronRight size={16} /></button>
         <div className="h-4 w-px bg-border mx-1" />
         <button onClick={toggleZoom} className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-border hover:bg-muted transition-colors">
           {zoom === 'week' ? <><ZoomOut size={13} />月视图</> : <><ZoomIn size={13} />周视图</>}
@@ -180,7 +181,7 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
 
         {/* Right: timeline */}
         <div className="flex-1 overflow-hidden relative">
-          <div className="overflow-x-auto" style={{ transform: `translateX(-${scrollOffset}px)` }}>
+          <div ref={timelineScrollRef} className="overflow-x-auto">
             <div style={{ width: timelineWidth, minWidth: timelineWidth }}>
               <svg width="0" height="0" className="absolute">{renderDependencySVGDefs()}</svg>
               {/* Header: month row */}

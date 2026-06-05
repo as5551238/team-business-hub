@@ -2,7 +2,7 @@ import { handleError } from '@/lib/errorHandler';
 import type { AppState, Goal, Project, Task, Member, SubTask } from '@/types';
 import { getSupabaseClient } from '@/supabase/client';
 import { STORAGE_KEY, CURRENT_USER_KEY, ensureAppStateDefaults, toCamel, toSnake } from './types';
-import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge, NotificationPreference } from '@/types';
+import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge, NotificationPreference, OKRSeason, Budget, CostEntry } from '@/types';
 import { initFactoryRulesIfNeeded } from './shared';
 
 export function saveLocalStateImmediate(state: AppState) {
@@ -74,7 +74,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
   if (!sb) return null;
   const tid = teamId || _currentTeamId || '__default__';
   try {
-    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes, notifPrefsRes] = await Promise.allSettled([
+    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes, notifPrefsRes, seasonsRes, budgetsRes, costEntriesRes] = await Promise.allSettled([
       sb.from('members').select('*').eq('status', 'active').order('join_date'),
       sb.from('goals').select('*').eq('team_id', tid).order('level'),
       sb.from('projects').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
@@ -98,6 +98,9 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       sb.from('teams').select('*').order('created_at'),
       sb.from('team_members').select('*'),
       sb.from('notification_preferences').select('*').eq('team_id', tid),
+      sb.from('okr_seasons').select('*').eq('team_id', tid).order('start_date', { ascending: false }),
+      sb.from('budgets').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
+      sb.from('cost_entries').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
     ]);
     const val = (r: PromiseSettledResult<unknown>) => r.status === 'fulfilled' ? r.value : null;
     const data = (r: { data?: unknown } | null) => Array.isArray(r?.data) ? r.data : [];
@@ -137,6 +140,11 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       automationRules: initFactoryRulesIfNeeded(data(val(automationRulesRes)).map(toCamel)),
       sprints: data(val(sprintsRes)).map(toCamel),
       knowledge: data(val(knowledgeRes)).map(toCamel) as Knowledge[],
+      seasons: data(val(seasonsRes)).map(toCamel) as OKRSeason[],
+      budgets: (data(val(budgetsRes)).map(toCamel) as (Budget & Record<string, unknown>)[]).map(b => ({
+        ...b, items: typeof b.items === 'string' ? JSON.parse(b.items) : (Array.isArray(b.items) ? b.items : []),
+      })),
+      costEntries: data(val(costEntriesRes)).map(toCamel) as CostEntry[],
       teams: data(val(teamsRes)).map(toCamel),
       teamMembers: teamMemberLinks,
       currentTeamId: tid,
@@ -286,7 +294,7 @@ export async function replayFailedWrites(): Promise<void> {
 
 /** Whitelist of DB columns per table — prevents sending unknown columns that cause 400 errors */
 const TABLE_COLUMNS: Record<string, Set<string> | null> = {
-  goals: new Set(['id','title','description','type','status','parent_id','level','start_date','end_date','owner_id','key_results','progress','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','selected_kr_ids','team_id','deleted_at']),
+  goals: new Set(['id','title','description','type','status','parent_id','level','start_date','end_date','owner_id','key_results','progress','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','selected_kr_ids','team_id','deleted_at','season_id','strategy_level','approval_status']),
   projects: new Set(['id','title','description','goal_id','status','start_date','end_date','owner_id','member_ids','task_count','progress','created_at','updated_at','leader_id','supporter_ids','parent_id','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','team_id','deleted_at']),
   tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','start_date','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','blocked_by','sprint_id','team_id','deleted_at']),
   members: new Set(['id','name','role','department','avatar','email','status','join_date','created_at','updated_at','nickname','phone','wechat_id','permissions','team_id']),
@@ -307,13 +315,16 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   status_flow_rules: new Set(['id','from_status','to_status','allowed_roles','auto_actions','created_at','updated_at','team_id']),
   automation_rules: new Set(['id','name','enabled','item_type','trigger','condition','actions','created_at','updated_at','team_id']),
   sprints: new Set(['id','name','start_date','end_date','goal_ids','status','created_at','updated_at','team_id']),
-  knowledge: new Set(['id','title','content','tags','member_id','related_items','created_at','updated_at','team_id']),
+  knowledge: new Set(['id','title','content','tags','member_id','related_items','created_at','updated_at','team_id','color']),
   teams: new Set(['id','name','description','avatar','invite_code','owner_id','settings','created_at','updated_at']),
   team_members: new Set(['id','team_id','member_id','role','permissions','joined_at']),
+  okr_seasons: new Set(['id','name','type','start_date','end_date','status','team_id','created_at','updated_at']),
+  budgets: new Set(['id','project_id','season_id','name','total_amount','currency','status','items','approved_by','team_id','created_at','updated_at']),
+  cost_entries: new Set(['id','budget_id','project_id','task_id','category','amount','description','recorded_by','recorded_at','approved_by','status','team_id','created_at']),
 };
 
 /** Columns that reference other tables via FK — empty strings must become null */
-const FK_COLUMNS = new Set(['owner_id','leader_id','supporter_ids','assignee_id','parent_id','goal_id','project_id','member_id','linked_item_id','source_id','target_id','related_id','item_id','created_by','updated_by']);
+const FK_COLUMNS = new Set(['owner_id','leader_id','supporter_ids','assignee_id','parent_id','goal_id','project_id','member_id','linked_item_id','source_id','target_id','related_id','item_id','created_by','updated_by','season_id','budget_id','task_id','approved_by','recorded_by']);
 
 /** Remove keys not present in DB table schema to avoid PostgREST 400 errors.
  *  Converts empty strings to null only for FK columns (Postgres treats '' as non-null). */

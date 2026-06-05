@@ -97,6 +97,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
   const [scheduleDeepSummary, setScheduleDeepSummary] = useState('');
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
   const trapRef = useFocusTrap(open, onClose);
 
   const { activeMembers } = useActiveMembers();
@@ -223,11 +224,19 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!canEditTasks) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left + scrollOffset;
+    const currentScrollLeft = timelineScrollRef.current?.scrollLeft ?? scrollOffset;
+    const x = e.clientX - rect.left + currentScrollLeft;
     const dayIdx = Math.floor(x / dayWidth);
     const clickDate = formatDate(addDays(timeRange.start, dayIdx));
     dispatch({ type: 'ADD_TASK', payload: { title: '新任务', description: '', projectId: filterProject || null, goalId: null, status: 'todo', priority: 'medium', leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], category: '', startDate: clickDate, dueDate: formatDate(addDays(timeRange.start, dayIdx + 7)), reminderDate: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', blockedBy: [] } });
   }, [canEditTasks, scrollOffset, dayWidth, timeRange, filterProject, state.currentUser?.id, dispatch]);
+
+  // Sync native scroll position to scrollOffset state
+  const handleTimelineScroll = useCallback(() => {
+    if (timelineScrollRef.current) {
+      setScrollOffset(timelineScrollRef.current.scrollLeft);
+    }
+  }, [setScrollOffset]);
 
   const handleApplySchedule = useCallback((s: ScheduleSuggestion) => {
     if (!canEditTasks) return;
@@ -295,8 +304,8 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
             </select>
           </div>
           <div className="flex-1" />
-          <button onClick={() => scrollBy(-200)} className="p-1 rounded hover:bg-muted" aria-label="向左滚动"><ChevronLeft size={16} /></button>
-          <button onClick={() => scrollBy(200)} className="p-1 rounded hover:bg-muted" aria-label="向右滚动"><ChevronRight size={16} /></button>
+          <button onClick={() => { if (timelineScrollRef.current) timelineScrollRef.current.scrollLeft -= 200; }} className="p-1 rounded hover:bg-muted" aria-label="向左滚动"><ChevronLeft size={16} /></button>
+          <button onClick={() => { if (timelineScrollRef.current) timelineScrollRef.current.scrollLeft += 200; }} className="p-1 rounded hover:bg-muted" aria-label="向右滚动"><ChevronRight size={16} /></button>
           <div className="h-4 w-px bg-border mx-1" />
           <button onClick={() => setShowBaseline(!showBaseline)} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs border hover:bg-muted transition-colors ${showBaseline ? 'border-primary bg-primary/5 text-primary' : 'border-border'}`}><GitCompare size={13} />基线</button>
           <button onClick={handleAutoSchedule} className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"><Sparkles size={13} />AI排程</button>
@@ -382,7 +391,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
                     <div key={task.id} className={`flex items-center px-3 border-b border-border/50 hover:bg-muted/30 group cursor-pointer ${isCritical ? 'bg-red-50/40' : ''}`} style={{ height: rowHeight }} onDoubleClick={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}>
                       <button onClick={() => handleToggleMilestone(task)} className={`mr-1 flex-shrink-0 ${isMilestone ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`} title="里程碑" aria-label="切换里程碑"><Flag size={13} /></button>
                       <input value={task.title} onChange={e => handleTitleChange(task.id, e.target.value)} className={`flex-1 text-xs bg-transparent border-none outline-none truncate min-w-0 hover:bg-muted/50 px-1 py-0.5 rounded ${isCritical ? 'font-medium text-red-700' : ''}`} readOnly={!canEditTasks} />
-                      <span className="w-14 text-[10px] text-muted-foreground truncate text-center flex-shrink-0">{getName(task.leaderId)}</span>
+                      {canEditTasks ? <button className="w-14 text-[10px] text-muted-foreground truncate text-center flex-shrink-0 hover:text-primary hover:underline" onClick={e => { e.stopPropagation(); setEditingTaskId(task.id); }} title="点击编辑负责人">{getName(task.leaderId) || '未指定'}</button> : <span className="w-14 text-[10px] text-muted-foreground truncate text-center flex-shrink-0">{getName(task.leaderId)}</span>}
                       {canDeleteTasks && <button onClick={() => handleDeleteTask(task.id)} className="ml-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" aria-label="删除任务"><Trash2 size={12} /></button>}
                       {isCritical && <span className="ml-1 text-[8px] text-red-400 flex-shrink-0" title={`浮动: ${slackDisplay}`}>CP</span>}
                     </div>
@@ -402,7 +411,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
               </div>
               {/* Right: timeline */}
               <div className="flex-1 overflow-hidden relative">
-                <div className="overflow-x-auto overflow-y-auto h-full" style={{ transform: `translateX(-${scrollOffset}px)` }}>
+                <div ref={timelineScrollRef} className="overflow-x-auto overflow-y-auto h-full" onScroll={handleTimelineScroll}>
                   <div style={{ width: timelineWidth, minWidth: timelineWidth }}>
                     <svg width="0" height="0" className="absolute">{renderDependencySVGDefs()}</svg>
                     {/* Month header */}
@@ -420,7 +429,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
                       ))}
                     </div>
                     {/* Task rows */}
-                    {allTasks.map(task => {
+                    {visibleTasks.map(task => {
                       const startTs = parseDate(task.startDate) || parseDate(task.dueDate) || timeRange.start;
                       const dueTs = parseDate(task.dueDate) || addDays(startTs, 7);
                       const isMilestone = task.tags?.includes('__milestone');

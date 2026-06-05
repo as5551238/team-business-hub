@@ -65,7 +65,7 @@ create table if not exists team_members (
   id text primary key default gen_random_uuid()::text,
   team_id text not null references teams(id) on delete cascade,
   member_id text not null references members(id) on delete cascade,
-  role text not null default 'member' check (role in ('admin', 'manager', 'member')),
+  role text not null default 'member' check (role in ('admin', 'manager', 'leader', 'member')),
   permissions jsonb default '[]'::jsonb,
   joined_at timestamptz default now(),
   unique(team_id, member_id)
@@ -75,7 +75,7 @@ create table if not exists team_members (
 create table if not exists members (
   id text primary key default gen_random_uuid()::text,
   name text not null,
-  role text not null default 'member' check (role in ('admin', 'manager', 'member')),
+  role text not null default 'member' check (role in ('admin', 'manager', 'leader', 'member')),
   department text not null default '',
   avatar text not null default '',
   email text not null,
@@ -120,7 +120,22 @@ create table if not exists goals (
   attachments jsonb default '[]'::jsonb,
   selected_kr_ids jsonb default '[]'::jsonb,
   team_id text not null,
+  season_id text,
+  strategy_level text check (strategy_level is null or strategy_level in ('vision', 'annual', 'quarter')),
   deleted_at timestamptz
+);
+
+-- ==================== OKR周期/Season表 ====================
+create table if not exists okr_seasons (
+  id text primary key default gen_random_uuid()::text,
+  name text not null,
+  type text not null default 'quarter' check (type in ('quarter', 'annual', 'custom')),
+  start_date text not null,
+  end_date text not null,
+  status text not null default 'draft' check (status in ('draft', 'planning', 'executing', 'scoring', 'reviewing', 'closed')),
+  team_id text not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
 
 -- ==================== 项目表 ====================
@@ -201,6 +216,7 @@ create table if not exists notifications (
   related_type text not null check (related_type in ('task', 'goal', 'project')),
   member_id text references members(id),
   read boolean not null default false,
+  level text default 'info',
   created_at timestamptz default now(),
   team_id text not null
 );
@@ -334,6 +350,8 @@ create table if not exists comments (
   is_read boolean default false,
   follow_up_required boolean default false,
   follow_up_status text default '',
+  parent_id text,
+  attachments jsonb default '[]'::jsonb,
   team_id text not null
 );
 
@@ -411,9 +429,57 @@ create table if not exists knowledge (
   tags jsonb default '[]'::jsonb,
   member_id text references members(id),
   related_items jsonb default '[]'::jsonb,
+  color text default '',
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   team_id text not null
+);
+
+-- ==================== 通知偏好表 ====================
+create table if not exists notification_preferences (
+  id text primary key default gen_random_uuid()::text,
+  member_id text not null references members(id) on delete cascade,
+  item_id text not null,
+  item_type text not null,
+  muted boolean not null default false,
+  created_at timestamptz default now(),
+  team_id text not null,
+  unique(member_id, item_id, item_type)
+);
+
+-- ==================== 行为事件表 ====================
+create table if not exists behavior_events (
+  id text primary key default gen_random_uuid()::text,
+  member_id text references members(id),
+  event_type text not null,
+  event_data jsonb default '{}'::jsonb,
+  session_id text,
+  created_at timestamptz default now(),
+  team_id text not null
+);
+
+-- ==================== 团队行业画像表 ====================
+create table if not exists team_industry_profile (
+  id text primary key default gen_random_uuid()::text,
+  team_id text not null unique references teams(id) on delete cascade,
+  industry text default '',
+  sub_industry text default '',
+  company_size text default '',
+  preferences jsonb default '{}'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- ==================== 邮件设置表 ====================
+create table if not exists email_settings (
+  id text primary key default gen_random_uuid()::text,
+  team_id text not null unique references teams(id) on delete cascade,
+  sender_email text not null default '',
+  sender_name text not null default '',
+  api_key text default '',
+  enabled boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
 
 -- ==================== 审计日志表 ====================
@@ -946,6 +1012,29 @@ create policy "Sprints: admin can delete" on sprints
     team_id = app_current_team_id() and is_team_admin(team_id)
   );
 
+-- === okr_seasons 表 ===
+alter table okr_seasons enable row level security;
+
+create policy "OKR Seasons: team members can read" on okr_seasons
+  for select using (
+    team_id = app_current_team_id() and is_team_member(team_id)
+  );
+
+create policy "OKR Seasons: team members can insert" on okr_seasons
+  for insert with check (
+    team_id = app_current_team_id() and is_team_member(team_id)
+  );
+
+create policy "OKR Seasons: team members can update" on okr_seasons
+  for update using (
+    team_id = app_current_team_id() and is_team_member(team_id)
+  );
+
+create policy "OKR Seasons: admin can delete" on okr_seasons
+  for delete using (
+    team_id = app_current_team_id() and is_team_admin(team_id)
+  );
+
 -- === knowledge 表 ===
 alter table knowledge enable row level security;
 
@@ -964,6 +1053,91 @@ create policy "Knowledge: owner or admin can update" on knowledge
     team_id = app_current_team_id()
     and (member_id = app_current_user_id() or is_team_admin(team_id))
   );
+
+-- ==================== R2: 预算与成本管理 ====================
+
+-- === budgets 表 ===
+create table if not exists budgets (
+  id text primary key default gen_random_uuid()::text,
+  project_id text references projects(id) on delete set null,
+  season_id text references okr_seasons(id) on delete set null,
+  name text not null,
+  total_amount numeric not null default 0,
+  currency text not null default 'CNY',
+  status text not null default 'draft',
+  items jsonb not null default '[]'::jsonb,
+  approved_by text,
+  team_id text not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table budgets enable row level security;
+
+create policy "Budgets: team members can read" on budgets
+  for select using (
+    team_id = app_current_team_id() and is_team_member(team_id)
+  );
+
+create policy "Budgets: team members can insert" on budgets
+  for insert with check (
+    team_id = app_current_team_id() and is_team_member(team_id)
+  );
+
+create policy "Budgets: admin or manager can update" on budgets
+  for update using (
+    team_id = app_current_team_id() and is_team_admin(team_id)
+  );
+
+create policy "Budgets: admin can delete" on budgets
+  for delete using (
+    team_id = app_current_team_id() and is_team_admin(team_id)
+  );
+
+create trigger audit_budgets after insert or update or delete on budgets
+  for each row execute function audit_trigger_func();
+
+-- === cost_entries 表 ===
+create table if not exists cost_entries (
+  id text primary key default gen_random_uuid()::text,
+  budget_id text not null references budgets(id) on delete cascade,
+  project_id text references projects(id) on delete set null,
+  task_id text references tasks(id) on delete set null,
+  category text not null default 'other',
+  amount numeric not null default 0,
+  description text not null default '',
+  recorded_by text,
+  recorded_at timestamptz default now(),
+  approved_by text,
+  status text not null default 'pending',
+  team_id text not null,
+  created_at timestamptz default now()
+);
+
+alter table cost_entries enable row level security;
+
+create policy "Cost entries: team members can read" on cost_entries
+  for select using (
+    team_id = app_current_team_id() and is_team_member(team_id)
+  );
+
+create policy "Cost entries: team members can insert" on cost_entries
+  for insert with check (
+    team_id = app_current_team_id() and is_team_member(team_id)
+  );
+
+create policy "Cost entries: admin or manager can update" on cost_entries
+  for update using (
+    team_id = app_current_team_id() and is_team_admin(team_id)
+  );
+
+create policy "Cost entries: admin can delete" on cost_entries
+  for delete using (
+    team_id = app_current_team_id() and is_team_admin(team_id)
+  );
+
+create trigger audit_cost_entries after insert or update or delete on cost_entries
+  for each row execute function audit_trigger_func();
 
 -- ==================== 审计触发器 ====================
 
@@ -1030,6 +1204,24 @@ alter publication supabase_realtime add table tasks;
 alter publication supabase_realtime add table notifications;
 alter publication supabase_realtime add table activities;
 alter publication supabase_realtime add table comments;
+alter publication supabase_realtime add table members;
+alter publication supabase_realtime add table item_links;
+alter publication supabase_realtime add table reviews;
+alter publication supabase_realtime add table categories;
+alter publication supabase_realtime add table templates;
+alter publication supabase_realtime add table schedule_events;
+alter publication supabase_realtime add table notes;
+alter publication supabase_realtime add table tags;
+alter publication supabase_realtime add table bookmarks;
+alter publication supabase_realtime add table saved_views;
+alter publication supabase_realtime add table status_flow_rules;
+alter publication supabase_realtime add table automation_rules;
+alter publication supabase_realtime add table sprints;
+alter publication supabase_realtime add table okr_seasons;
+alter publication supabase_realtime add table budgets;
+alter publication supabase_realtime add table cost_entries;
+alter publication supabase_realtime add table knowledge;
+alter publication supabase_realtime add table notification_preferences;
 
 -- ==================== 附件存储桶 ====================
 insert into storage.buckets (id, name, public) values ('attachments', 'attachments', true) on conflict (id) do nothing;

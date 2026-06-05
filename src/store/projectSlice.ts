@@ -63,7 +63,7 @@ export function projectReducer(state: AppState, action: Action): AppState | null
           const newValues: Record<string, unknown> = {};
           for (const k of changedKeys) { oldValues[k] = (oldProject as Record<string, unknown>)[k]; newValues[k] = (updates as Record<string, unknown>)[k]; }
           const fieldLabel = changedKeys.length === 1 ? projectFieldLabelMap[changedKeys[0]] || changedKeys[0] : `${changedKeys.length}个字段`;
-          pushFieldUndo('UPDATE_PROJECT', action.payload.id, oldValues, newValues, `更新项目${fieldLabel}`);
+          pushFieldUndo('UPDATE_PROJECT', action.payload.id, oldValues, newValues, `更新项目${fieldLabel}`, (action as Action & { _skipUndo?: boolean })._skipUndo);
         }
         if (updates.title) updates.title = clampTitle(updates.title) ?? updates.title;
         if (updates.description) updates.description = clampDesc(updates.description) ?? updates.description;

@@ -1,4 +1,4 @@
-import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark, StatusFlowRule, AutomationRule, Sprint, Knowledge, Team, TeamMember, Subscription, ApprovalAudit } from '@/types';
+import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark, StatusFlowRule, AutomationRule, Sprint, Knowledge, Team, TeamMember, Subscription, ApprovalAudit, OKRSeason, ReviewSession, Budget, CostEntry } from '@/types';
 
 export const STORAGE_KEY = 'tbh-data';
 const LEGACY_STORAGE_KEY = 'team-business-hub-data';
@@ -21,17 +21,14 @@ export type Action =
   | { type: 'SET_VIEWING_MEMBER'; payload: string | null }
   | { type: 'SET_CURRENT_TEAM'; payload: string | null }
   | { type: 'ADD_GOAL'; payload: Omit<Goal, 'id' | 'createdAt' | 'updatedAt' | 'progress'> }
-  | { type: 'UPDATE_GOAL'; payload: { id: string; updates: Partial<Goal> } }
   | { type: 'DELETE_GOAL'; payload: string }
   | { type: 'RESTORE_GOAL'; payload: string }
   | { type: 'MOVE_GOAL_PARENT'; payload: { goalId: string; newParentId: string | null } }
   | { type: 'UPDATE_KEY_RESULT'; payload: { goalId: string; krId: string; value: number } }
   | { type: 'ADD_PROJECT'; payload: Omit<Project, 'id' | 'createdAt' | 'updatedAt' | 'progress'> }
-  | { type: 'UPDATE_PROJECT'; payload: { id: string; updates: Partial<Project> } }
   | { type: 'DELETE_PROJECT'; payload: string }
   | { type: 'RESTORE_PROJECT'; payload: string }
   | { type: 'ADD_TASK'; payload: Omit<Task, 'id' | 'createdAt' | 'updatedAt'> }
-  | { type: 'UPDATE_TASK'; payload: { id: string; updates: Partial<Task> } }
   | { type: 'DELETE_TASK'; payload: string }
   | { type: 'RESTORE_TASK'; payload: string }
   | { type: 'TOGGLE_SUBTASK'; payload: { taskId: string; subtaskId: string } }
@@ -105,7 +102,22 @@ export type Action =
   | { type: 'SET_OUTLOOK_MAIL_SUMMARY'; payload: import('@/types').OutlookMailSummary[] }
   | { type: 'MERGE_OUTLOOK_MAIL_SUMMARY'; payload: import('@/types').OutlookMailSummary[] }
   | { type: 'LINK_OUTLOOK_MAIL'; payload: { mailId: string; itemId: string; itemType: 'task' | 'goal' | 'project' } }
-  | { type: 'CLEAR_OUTLOOK_DATA' };
+  | { type: 'ADD_SEASON'; payload: Omit<OKRSeason, 'id' | 'createdAt' | 'updatedAt'> }
+  | { type: 'UPDATE_SEASON'; payload: { id: string; updates: Partial<OKRSeason> } }
+  | { type: 'DELETE_SEASON'; payload: string }
+  | { type: 'ADD_REVIEW_SESSION'; payload: Omit<ReviewSession, 'id' | 'createdAt'> }
+  | { type: 'UPDATE_REVIEW_SESSION'; payload: { id: string; updates: Partial<ReviewSession> } }
+  | { type: 'DELETE_REVIEW_SESSION'; payload: string }
+  | { type: 'ADD_BUDGET'; payload: Omit<Budget, 'id' | 'createdAt' | 'updatedAt'> }
+  | { type: 'UPDATE_BUDGET'; payload: { id: string; updates: Partial<Budget> } }
+  | { type: 'DELETE_BUDGET'; payload: string }
+  | { type: 'ADD_COST_ENTRY'; payload: Omit<CostEntry, 'id' | 'createdAt'> }
+  | { type: 'UPDATE_COST_ENTRY'; payload: { id: string; updates: Partial<CostEntry> } }
+  | { type: 'DELETE_COST_ENTRY'; payload: string }
+  | { type: 'CLEAR_OUTLOOK_DATA' }
+  | { type: 'UPDATE_GOAL'; payload: { id: string; updates: Partial<Goal> }; _skipUndo?: boolean }
+  | { type: 'UPDATE_PROJECT'; payload: { id: string; updates: Partial<Project> }; _skipUndo?: boolean }
+  | { type: 'UPDATE_TASK'; payload: { id: string; updates: Partial<Task> }; _skipUndo?: boolean };
 
 export function toCamel(row: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
@@ -161,6 +173,10 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: Memb
     approvalAudits: arr(data.approvalAudits),
     outlookCalendarEvents: arr(data.outlookCalendarEvents),
     outlookMailSummary: arr(data.outlookMailSummary),
+    seasons: arr(data.seasons),
+    reviewSessions: arr(data.reviewSessions),
+    budgets: arr(data.budgets),
+    costEntries: arr(data.costEntries),
     currentTeamId: data.currentTeamId || null,
   };
   result.goals = result.goals.map((g: Goal) => ({
@@ -174,6 +190,8 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: Memb
     startDate: g.startDate ?? '', endDate: g.endDate ?? '',
     description: g.description ?? '', type: g.type ?? 'okr',
     approvalStatus: g.approvalStatus ?? 'draft',
+    seasonId: g.seasonId ?? null,
+    strategyLevel: g.strategyLevel ?? null,
   }));
   result.projects = result.projects.map((p: Project) => ({
     ...p, tags: p.tags ?? [], attachments: p.attachments ?? [],

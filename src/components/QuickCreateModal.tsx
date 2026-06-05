@@ -7,7 +7,7 @@
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
-import type { TaskStatus, TaskPriority, GoalType } from '@/types';
+import type { TaskStatus, TaskPriority, GoalType, GoalStatus, ProjectStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { X, Plus, Target, FolderKanban, CheckSquare } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
@@ -28,7 +28,7 @@ export function QuickCreateModal({ open, onClose, initialType = 'task' }: QuickC
   const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const titleRef = useRef<HTMLInputElement>(null);
-  const trapRef = useFocusTrap({ active: open, onEscape: onClose });
+  const trapRef = useFocusTrap(open, onClose);
 
   useEffect(() => { if (open) { setTitle(''); setType(initialType); setLeaderId(state.currentUser?.id || ''); setDueDate(''); setPriority('medium'); } }, [open, initialType]);
   useEffect(() => { if (open) { setType(initialType); } }, [initialType]);
@@ -54,9 +54,9 @@ export function QuickCreateModal({ open, onClose, initialType = 'task' }: QuickC
       const taskDueDate = dueDate || smartDueDate;
       dispatch({ type: 'ADD_TASK', payload: { title: title.trim(), description: '', projectId: null, goalId: null, parentId: null, status: 'todo' as TaskStatus, priority, leaderId, supporterIds: [], tags: [], category: '', startDate: taskDueDate || null, dueDate: taskDueDate || null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', summary: '' } });
     } else if (type === 'goal') {
-      dispatch({ type: 'ADD_GOAL', payload: { title: title.trim(), description: '', type: 'okr' as GoalType, status: 'todo' as TaskStatus, priority, parentId: null, level: 0, category: '', startDate: dueDate || '', endDate: dueDate || '', leaderId, supporterIds: [], tags: [], keyResults: [], selectedKRIds: [], attachments: [], trackingRecords: [], repeatCycle: 'none', progress: 0, summary: '' } });
+      dispatch({ type: 'ADD_GOAL', payload: { title: title.trim(), description: '', type: 'okr' as GoalType, status: 'todo' as GoalStatus, priority, parentId: null, level: 0, category: '', startDate: dueDate || '', endDate: dueDate || '', leaderId, supporterIds: [], tags: [], keyResults: [], selectedKRIds: [], attachments: [], trackingRecords: [], repeatCycle: 'none', progress: 0, summary: '' } });
     } else {
-      dispatch({ type: 'ADD_PROJECT', payload: { title: title.trim(), description: '', goalId: null, parentId: null, status: 'todo' as TaskStatus, priority, leaderId, supporterIds: [], tags: [], category: '', startDate: dueDate || '', endDate: dueDate || '', attachments: [], trackingRecords: [], repeatCycle: 'none', taskCount: 0 } });
+      dispatch({ type: 'ADD_PROJECT', payload: { title: title.trim(), description: '', goalId: null, parentId: null, status: 'todo' as ProjectStatus, priority, leaderId, supporterIds: [], tags: [], category: '', startDate: dueDate || '', endDate: dueDate || '', attachments: [], trackingRecords: [], repeatCycle: 'none', taskCount: 0 } });
     }
     onClose();
   }

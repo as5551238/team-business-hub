@@ -7,11 +7,13 @@
 
 import type { AppState, OutlookCalendarEvent, OutlookMailSummary } from '@/types';
 import type { Action } from '../types';
+import { needMutate } from './shared';
 
 export function outlookReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
     case 'SET_OUTLOOK_CALENDAR_EVENTS': {
-      const s = { ...state, outlookCalendarEvents: action.payload as OutlookCalendarEvent[] };
+      const s = needMutate(state, ['outlookCalendarEvents']);
+      s.outlookCalendarEvents = action.payload as OutlookCalendarEvent[];
       return s;
     }
 
@@ -19,27 +21,33 @@ export function outlookReducer(state: AppState, action: Action): AppState | null
       const incoming = action.payload as OutlookCalendarEvent[];
       const existingMap = new Map(state.outlookCalendarEvents.map(e => [e.id, e]));
       for (const evt of incoming) {
-        existingMap.set(evt.id, evt); // LWW: 直接覆盖
+        existingMap.set(evt.id, evt);
       }
-      return { ...state, outlookCalendarEvents: Array.from(existingMap.values()) };
+      const s = needMutate(state, ['outlookCalendarEvents']);
+      s.outlookCalendarEvents = Array.from(existingMap.values());
+      return s;
     }
 
     case 'DELETE_OUTLOOK_CALENDAR_EVENTS': {
       const idsToDelete = new Set(action.payload as string[]);
-      return { ...state, outlookCalendarEvents: state.outlookCalendarEvents.filter(e => !idsToDelete.has(e.id)) };
+      const s = needMutate(state, ['outlookCalendarEvents']);
+      s.outlookCalendarEvents = s.outlookCalendarEvents.filter(e => !idsToDelete.has(e.id));
+      return s;
     }
 
     case 'LINK_OUTLOOK_CALENDAR_EVENT': {
       const { eventId, itemId, itemType } = action.payload as { eventId: string; itemId: string; itemType: 'task' | 'goal' | 'project' };
       const idx = state.outlookCalendarEvents.findIndex(e => e.id === eventId);
       if (idx < 0) return state;
-      const updated = [...state.outlookCalendarEvents];
-      updated[idx] = { ...updated[idx], linkedItemId: itemId, linkedItemType: itemType };
-      return { ...state, outlookCalendarEvents: updated };
+      const s = needMutate(state, ['outlookCalendarEvents']);
+      s.outlookCalendarEvents[idx] = { ...s.outlookCalendarEvents[idx], linkedItemId: itemId, linkedItemType: itemType };
+      return s;
     }
 
     case 'SET_OUTLOOK_MAIL_SUMMARY': {
-      return { ...state, outlookMailSummary: action.payload as OutlookMailSummary[] };
+      const s = needMutate(state, ['outlookMailSummary']);
+      s.outlookMailSummary = action.payload as OutlookMailSummary[];
+      return s;
     }
 
     case 'MERGE_OUTLOOK_MAIL_SUMMARY': {
@@ -48,20 +56,25 @@ export function outlookReducer(state: AppState, action: Action): AppState | null
       for (const mail of incoming) {
         existingMap.set(mail.id, mail);
       }
-      return { ...state, outlookMailSummary: Array.from(existingMap.values()) };
+      const s = needMutate(state, ['outlookMailSummary']);
+      s.outlookMailSummary = Array.from(existingMap.values());
+      return s;
     }
 
     case 'LINK_OUTLOOK_MAIL': {
       const { mailId, itemId, itemType } = action.payload as { mailId: string; itemId: string; itemType: 'task' | 'goal' | 'project' };
       const idx = state.outlookMailSummary.findIndex(m => m.id === mailId);
       if (idx < 0) return state;
-      const updated = [...state.outlookMailSummary];
-      updated[idx] = { ...updated[idx], linkedItemId: itemId, linkedItemType: itemType };
-      return { ...state, outlookMailSummary: updated };
+      const s = needMutate(state, ['outlookMailSummary']);
+      s.outlookMailSummary[idx] = { ...s.outlookMailSummary[idx], linkedItemId: itemId, linkedItemType: itemType };
+      return s;
     }
 
     case 'CLEAR_OUTLOOK_DATA': {
-      return { ...state, outlookCalendarEvents: [], outlookMailSummary: [] };
+      const s = needMutate(state, ['outlookCalendarEvents', 'outlookMailSummary']);
+      s.outlookCalendarEvents = [];
+      s.outlookMailSummary = [];
+      return s;
     }
 
     default:

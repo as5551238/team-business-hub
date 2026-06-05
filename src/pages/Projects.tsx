@@ -17,6 +17,7 @@ import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 import { useBatchSelection } from '@/hooks/useBatchSelection';
 import { BatchActionBar } from '@/components/BatchActionBar';
 import { useBatchOperations } from '@/hooks/useBatchOperations';
+import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import { useCommentCounts } from '@/hooks/useCommentCounts';
 import { isDateRangeInTimeRange } from '@/lib/timeRangeUtils';
 
@@ -40,13 +41,12 @@ export default function Projects() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('detail');
 
-  // Apply URL filter params on mount (one-time)
+  // Apply URL filter params on mount and when URL changes
   useEffect(() => {
     if (urlFilters.statuses && urlFilters.statuses.size > 0) {
       setSelectedStatuses(urlFilters.statuses);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [urlFilters]);
 
   const batchSel = useBatchSelection();
   const { batchMode, selectedIds, toggleSelect, selectAll, selectRange, clearSelection, exitBatchMode } = batchSel;
@@ -58,6 +58,7 @@ export default function Projects() {
   const [timeFilter, setTimeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showPersonPicker, setShowPersonPicker] = useState(false);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
   // All users default to team view — no auto-switch to personal view
   const setDetailItem = useCallback((item: { type: 'project'; id: string } | null) => {
@@ -94,17 +95,27 @@ export default function Projects() {
     return result;
   }, [state.projects, selectedStatuses, selectedPriorities, selectedLevels, selectedCategories, selectedTags, personFilter, timeFilter, searchQuery, isTeamView, viewingMember, showCompleted]);
 
-  // Keyboard event handlers for batch toggle + select-all
-  useEffect(() => {
-    const onToggleBatch = () => { batchSel.toggleBatchMode(); };
-    const onSelectAll = () => { selectAll(filteredProjects.map(p => p.id)); };
-    window.addEventListener('tbh-toggle-batch', onToggleBatch);
-    window.addEventListener('tbh-select-all', onSelectAll);
-    return () => {
-      window.removeEventListener('tbh-toggle-batch', onToggleBatch);
-      window.removeEventListener('tbh-select-all', onSelectAll);
-    };
-  }, [batchSel, selectAll, filteredProjects]);
+  // Keyboard navigation (j/k, edit, delete, complete, batch, switch-view, focus-filter)
+  useKeyboardNavigation({
+    updateActionType: 'UPDATE_PROJECT',
+    deleteActionType: 'DELETE_PROJECT',
+    editPermission: 'edit_projects',
+    deletePermission: 'delete_projects',
+    filteredItems: filteredProjects,
+    focusedId,
+    setFocusedId,
+    dispatch,
+    can,
+    batchMode,
+    onToggleSelect: toggleSelect,
+    onSelectAll: useCallback(() => selectAll(filteredProjects.map(p => p.id)), [selectAll, filteredProjects]),
+    clearSelection,
+    toggleBatchMode: batchSel.toggleBatchMode,
+    setDetailItem,
+    itemType: 'project',
+    switchView: useCallback((mode?: string) => { if (mode) setViewMode(mode as ViewMode); }, []),
+    focusFilter: useCallback(() => { document.querySelector<HTMLInputElement>('input[data-search-input]')?.focus(); }, []),
+  });
 
   const topProjects = useMemo(() => filteredProjects.filter(p => !p.parentId), [filteredProjects]);
   const activeFilterCount = (selectedStatuses.size > 0 ? 1 : 0) + (selectedPriorities.size > 0 ? 1 : 0) + (selectedLevels.size > 0 ? 1 : 0) + (selectedCategories.size > 0 ? 1 : 0) + (selectedTags.size > 0 ? 1 : 0) + (personFilter.length > 0 ? 1 : 0) + (timeFilter !== 'all' ? 1 : 0) + (searchQuery.trim().length > 0 ? 1 : 0);
@@ -284,6 +295,7 @@ export default function Projects() {
                 <div><label className="block text-sm font-medium mb-1">父项目</label><select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={formData.parentId} onChange={e => setFormData(f => ({ ...f, parentId: e.target.value }))}><option value="">无（顶级项目）</option>{state.projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select></div>
               </div>
               <div><label className="block text-sm font-medium mb-1">主导人</label><select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={formData.leaderId} onChange={e => setFormData(f => ({ ...f, leaderId: e.target.value }))}><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
+              <div><label className="block text-sm font-medium mb-1">协作人</label><div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto border border-border rounded-lg px-2 py-1.5">{activeMembers.filter(m => m.id !== formData.leaderId).map(m => <button key={m.id} type="button" className={`px-2 py-0.5 rounded text-xs transition-colors ${formData.supporterIds.includes(m.id) ? 'bg-primary/10 text-primary ring-1 ring-primary/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`} onClick={() => setFormData(f => ({ ...f, supporterIds: f.supporterIds.includes(m.id) ? f.supporterIds.filter(x => x !== m.id) : [...f.supporterIds, m.id] }))}>{m.name}</button>)}</div></div>
               <div><label className="block text-sm font-medium mb-1">分类</label><select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={formData.category} onChange={e => setFormData(f => ({ ...f, category: e.target.value }))}><option value="">未分类</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
               <div>
                 <label className="block text-sm font-medium mb-1">标签</label>

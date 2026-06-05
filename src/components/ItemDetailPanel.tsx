@@ -98,7 +98,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const uploadTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const [panelWidth, setPanelWidth] = useState(480);
+  const [panelWidth, setPanelWidth] = useState(560);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -298,6 +298,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
         setUploadStatus('success');
       } else {
         setUploadStatus('error');
+        alert('附件上传失败：存储服务未配置或不可用，请联系管理员');
       }
     } catch (err) {
       console.error('File upload failed:', err);
@@ -326,20 +327,32 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
   }
 
   async function handlePasteImage(e: React.ClipboardEvent) {
-    const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
+    // Try clipboardData.files first, then fall back to clipboardData.items (Chrome screenshot paste)
+    let files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
+    if (files.length === 0 && e.clipboardData.items) {
+      const imageItems = Array.from(e.clipboardData.items).filter(item => item.type.startsWith('image/'));
+      const filePromises = imageItems.map(item => new Promise<File | null>(resolve => {
+        item.getAsString(() => {}); // required for some browsers
+        const blob = item.getAsFile();
+        resolve(blob);
+      }));
+      const resolved = await Promise.all(filePromises);
+      files = resolved.filter((f): f is File => f !== null);
+    }
     if (files.length === 0) return;
     e.preventDefault();
     const newAttachments: typeof attachments = [];
     for (const file of files) {
       try {
-        const path = `${itemType}/${itemId}/${Date.now()}_${file.name}`;
+        const name = file.name || `paste_${Date.now()}.png`;
+        const path = `${itemType}/${itemId}/${Date.now()}_${name}`;
         const url = await uploadFile(BUCKET_NAMES.attachments, path, file);
         if (url) {
-          const attachment = { id: genId('att'), name: file.name, type: file.type, size: file.size, url, uploadedBy: state.currentUser?.id || '', uploadedAt: new Date().toISOString() };
+          const attachment = { id: genId('att'), name, type: file.type, size: file.size, url, uploadedBy: state.currentUser?.id || '', uploadedAt: new Date().toISOString() };
           newAttachments.push(attachment);
           const descArea = e.target as HTMLTextAreaElement;
           const pos = descArea.selectionStart;
-          const md = `\n![${file.name}](${url})\n`;
+          const md = `\n![${name}](${url})\n`;
           descArea.value = descArea.value.slice(0, pos) + md + descArea.value.slice(pos);
           setLocalDescription(descArea.value);
         } else {
@@ -378,7 +391,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
       {!inline && isOpen && <div className="fixed inset-0 bg-black/30 z-40 hidden md:block" onClick={handleOverlayClick} aria-hidden="true" />}
       <div ref={(el) => { (focusTrapRef as React.MutableRefObject<HTMLDivElement | null>).current = el; (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }} role="dialog" aria-label={`${itemType === 'goal' ? '目标' : itemType === 'project' ? '项目' : '任务'}详情`} aria-modal={!inline && isOpen ? true : undefined} className={cn(inline ? 'h-full flex flex-col border-l bg-card animate-slide-in-right' : 'fixed glass-elevated border-border z-50 flex flex-col transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', !inline && (isOpen ? 'translate-x-0' : 'translate-x-full'))} style={inline ? undefined : { width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}>
         {inline && <div className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/20 active:bg-primary/30 z-10" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }} />}
-        {!inline && <div className="hidden md:block absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/20 active:bg-primary/30 z-10" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }} />}
+        {!inline && <div className="hidden md:block absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-primary/30 active:bg-primary/40 z-10 group" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }}><div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r bg-border group-hover:bg-primary/50" /></div>}
         <div className="overflow-y-auto flex-1">
           <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-border sticky top-0 bg-card z-10">
             {editLockUser && (

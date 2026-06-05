@@ -9,6 +9,7 @@ import DOMPurify from 'dompurify';
 import { NOTE_COLORS, FOLDERS } from '../admin/constants';
 import { renderMarkdown } from '../admin/MarkdownDocTab';
 import { cn } from '@/lib/utils';
+import { useAutoSave } from '@/hooks/useAutoSave';
 
 export function NotesView() {
   const { state } = useStore();
@@ -23,7 +24,30 @@ export function NotesView() {
   const [editingColor, setEditingColor] = useState(NOTE_COLORS[0]);
   const [editingCategory, setEditingCategory] = useState('');
   const [markdownPreview, setMarkdownPreview] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedContentRef = useRef('');
+  const lastSavedTitleRef = useRef('');
+
+  // Auto-save content with useAutoSave (replaces hand-rolled debounce)
+  const { flush: flushContent } = useAutoSave(editingContent, {
+    delay: 800,
+    enabled: !!selectedNoteId && editingContent !== lastSavedContentRef.current,
+    onSave: (val) => {
+      if (!selectedNoteId || val === lastSavedContentRef.current) return;
+      lastSavedContentRef.current = val;
+      updateNote(selectedNoteId, { content: val });
+    },
+  });
+
+  // Auto-save title with useAutoSave
+  const { flush: flushTitle } = useAutoSave(editingTitle, {
+    delay: 800,
+    enabled: !!selectedNoteId && editingTitle !== lastSavedTitleRef.current,
+    onSave: (val) => {
+      if (!selectedNoteId || val === lastSavedTitleRef.current) return;
+      lastSavedTitleRef.current = val;
+      updateNote(selectedNoteId, { title: val.trim() || '无标题' });
+    },
+  });
 
   const noteCategories = useMemo(() => { const cats = new Set<string>(); notes.forEach(n => { if (n.category) cats.add(n.category); }); return Array.from(cats); }, [notes]);
   const filteredNotes = useMemo(() => {
@@ -37,9 +61,7 @@ export function NotesView() {
   const sortedNotes = useMemo(() => [...filteredNotes].sort((a, b) => { if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1; return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(); }), [filteredNotes]);
   const selectedNote = selectedNoteId ? notes.find(n => n.id === selectedNoteId) : null;
 
-  useEffect(() => { if (selectedNote) { setEditingTitle(selectedNote.title); setEditingContent(selectedNote.content); setEditingColor(selectedNote.color); setEditingCategory(selectedNote.category || ''); } }, [selectedNote?.id]);
-  function handleNoteSave() { if (!selectedNoteId || !selectedNote) return; if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => { updateNote(selectedNoteId, { title: editingTitle.trim() || '无标题', content: editingContent, color: editingColor, category: editingCategory }); }, 500); }
-  useEffect(() => { return () => { if (debounceRef.current) clearTimeout(debounceRef.current); }; }, []);
+  useEffect(() => { if (selectedNote) { flushContent(); flushTitle(); setEditingTitle(selectedNote.title); setEditingContent(selectedNote.content); setEditingColor(selectedNote.color); setEditingCategory(selectedNote.category || ''); lastSavedTitleRef.current = selectedNote.title; lastSavedContentRef.current = selectedNote.content; } }, [selectedNote?.id]);
 
   function handleNewNote() { const folder = folderFilter === '全部' ? '工作' : folderFilter; const memberId = currentUser?.id || ''; addNote({ title: '新建笔记', content: '', folder, color: NOTE_COLORS[0], isPinned: false, linkedItemId: null, linkedItemType: null, createdBy: memberId, updatedBy: memberId }); }
   function handleDeleteNote(id: string, title: string) { if (!confirm(`确定要删除笔记「${title}」吗？`)) return; deleteNote(id); if (selectedNoteId === id) setSelectedNoteId(null); }
@@ -73,19 +95,19 @@ export function NotesView() {
           {selectedNote ? (
             <>
               <div className="flex items-center gap-2 p-3 border-b border-border flex-shrink-0">
-                <input className="flex-1 text-base font-semibold border-none outline-none bg-transparent" placeholder="笔记标题" value={editingTitle} onChange={e => { setEditingTitle(e.target.value); handleNoteSave(); }} onBlur={handleNoteSave} />
+                <input className="flex-1 text-base font-semibold border-none outline-none bg-transparent" placeholder="笔记标题" value={editingTitle} onChange={e => setEditingTitle(e.target.value)} onBlur={() => flushTitle()} />
                 <button className={`p-1.5 rounded-lg hover:bg-muted ${markdownPreview ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`} onClick={() => setMarkdownPreview(!markdownPreview)} title={markdownPreview ? '编辑模式' : 'Markdown预览'}>{markdownPreview ? <Edit3 size={16} /> : <Eye size={16} />}</button>
                 <button className="p-1.5 rounded-lg hover:bg-muted" onClick={() => togglePin(selectedNote.id, selectedNote.isPinned)}>{selectedNote.isPinned ? <PinOff size={16} className="text-primary" /> : <Pin size={16} className="text-muted-foreground" />}</button>
                 <button className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600" onClick={() => handleDeleteNote(selectedNote.id, selectedNote.title)}><Trash2 size={16} /></button>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-border/50 flex-shrink-0">
                 <Palette size={14} className="text-muted-foreground" />{NOTE_COLORS.map(c => <button key={c} className={cn('w-6 h-6 rounded-full border-2 transition-transform hover:scale-110', editingColor === c ? 'border-primary ring-2 ring-primary/30 scale-110' : 'border-gray-300')} style={{ backgroundColor: c }} onClick={() => { setEditingColor(c); updateNote(selectedNote.id, { color: c }); }} />)}<span className="mx-1 text-border">|</span>
-                <Tag size={12} className="text-muted-foreground flex-shrink-0" /><input className="text-xs border border-border rounded px-1.5 py-0.5 w-20 focus:outline-none focus:ring-1 focus:ring-primary/20" placeholder="分类" value={editingCategory} onChange={e => { setEditingCategory(e.target.value); handleNoteSave(); }} onBlur={handleNoteSave} />
+                <Tag size={12} className="text-muted-foreground flex-shrink-0" /><input className="text-xs border border-border rounded px-1.5 py-0.5 w-20 focus:outline-none focus:ring-1 focus:ring-primary/20" placeholder="分类" value={editingCategory} onChange={e => setEditingCategory(e.target.value)} onBlur={() => { if (selectedNoteId && editingCategory !== (selectedNote?.category || '')) updateNote(selectedNoteId, { category: editingCategory }); }} />
               </div>
               {markdownPreview ? (
                 <div className="flex-1 w-full p-4 text-sm overflow-y-auto prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: renderMarkdown(editingContent) }} />
               ) : (
-                <textarea className="flex-1 w-full p-4 text-sm border-none outline-none resize-none bg-transparent" placeholder="开始书写... (支持Markdown)" value={editingContent} onChange={e => { setEditingContent(e.target.value); handleNoteSave(); }} onBlur={handleNoteSave} />
+                <textarea className="flex-1 w-full p-4 text-sm border-none outline-none resize-none bg-transparent" placeholder="开始书写... (支持Markdown)" value={editingContent} onChange={e => setEditingContent(e.target.value)} onBlur={() => flushContent()} />
               )}
             </>
           ) : <div className="flex-1 flex items-center justify-center text-muted-foreground"><div className="text-center"><StickyNote size={48} className="mx-auto mb-2 opacity-30" /><p className="text-sm">选择或新建一条笔记</p></div></div>}

@@ -141,6 +141,8 @@ export function filterViewModes(page: string, modes: string[], level?: UserLevel
       list: 'beginner',
       matrix: 'intermediate',
       okr: 'advanced',
+      strategy: 'intermediate',
+      cascade: 'intermediate',
     },
   };
 

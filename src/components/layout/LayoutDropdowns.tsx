@@ -101,6 +101,7 @@ interface NotificationDropdownProps {
 export const NotificationDropdown = React.memo(function NotificationDropdown({ notifications, unreadCount, onMarkAllRead, onMarkRead, onNavigate }: NotificationDropdownProps) {
   const [activeTab, setActiveTab] = useState<NotifTab>('all');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => filterByTab(notifications, activeTab), [notifications, activeTab]);
   const groups = useMemo(() => groupNotifications(filtered.slice(0, 20)), [filtered]);
@@ -193,6 +194,7 @@ export const NotificationDropdown = React.memo(function NotificationDropdown({ n
               )}
               {group.items.map(n => {
                 const targetPage = n.relatedType === 'goal' ? 'goals' : n.relatedType === 'project' ? 'projects' : n.relatedType === 'task' ? 'tasks' : null;
+                const isExpanded = expandedIds.has(n.id);
                 return (
                   <div key={n.id} className={cn('px-4 py-2.5 border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors', !n.read && 'bg-primary/5')}
                     onClick={() => { onMarkRead(n.id); if (targetPage) onNavigate(targetPage, n.relatedId, n.relatedType, n.id); }}>
@@ -204,7 +206,9 @@ export const NotificationDropdown = React.memo(function NotificationDropdown({ n
                           {n.level === 'urgent' && <span className="px-1 py-0.5 rounded text-[9px] bg-red-100 text-red-700 font-medium flex-shrink-0">紧急</span>}
                           {n.level === 'important' && <span className="px-1 py-0.5 rounded text-[9px] bg-amber-100 text-amber-700 font-medium flex-shrink-0">重要</span>}
                         </div>
-                        <div className="text-xs text-muted-foreground mt-0.5 truncate">{n.message}</div>
+                        <div className={cn('text-xs text-muted-foreground mt-0.5', isExpanded ? '' : 'truncate')}>{n.message}</div>
+                        {n.message && n.message.length > 40 && !isExpanded && <button className="text-[10px] text-primary hover:underline mt-0.5" onClick={e => { e.stopPropagation(); setExpandedIds(prev => new Set(prev).add(n.id)); }}>展开</button>}
+                        {isExpanded && <button className="text-[10px] text-primary hover:underline mt-0.5" onClick={e => { e.stopPropagation(); setExpandedIds(prev => { const next = new Set(prev); next.delete(n.id); return next; }); }}>收起</button>}
                         <div className="text-[10px] text-muted-foreground/60 mt-1">{new Date(n.createdAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                       </div>
                       {!n.read && <div className={cn('w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0', n.level === 'urgent' ? 'bg-red-500' : n.level === 'important' ? 'bg-amber-500' : 'bg-primary')} />}

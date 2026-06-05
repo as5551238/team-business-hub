@@ -115,10 +115,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const inverseAction = popUndo();
       if (inverseAction) {
         if (Array.isArray(inverseAction)) {
-          // Batch undo: dispatch all inverse actions
-          inverseAction.forEach(a => dispatch(a));
+          // Batch undo: dispatch all inverse actions, skip undo recording
+          inverseAction.forEach(a => dispatch({ ...a, _skipUndo: true }));
         } else {
-          dispatch(inverseAction);
+          dispatch({ ...inverseAction, _skipUndo: true });
         }
         setUndoCounter(c => c + 1);
         notifySelectorListeners();
@@ -129,9 +129,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const redoAction = popRedo();
       if (redoAction) {
         if (Array.isArray(redoAction)) {
-          redoAction.forEach(a => dispatch(a));
+          redoAction.forEach(a => dispatch({ ...a, _skipUndo: true }));
         } else {
-          dispatch(redoAction);
+          dispatch({ ...redoAction, _skipUndo: true });
         }
         setUndoCounter(c => c + 1);
         notifySelectorListeners();

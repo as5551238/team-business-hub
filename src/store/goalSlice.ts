@@ -64,7 +64,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
           const newValues: Record<string, unknown> = {};
           for (const k of changedKeys) { oldValues[k] = (oldGoal as Record<string, unknown>)[k]; newValues[k] = (updates as Record<string, unknown>)[k]; }
           const fieldLabel = changedKeys.length === 1 ? goalFieldLabelMap[changedKeys[0]] || changedKeys[0] : `${changedKeys.length}个字段`;
-          pushFieldUndo('UPDATE_GOAL', action.payload.id, oldValues, newValues, `更新目标${fieldLabel}`);
+          pushFieldUndo('UPDATE_GOAL', action.payload.id, oldValues, newValues, `更新目标${fieldLabel}`, (action as Action & { _skipUndo?: boolean })._skipUndo);
         }
         if (updates.title) updates.title = clampTitle(updates.title) ?? updates.title;
         if (updates.description) updates.description = clampDesc(updates.description) ?? updates.description;

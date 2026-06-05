@@ -20,6 +20,11 @@ export function useAutoSave(value: string, options: UseAutoSaveOptions) {
   const lastSavedRef = useRef(value);
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
+  // Track latest value via ref so unmount cleanup always reads current value
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   // Flush any pending save immediately
   const flush = useCallback(() => {
@@ -55,8 +60,11 @@ export function useAutoSave(value: string, options: UseAutoSaveOptions) {
     return () => {
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
-        lastSavedRef.current = value;
-        onSaveRef.current(value);
+        const latest = valueRef.current;
+        if (latest !== lastSavedRef.current && enabledRef.current) {
+          lastSavedRef.current = latest;
+          onSaveRef.current(latest);
+        }
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

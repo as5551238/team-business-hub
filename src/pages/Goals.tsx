@@ -18,6 +18,8 @@ import {
 import { viewTabs, statusLabels, statusColors, bizLabels, bizColors, type ViewMode, VALID_VIEW_MODES } from './goals/constants';
 import { useDraftSave } from '@/hooks/useDraftSave';
 import { OKRAlignmentView } from './admin/OKRAlignmentTab';
+import { StrategyHierarchyView } from '@/components/StrategyHierarchyView';
+import { CascadeDrilldownView } from '@/components/CascadeDrilldownView';
 import { AIItemFlow } from '@/components/AIItemFlow';
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 import { useBatchSelection } from '@/hooks/useBatchSelection';
@@ -57,13 +59,12 @@ export default function Goals() {
   const [searchText, setSearchText] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
 
-  // Apply URL filter params on mount (one-time)
+  // Apply URL filter params on mount and when URL changes
   useEffect(() => {
     if (urlFilters.statuses && urlFilters.statuses.size > 0) {
       setSelectedStatuses(urlFilters.statuses);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [urlFilters]);
 
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
   const [customRepeatDays, setCustomRepeatDays] = useState(0);
@@ -463,6 +464,8 @@ export default function Goals() {
        )}
 
       {effectiveViewMode === 'okr' && <OKRAlignmentView />}
+      {effectiveViewMode === 'strategy' && <StrategyHierarchyView />}
+      {effectiveViewMode === 'cascade' && <CascadeDrilldownView />}
       </div>
       {detailItem && <div className="flex-shrink-0 border-l border-border bg-card" style={{ width: 480 }}><ItemDetailPanel key={detailItem.id} inline isOpen={true} onClose={closeGoalDetail} itemType={detailItem.type} itemId={detailItem.id} /></div>}
 

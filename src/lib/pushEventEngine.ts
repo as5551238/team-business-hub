@@ -294,10 +294,11 @@ export function startAiPushScan(
     const todayStr = now.toISOString().slice(0, 10);
     const threeDaysLater = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    // 1. 即将逾期（3天内到期且未完成）
+    // 1. 即将逾期（3天内到期且未完成）— only tasks assigned to current user
     for (const t of tasks) {
       if (t.status === 'done' || t.status === 'cancelled') continue;
       if (t.deletedAt) continue;
+      if (t.leaderId !== userId && !(t.supporterIds || []).includes(userId)) continue;
       if (t.dueDate && t.dueDate >= todayStr && t.dueDate <= threeDaysLater) {
         const daysLeft = Math.ceil((new Date(t.dueDate).getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
         dispatchAiPushEvent({
@@ -311,10 +312,11 @@ export function startAiPushScan(
       }
     }
 
-    // 2. 已逾期
+    // 2. 已逾期 — only tasks assigned to current user
     for (const t of tasks) {
       if (t.status === 'done' || t.status === 'cancelled') continue;
       if (t.deletedAt) continue;
+      if (t.leaderId !== userId && !(t.supporterIds || []).includes(userId)) continue;
       if (t.dueDate && t.dueDate < todayStr) {
         dispatchAiPushEvent({
           type: 'delay_warning',
@@ -327,9 +329,10 @@ export function startAiPushScan(
       }
     }
 
-    // 3. 目标进度停滞（进行中但7天无更新）
+    // 3. 目标进度停滞（进行中但7天无更新）— only goals assigned to current user
     for (const g of goals) {
       if (g.status !== 'in_progress' || g.deletedAt) continue;
+      if (g.leaderId !== userId && !(g.supporterIds || []).includes(userId)) continue;
       if (g.updatedAt) {
         const daysSinceUpdate = Math.ceil((now.getTime() - new Date(g.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
         if (daysSinceUpdate >= 7) {

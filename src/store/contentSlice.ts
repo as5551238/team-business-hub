@@ -1,4 +1,4 @@
-import type { AppState, Bookmark, Sprint, Knowledge } from '@/types';
+import type { AppState, Bookmark, Sprint, Knowledge, ReviewSession } from '@/types';
 import { isSupabaseConfigured } from '@/supabase/client';
 import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseUpsert, supabaseDelete } from './supabase';
@@ -209,8 +209,30 @@ export function contentReducer(state: AppState, action: Action): AppState | null
       const idx = s.subscriptions.findIndex(sub => sub.teamId === action.payload.teamId);
       const now = tsNow();
       if (idx !== -1) {
+        const oldUpdatedAt = s.subscriptions[idx].updatedAt;
         s.subscriptions[idx] = { ...s.subscriptions[idx], ...action.payload.updates, updatedAt: now };
+        supabaseUpdate('subscriptions', s.subscriptions[idx].id, { ...action.payload.updates, updated_at: now }, oldUpdatedAt);
       }
+      return s;
+    }
+    case 'ADD_REVIEW_SESSION': {
+      const s = needMutate(state, ['reviewSessions']);
+      const now = tsNow();
+      const session: ReviewSession = { ...action.payload, id: action.payload.id || genId('rvs'), createdAt: now };
+      s.reviewSessions.push(session);
+      return s;
+    }
+    case 'UPDATE_REVIEW_SESSION': {
+      const s = needMutate(state, ['reviewSessions']);
+      const idx = s.reviewSessions.findIndex(r => r.id === action.payload.id);
+      if (idx !== -1) {
+        s.reviewSessions[idx] = { ...s.reviewSessions[idx], ...action.payload.updates };
+      }
+      return s;
+    }
+    case 'DELETE_REVIEW_SESSION': {
+      const s = needMutate(state, ['reviewSessions']);
+      s.reviewSessions = s.reviewSessions.filter(r => r.id !== action.payload);
       return s;
     }
   }
