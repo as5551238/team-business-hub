@@ -20,6 +20,8 @@ export interface AIConfig {
   costRouting?: boolean;
   /** 当前套餐层级（门禁用） */
   _planTier?: string;
+  /** 当前团队ID（AI调用计数RPC用） */
+  _teamId?: string;
 }
 
 export type SuggestedAction = {
@@ -197,11 +199,13 @@ export function loadAIConfig(): AIConfig {
       if (migrated) saveAIConfig(saved);
       // Inject plan tier for feature gating
       saved._planTier = loadPlanTier();
+      saved._teamId = loadTeamId();
       return saved;
     }
   } catch (e) { handleError(e, { module: 'aiTypes', operation: 'LOAD_AI_CONFIG', severity: 'debug' }); }
   const config = { ...DEFAULT_AI_CONFIG };
   config._planTier = loadPlanTier();
+  config._teamId = loadTeamId();
   return config;
 }
 
@@ -212,6 +216,15 @@ function loadPlanTier(): string {
     if (raw) return raw;
   } catch { /* ignore */ }
   return 'free';
+}
+
+/** Load current team ID from localStorage */
+function loadTeamId(): string {
+  try {
+    const raw = localStorage.getItem('tbh-current-team');
+    if (raw) return raw;
+  } catch { /* ignore */ }
+  return '__default__';
 }
 
 /** Sync plan tier from store state to localStorage — call after login / subscription change */

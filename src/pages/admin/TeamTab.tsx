@@ -7,6 +7,8 @@ import type { MemberRole, Permission, PermissionModule, Member } from '@/types';
 import { inputCls, roleLabels, roleColors, permissionDesc, allPermissions, getRoleDefaultPermission, memberToEditForm, type EditForm } from './constants';
 import { handleError } from '@/lib/errorHandler';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { gatedAction, checkLimit } from '@/lib/featureGating';
+import { getPlanName } from '@/lib/featureGating';
 
 export function TeamTab() {
   const { state, dispatch } = useStore();
@@ -323,6 +325,13 @@ export function TeamTab() {
               <button className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-muted" onClick={() => setShowAddDialog(false)}>取消</button>
               <button className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => {
                 if (!addForm.name.trim()) return;
+                const teamId = state.currentTeamId ?? '';
+                const allowed = gatedAction('maxMembers', teamId, state.subscriptions ?? [], activeMembers.length);
+                if (!allowed) {
+                  const info = checkLimit('maxMembers', teamId, state.subscriptions ?? [], activeMembers.length);
+                  alert(`当前${getPlanName(info.tier)}最多支持 ${info.max} 名成员，请升级到专业版或企业版以添加更多成员。`);
+                  return;
+                }
                 dispatch({ type: 'ADD_MEMBER', payload: { name: addForm.name.trim(), nickname: addForm.nickname.trim(), wechatId: addForm.wechatId.trim(), phone: addForm.phone.trim(), email: addForm.email.trim(), role: addForm.role, department: addForm.department.trim() || 'SQ Team', avatar: addForm.name.trim().slice(0, 2), status: 'active', permissions: [] } });
                 setShowAddDialog(false);
                 setAddForm({ name: '', nickname: '', wechatId: '', phone: '', email: '', role: 'member', department: '' });

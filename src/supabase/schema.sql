@@ -1404,3 +1404,131 @@ select
   end as phone,
   wechat_id
 from members;
+
+-- ==================== 付费订阅系统 ====================
+
+create table if not exists subscriptions (
+  id text primary key default gen_random_uuid()::text,
+  team_id text not null references teams(id) on delete cascade,
+  tier text not null default 'free' check (tier in ('free', 'pro', 'enterprise')),
+  status text not null default 'active' check (status in ('active', 'past_due', 'canceled', 'trialing')),
+  stripe_customer_id text,
+  stripe_subscription_id text,
+  current_period_start timestamptz default now(),
+  current_period_end timestamptz,
+  trial_ends_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index idx_subscriptions_team on subscriptions(team_id);
+create unique index idx_subscriptions_team_active on subscriptions(team_id) where status = 'active';
+
+alter table subscriptions enable row level security;
+create policy "SUB: team members can read own" on subscriptions for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "SUB: admin can manage" on subscriptions for all using (team_id = app_current_team_id() and is_team_admin(team_id));
+
+-- Auto-update updated_at
+create or replace function subscriptions_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+create trigger trg_subscriptions_updated_at
+  before update on subscriptions
+  for each row execute function subscriptions_updated_at();
+
+-- ==================== get_team_tier() — 供 RLS 和 RPC 使用 ====================
+
+create or replace function get_team_tier(p_team_id text)
+returns text as $$
+declare
+  v_tier text;
+begin
+  select tier into v_tier from subscriptions where team_id = p_team_id and status = 'active' limit 1;
+  return coalesce(v_tier, 'free');
+end;
+$$ language plpgsql security definer stable;
+
+-- ==================== 付费功能 RLS 增量策略 ====================
+
+-- automation_rules: free 不可创建
+create policy "AR: paid teams only insert" on automation_rules for insert with check (
+  team_id = app_current_team_id() and is_team_admin(team_id)
+  and get_team_tier(team_id) != 'free'
+);
+
+-- status_flow_rules (审批流): free 不可创建
+create policy "SFR: paid teams only insert" on status_flow_rules for insert with check (
+  team_id = app_current_team_id() and is_team_admin(team_id)
+  and get_team_tier(team_id) != 'free'
+);
+
+-- performance_reviews: free 不可创建 (高级权限)
+create policy "PR: paid teams only insert" on performance_reviews for insert with check (
+  team_id = app_current_team_id() and is_team_member(team_id)
+  and get_team_tier(team_id) != 'free'
+);
+
+-- ==================== call_llm_proxy — LLM代理RPC ====================
+
+create or replace function call_llm_proxy(p_url text, p_body text, p_api_key text)
+returns text as $$
+declare
+  response text;
+begin
+  select http Into response from net.http_post(
+    url := p_url,
+    body := p_body::jsonb,
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || p_api_key
+    )
+  );
+  return response;
+end;
+$$ language plpgsql security definer;
+
+-- ==================== AI调用计数 — 服务端校验基础 ====================
+
+create table if not exists ai_call_logs (
+  id text primary key default gen_random_uuid()::text,
+  team_id text not null,
+  user_id text not null,
+  call_date date not null default current_date,
+  call_count integer not null default 1,
+  created_at timestamptz default now(),
+  unique(team_id, user_id, call_date)
+);
+
+alter table ai_call_logs enable row level security;
+create policy "AL: team members can read own" on ai_call_logs for select using (team_id = app_current_team_id());
+create policy "AL: system can write" on ai_call_logs for insert with check (true);
+create policy "AL: system can update" on ai_call_logs for update using (true);
+
+-- RPC: 检查并递增 AI 调用计数
+create or replace function check_and_increment_ai_call(p_team_id text, p_user_id text, p_limit integer)
+returns jsonb as $$
+declare
+  v_count integer;
+  v_allowed boolean;
+begin
+  select call_count into v_count from ai_call_logs
+    where team_id = p_team_id and user_id = p_user_id and call_date = current_date;
+
+  if not found then
+    insert into ai_call_logs (team_id, user_id, call_date, call_count) values (p_team_id, p_user_id, current_date, 1);
+    return jsonb_build_object('allowed', true, 'count', 1, 'limit', p_limit);
+  end if;
+
+  v_allowed := v_count < p_limit;
+  if v_allowed then
+    update ai_call_logs set call_count = call_count + 1
+      where team_id = p_team_id and user_id = p_user_id and call_date = current_date;
+  end if;
+
+  return jsonb_build_object('allowed', v_allowed, 'count', v_count + case when v_allowed then 1 else 0 end, 'limit', p_limit);
+end;
+$$ language plpgsql security definer;

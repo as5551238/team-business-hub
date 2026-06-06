@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { createRuleFromIntent, getWorkflowPatternSummary } from '@/lib/ai/aiWorkflowEngine';
 import { getAutomationLog, clearAutomationLog } from '@/store/shared';
 import type { AutomationLogEntry } from '@/store/shared';
+import { gatedAction, checkLimit, getPlanName } from '@/lib/featureGating';
 
 const TRIGGERS: { value: AutomationTrigger; label: string }[] = [
   { value: 'status_change', label: '状态变更' },
@@ -55,6 +56,7 @@ export function AutomationTab() {
   }
 
   function handleSave() {
+    const teamId = state.currentTeamId ?? '';
     if (editingId) {
       dispatch({ type: 'UPDATE_AUTOMATION_RULE', payload: { id: editingId, updates: {
         name: form.name, enabled: form.enabled, itemType: form.itemType, trigger: form.trigger,
@@ -62,6 +64,18 @@ export function AutomationTab() {
         actions: form.actions,
       }}});
     } else {
+      // Check maxAutomations limit
+      if (!gatedAction('maxAutomations', teamId, state.subscriptions ?? [], rules.length)) {
+        const info = checkLimit('maxAutomations', teamId, state.subscriptions ?? [], rules.length);
+        alert(`当前${getPlanName(info.tier)}最多支持 ${info.max} 条自动化规则，请升级以添加更多。`);
+        return;
+      }
+      // Check agentAutomation gate if rule contains AI action
+      const hasAIAction = form.actions.some(a => a.type === 'ai_action');
+      if (hasAIAction && !gatedAction('agentAutomation', teamId, state.subscriptions ?? [])) {
+        alert('AI自动化动作需要专业版或企业版。请升级以使用此功能。');
+        return;
+      }
       dispatch({ type: 'ADD_AUTOMATION_RULE', payload: {
         name: form.name, enabled: form.enabled, itemType: form.itemType, trigger: form.trigger,
         condition: { field: form.conditionField, operator: form.conditionOperator as AutomationRule['condition']['operator'], value: form.conditionValue },
@@ -102,6 +116,16 @@ export function AutomationTab() {
 
   function handleAiCreate() {
     if (!aiInput.trim()) return;
+    const teamId = state.currentTeamId ?? '';
+    if (!gatedAction('maxAutomations', teamId, state.subscriptions ?? [], rules.length)) {
+      const info = checkLimit('maxAutomations', teamId, state.subscriptions ?? [], rules.length);
+      alert(`当前${getPlanName(info.tier)}最多支持 ${info.max} 条自动化规则，请升级以添加更多。`);
+      return;
+    }
+    if (!gatedAction('agentAutomation', teamId, state.subscriptions ?? [])) {
+      alert('AI自动化创建需要专业版或企业版。请升级以使用此功能。');
+      return;
+    }
     const rule = createRuleFromIntent(aiInput.trim());
     if (!rule) return;
     dispatch({ type: 'ADD_AUTOMATION_RULE', payload: {

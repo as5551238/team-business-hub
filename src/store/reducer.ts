@@ -70,6 +70,7 @@ const TABLE_TO_STATE_KEY: Record<string, string> = {
   capacity_plans: 'capacityPlans',
   dste_phases: 'dstePhases',
   business_values: 'businessValues',
+  subscriptions: 'subscriptions',
 };
 
 export function reducer(state: AppState, action: Action): AppState {

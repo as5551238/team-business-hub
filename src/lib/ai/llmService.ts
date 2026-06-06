@@ -98,13 +98,33 @@ interface LLMResponse {
 }
 
 export async function callLLM(prompt: string, config: AIConfig, complexity?: TaskComplexity): Promise<string | null> {
-  // Feature gate: AI daily call limit
+  // Feature gate: AI daily call limit (localStorage + optional server-side check)
   const todayCount = getAITodayCount();
   const PLAN_AI_LIMITS: Record<string, number> = { 'free': 10, 'pro': 1000, 'enterprise': 999999 };
   const plan = config._planTier || 'free';
   const aiLimit = PLAN_AI_LIMITS[plan] ?? 10;
   if (todayCount >= aiLimit) {
     throw new Error(`今日AI调用次数已达上限(${aiLimit}次)。请升级套餐或明日再试。`);
+  }
+
+  // Server-side AI call limit check (optional — silently falls back if RPC unavailable)
+  try {
+    const sb = getSupabaseClient();
+    if (sb) {
+      const { error: rpcErr } = await sb.rpc('check_and_increment_ai_call', {
+        p_team_id: config._teamId || '__default__',
+      });
+      if (rpcErr) {
+        // If RPC says limit exceeded, block the call
+        if (rpcErr.message?.includes('limit') || rpcErr.message?.includes('exceeded') || rpcErr.code === '429') {
+          throw new Error(`今日AI调用次数已达服务端上限。请升级套餐或明日再试。`);
+        }
+        // Other RPC errors (function not deployed, etc.) — ignore, use local count
+      }
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('服务端上限')) throw e;
+    // Non-limit errors — silently continue with local-only check
   }
 
   const preset = PROVIDER_PRESETS[config.provider];
@@ -225,13 +245,30 @@ export async function callLLMStream(
   onChunk: (text: string) => void,
   options?: { complexity?: TaskComplexity; signal?: AbortSignal }
 ): Promise<string> {
-  // Feature gate: AI daily call limit
+  // Feature gate: AI daily call limit (localStorage + optional server-side check)
   const todayCount = getAITodayCount();
   const PLAN_AI_LIMITS: Record<string, number> = { 'free': 10, 'pro': 1000, 'enterprise': 999999 };
   const plan = config._planTier || 'free';
   const aiLimit = PLAN_AI_LIMITS[plan] ?? 10;
   if (todayCount >= aiLimit) {
     throw new Error(`今日AI调用次数已达上限(${aiLimit}次)。请升级套餐或明日再试。`);
+  }
+
+  // Server-side AI call limit check (optional)
+  try {
+    const sb = getSupabaseClient();
+    if (sb) {
+      const { error: rpcErr } = await sb.rpc('check_and_increment_ai_call', {
+        p_team_id: config._teamId || '__default__',
+      });
+      if (rpcErr) {
+        if (rpcErr.message?.includes('limit') || rpcErr.message?.includes('exceeded') || rpcErr.code === '429') {
+          throw new Error(`今日AI调用次数已达服务端上限。请升级套餐或明日再试。`);
+        }
+      }
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('服务端上限')) throw e;
   }
 
   const preset = PROVIDER_PRESETS[config.provider];

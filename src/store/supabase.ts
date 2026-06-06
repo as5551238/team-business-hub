@@ -2,7 +2,7 @@ import { handleError } from '@/lib/errorHandler';
 import type { AppState, Goal, Project, Task, Member, SubTask } from '@/types';
 import { getSupabaseClient } from '@/supabase/client';
 import { STORAGE_KEY, CURRENT_USER_KEY, ensureAppStateDefaults, toCamel, toSnake } from './types';
-import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge, NotificationPreference, OKRSeason, Budget, CostEntry, PerformanceReview, EffectivenessMetric, AISuggestion } from '@/types';
+import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge, NotificationPreference, OKRSeason, Budget, CostEntry, PerformanceReview, EffectivenessMetric, AISuggestion, Subscription } from '@/types';
 import { initFactoryRulesIfNeeded } from './shared';
 
 export function saveLocalStateImmediate(state: AppState) {
@@ -74,7 +74,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
   if (!sb) return null;
   const tid = teamId || _currentTeamId || '__default__';
   try {
-    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes, notifPrefsRes, seasonsRes, budgetsRes, costEntriesRes, perfReviewsRes, effMetricsRes, aiSuggRes] = await Promise.allSettled([
+    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes, notifPrefsRes, seasonsRes, budgetsRes, costEntriesRes, perfReviewsRes, effMetricsRes, aiSuggRes, subscriptionsRes] = await Promise.allSettled([
       sb.from('members').select('*').eq('status', 'active').order('join_date'),
       sb.from('goals').select('*').eq('team_id', tid).order('level'),
       sb.from('projects').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
@@ -104,6 +104,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       sb.from('performance_reviews').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
       sb.from('effectiveness_metrics').select('*').eq('team_id', tid).order('measured_at', { ascending: false }),
       sb.from('ai_suggestions').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
+      sb.from('subscriptions').select('*').order('created_at', { ascending: false }),
     ]);
     const val = (r: PromiseSettledResult<unknown>) => r.status === 'fulfilled' ? r.value : null;
     const data = (r: { data?: unknown } | null) => Array.isArray(r?.data) ? r.data : [];
@@ -157,6 +158,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       })),
       effectivenessMetrics: data(val(effMetricsRes)).map(toCamel) as EffectivenessMetric[],
       aiSuggestions: data(val(aiSuggRes)).map(toCamel) as AISuggestion[],
+      subscriptions: data(val(subscriptionsRes)).map(toCamel) as Subscription[],
       teams: data(val(teamsRes)).map(toCamel),
       teamMembers: teamMemberLinks,
       currentTeamId: tid,
@@ -340,6 +342,7 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   capacity_plans: new Set(['id','period','available_hours','planned_hours','forecast_hours','gap','team_id','created_at']),
   dste_phases: new Set(['id','season_id','phase','status','ai_auto_progress','completed_at','checklist','team_id']),
   business_values: new Set(['id','goal_id','input_cost','output_value','roi','value_stream','measured_at','team_id']),
+  subscriptions: new Set(['id','team_id','tier','status','stripe_customer_id','stripe_subscription_id','current_period_start','current_period_end','trial_ends_at','created_at','updated_at']),
 };
 
 /** Columns that reference other tables via FK — empty strings must become null */
