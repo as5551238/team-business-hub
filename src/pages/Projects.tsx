@@ -6,7 +6,7 @@ import type { TaskPriority } from '@/types';
 import { Plus, FolderKanban, Search, Check, Users, X, Filter, ChevronDown, EyeOff, Eye } from 'lucide-react';
 import { SimpleSelect } from '@/components/ui/simple-select';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence } from '@/lib/collab';
@@ -272,6 +272,7 @@ export default function Projects() {
         <DialogContent className="sm:max-w-lg p-0 gap-0">
           <DialogHeader className="px-6 py-4 border-b border-border flex flex-row items-center justify-between space-y-0">
             <DialogTitle className="font-semibold">新建项目</DialogTitle>
+            <DialogDescription className="sr-only">创建新项目的表单</DialogDescription>
           </DialogHeader>
             <div className="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
               <div><label className="block text-sm font-medium mb-1">项目名称 *</label><input className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="例：Q2产品迭代" value={formData.title} onChange={e => setFormData(f => ({ ...f, title: e.target.value }))} /></div>

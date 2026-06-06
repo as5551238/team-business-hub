@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { X, Sparkles, Zap, UserPlus, Users, ListChecks, UserCheck } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useStore } from '@/store/useStore';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { matchTasksLocal, matchTasksDeep, type MatchResult, type TaskMatchResult } from '@/lib/ai/aiMatcher';
 import { loadAIConfig } from '@/lib/ai/types';
 
@@ -45,7 +45,6 @@ export function AIMatchPanel({ onClose }: AIMatchPanelProps) {
 
   const aiConfig = useMemo(() => loadAIConfig(), []);
   const aiDisabled = !aiConfig.enabled || !aiConfig.apiKey;
-  const trapRef = useFocusTrap(true, onClose);
 
   const unassignedCount = useMemo(
     () => state.tasks.filter(t => !t.leaderId && t.status !== 'done' && t.status !== 'cancelled').length,
@@ -105,13 +104,12 @@ export function AIMatchPanel({ onClose }: AIMatchPanelProps) {
   }, [result, state.tasks]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose} role="presentation">
-      <div className="bg-card rounded-xl shadow-xl border border-border w-[680px] max-h-[80vh] flex flex-col animate-fade-in" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="AI匹配" ref={trapRef}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-lg font-bold">智能匹配</h2>
-          <button className="p-1.5 rounded-lg hover:bg-muted transition-colors" onClick={onClose} aria-label="关闭"><X size={20} /></button>
-        </div>
+    <Dialog open={true} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-[680px] max-h-[80vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <DialogTitle className="text-lg font-bold">智能匹配</DialogTitle>
+          <DialogDescription className="sr-only">智能匹配任务与成员</DialogDescription>
+        </DialogHeader>
 
         {/* Action buttons */}
         <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/30">
@@ -197,8 +195,8 @@ export function AIMatchPanel({ onClose }: AIMatchPanelProps) {
             </button>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

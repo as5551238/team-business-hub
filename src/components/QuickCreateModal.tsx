@@ -7,7 +7,7 @@ import { useStore } from '@/store/useStore';
 import type { TaskStatus, TaskPriority, GoalType, GoalStatus, ProjectStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { Plus, Target, FolderKanban, CheckSquare } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { SimpleSelect } from '@/components/ui/simple-select';
 
 type ItemType = 'task' | 'goal' | 'project';
@@ -69,6 +69,7 @@ export function QuickCreateModal({ open, onClose, initialType = 'task' }: QuickC
         {/* Header with type switcher */}
         <DialogHeader className="sr-only">
           <DialogTitle>快速创建{typeLabel}</DialogTitle>
+          <DialogDescription className="sr-only">快速创建{typeLabel}表单</DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-1 px-4 pt-4 pb-2">
           {(['task', 'goal', 'project'] as ItemType[]).map(t => (

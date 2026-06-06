@@ -5,7 +5,9 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { useMemberLookup, usePermissions, useActiveMembers } from '@/store/hooks';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag, X, Filter, Save, GitCompare, Sparkles, Zap } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -98,7 +100,6 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
-  const trapRef = useFocusTrap(open, onClose);
 
   const { activeMembers } = useActiveMembers();
 
@@ -269,18 +270,17 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose} role="presentation">
-      <div className="bg-card rounded-2xl shadow-2xl w-[95vw] max-w-[1400px] h-[85vh] flex flex-col animate-fade-in" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="甘特图" ref={trapRef}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-[90vw] max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold">甘特图</h2>
+            <DialogTitle className="text-lg font-bold">甘特图</DialogTitle>
+            <DialogDescription className="sr-only">甘特图弹窗，查看和编辑任务时间线</DialogDescription>
             <span className="text-xs text-muted-foreground">{allTasks.length} 个任务</span>
             {cpmResult.criticalTaskIds.size > 0 && <span className="text-[10px] text-red-500 font-medium">关键路径 {cpmResult.criticalPath.length} 项 | 工期 {cpmResult.projectDuration} 天</span>}
             {(() => { const bufs = suggestBuffers(cpmResult.taskMetrics, cpmResult.criticalTaskIds); return bufs.length > 0 ? <span className="text-[10px] text-blue-500 font-medium ml-2">缓冲建议: {bufs.length}项, 总计{bufs.reduce((s,b)=>s+b.suggestBuffer,0)}天</span> : null; })()}
           </div>
-          <button className="p-1.5 rounded-lg hover:bg-muted transition-colors" onClick={onClose} aria-label="关闭甘特图"><X size={20} /></button>
-        </div>
+        </DialogHeader>
 
         {/* Toolbar */}
         <div className="flex items-center gap-2 px-5 py-2 border-b border-border bg-muted/30 relative flex-wrap">
@@ -522,9 +522,13 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
 
         {/* Editing modal (centered overlay) */}
         {editingTaskId && (() => { const et = allTasks.find(t => t.id === editingTaskId); if (!et) return null; return (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30" onClick={() => setEditingTaskId(null)}>
-            <div className="bg-card rounded-2xl shadow-2xl p-6 w-[420px] max-h-[80vh] overflow-y-auto space-y-4" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between"><span className="text-base font-semibold">{et.title}</span><button onClick={() => setEditingTaskId(null)} className="p-1 hover:bg-muted rounded-lg" aria-label="关闭编辑"><X size={16} /></button></div>
+          <Dialog open={!!editingTaskId} onOpenChange={(v) => { if (!v) setEditingTaskId(null); }}>
+            <DialogContent className="sm:max-w-[420px] max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{et.title}</DialogTitle>
+                <DialogDescription className="sr-only">编辑任务详情</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
               <div><label className="text-xs text-muted-foreground block mb-1">状态</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.status} onChange={e => handleUpdateTask(et.id, { status: e.target.value as TaskStatus })}>{(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
               <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.leaderId || ''} onChange={e => handleUpdateTask(et.id, { leaderId: e.target.value })}><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
               <div className="grid grid-cols-2 gap-3">
@@ -535,10 +539,11 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
               <div><label className="text-xs text-muted-foreground block mb-1">前置依赖</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value="" onChange={e => { if (!e.target.value) return; const current = (et.blockedBy ?? []) as string[]; if (!current.includes(e.target.value)) handleUpdateTask(et.id, { blockedBy: [...current, e.target.value] }); }}><option value="">添加依赖...</option>{allTasks.filter(t => t.id !== et.id).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select>
                 <div className="flex flex-wrap gap-1 mt-2">{((et.blockedBy ?? []) as string[]).map(bid => { const dep = allTasks.find(t => t.id === bid); if (!dep) return null; return <span key={bid} className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1">{dep.title}<button className="hover:text-red-500" onClick={() => handleUpdateTask(et.id, { blockedBy: ((et.blockedBy ?? []) as string[]).filter((id: string) => id !== bid) })} aria-label="移除依赖"><X size={12} /></button></span>; })}</div>
               </div>
-            </div>
-          </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         ); })()}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useStore } from '@/store/useStore';
 import { useTemplates } from '@/store/hooks';
 import { uploadFile, BUCKET_NAMES } from '@/supabase/storage';
@@ -91,40 +92,40 @@ export function ToolboxTab() {
         ))}
         {filtered.length === 0 && <div className="col-span-full py-16 text-center"><FileText size={40} className="mx-auto text-muted-foreground/40" /><EmptyState title="暂无模板" compact /><button onClick={openCreate} className={primaryBtnCls + ' mt-3'}><Plus size={16} /> 创建第一个模板</button></div>}
       </div>
-      {showDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowDialog(false)} role="presentation" />
-          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="模板编辑">
-            <div className="px-6 py-4 border-b border-border"><h3 className="font-semibold">{editingId ? '编辑模板' : '新建模板'}</h3></div>
-            <div className="px-6 py-4 space-y-4">
-              <div><label className="block text-sm font-medium mb-1">标题 *</label><input className={inputCls} placeholder="模板标题" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
-              <div><label className="block text-sm font-medium mb-1">描述</label><input className={inputCls} placeholder="模板描述" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-sm font-medium mb-1">类型</label>
-                  <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as TForm['type'] }))}>
-                    <option value="goal">目标</option><option value="project">项目</option><option value="task">任务</option><option value="document">文档</option>
-                  </select>
-                </div>
-                <div><label className="block text-sm font-medium mb-1">分类</label><input className={inputCls} placeholder="分类名称" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} /></div>
+      <Dialog open={showDialog} onOpenChange={(v) => { if (!v) setShowDialog(false); }}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 py-4 border-b border-border">
+            <DialogTitle className="font-semibold">{editingId ? '编辑模板' : '新建模板'}</DialogTitle>
+            <DialogDescription className="sr-only">{editingId ? '编辑模板表单' : '新建模板表单'}</DialogDescription>
+          </DialogHeader>
+          <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
+            <div><label className="block text-sm font-medium mb-1">标题 *</label><input className={inputCls} placeholder="模板标题" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
+            <div><label className="block text-sm font-medium mb-1">描述</label><input className={inputCls} placeholder="模板描述" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-sm font-medium mb-1">类型</label>
+                <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as TForm['type'] }))}>
+                  <option value="goal">目标</option><option value="project">项目</option><option value="task">任务</option><option value="document">文档</option>
+                </select>
               </div>
-              <div><label className="block text-sm font-medium mb-1">内容</label><textarea className={inputCls + ' min-h-[120px] resize-y'} placeholder="模板内容..." value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} /></div>
-              <div className="flex items-center gap-2 text-sm"><Switch checked={form.isPublic} onCheckedChange={v => setForm(f => ({ ...f, isPublic: v }))} /><span>公开模板（团队成员可见）</span></div>
-              <div>
-                <label className="block text-sm font-medium mb-1">附件</label>
-                <div className="flex items-center gap-2">
-                  <input type="file" ref={fileInputRef} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
-                  <button className={btnCls} onClick={() => fileInputRef.current?.click()}><Upload size={14} /> {uploading ? '上传中...' : '上传附件'}</button>
-                  {attachedFile && <span className="text-xs text-muted-foreground flex items-center gap-1"><Download size={12} /><a href={attachedUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{attachedFile}</a></span>}
-                </div>
-              </div>
+              <div><label className="block text-sm font-medium mb-1">分类</label><input className={inputCls} placeholder="分类名称" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} /></div>
             </div>
-            <div className="px-6 py-4 border-t border-border flex justify-end gap-3">
-              <button className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-muted" onClick={() => setShowDialog(false)}>取消</button>
-              <button className={primaryBtnCls} onClick={handleSave}>{editingId ? '保存修改' : '创建'}</button>
+            <div><label className="block text-sm font-medium mb-1">内容</label><textarea className={inputCls + ' min-h-[120px] resize-y'} placeholder="模板内容..." value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} /></div>
+            <div className="flex items-center gap-2 text-sm"><Switch checked={form.isPublic} onCheckedChange={v => setForm(f => ({ ...f, isPublic: v }))} /><span>公开模板（团队成员可见）</span></div>
+            <div>
+              <label className="block text-sm font-medium mb-1">附件</label>
+              <div className="flex items-center gap-2">
+                <input type="file" ref={fileInputRef} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
+                <button className={btnCls} onClick={() => fileInputRef.current?.click()}><Upload size={14} /> {uploading ? '上传中...' : '上传附件'}</button>
+                {attachedFile && <span className="text-xs text-muted-foreground flex items-center gap-1"><Download size={12} /><a href={attachedUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{attachedFile}</a></span>}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+          <div className="px-6 py-4 border-t border-border flex justify-end gap-3">
+            <button className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-muted" onClick={() => setShowDialog(false)}>取消</button>
+            <button className={primaryBtnCls} onClick={handleSave}>{editingId ? '保存修改' : '创建'}</button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

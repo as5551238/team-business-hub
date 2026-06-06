@@ -9,7 +9,7 @@ import { handleError } from '@/lib/errorHandler';
 import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, FileText, Copy, MessageSquare, Trash2, Check, Filter, Sparkles, Users, EyeOff, Eye } from 'lucide-react';
 import { SimpleSelect } from '@/components/ui/simple-select';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
@@ -652,12 +652,12 @@ export default function Tasks() {
       </div>
 
 
-      {showCreateDialog && (
-        <Dialog open={showCreateDialog} onOpenChange={(v) => { if (!v) closeCreateDialog(); }}>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
-            <DialogHeader className="px-5 md:px-6 py-4 border-b border-border flex flex-row items-center justify-between space-y-0">
-              <DialogTitle className="font-semibold">新建任务</DialogTitle>
-            </DialogHeader>
+      <Dialog open={showCreateDialog} onOpenChange={(v) => { if (!v) closeCreateDialog(); }}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-5 md:px-6 py-4 border-b border-border flex flex-row items-center justify-between space-y-0">
+            <DialogTitle className="font-semibold">新建任务</DialogTitle>
+            <DialogDescription className="sr-only">创建新任务的表单</DialogDescription>
+          </DialogHeader>
             <div className="px-5 md:px-6 py-4 space-y-4 overflow-y-auto flex-1">
               {!fromTemplate ? (
                 <div className="space-y-4">
@@ -695,8 +695,7 @@ export default function Tasks() {
               )}
             </div>
           </DialogContent>
-        </Dialog>
-      )}
+      </Dialog>
 
       {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={closeTaskDetail} itemType={detailItem.type} itemId={detailItem.id} />}
       {showMatchPanel && <AIMatchPanel onClose={() => setShowMatchPanel(false)} />}

@@ -5,7 +5,7 @@ import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
 import { Trash2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check, Users, EyeOff, Eye } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
@@ -352,6 +352,7 @@ export default function Goals() {
         <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="px-5 md:px-6 py-4 border-b flex flex-row items-center justify-between space-y-0">
             <DialogTitle className="font-semibold">新建目标</DialogTitle>
+            <DialogDescription className="sr-only">创建新目标的表单</DialogDescription>
           </DialogHeader>
             <div className="px-5 md:px-6 py-4 space-y-4 overflow-y-auto flex-1">
               <div className="flex items-center gap-2">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, FileText, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { handleError } from '@/lib/errorHandler';
 
 export function PrivacyPage() {
@@ -163,34 +164,35 @@ export function ConsentDialog({ onAccept, onDecline }: { onAccept: () => void; o
 
   if (showPrivacy) {
     return (
-      <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-        <div className="bg-card dark:bg-gray-800 rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="隐私协议">
-          <div className="sticky top-0 bg-card dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">隐私政策</h2>
+      <Dialog open={showPrivacy} onOpenChange={(v) => { if (!v) setShowPrivacy(false); }}>
+        <DialogContent className="sm:max-w-3xl max-h-[80vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="sticky top-0 bg-card border-b border-gray-200 dark:border-gray-700 p-4 flex flex-row items-center justify-between space-y-0">
+            <DialogTitle className="text-lg font-bold text-gray-900 dark:text-gray-100">隐私政策</DialogTitle>
+            <DialogDescription className="sr-only">隐私政策全文</DialogDescription>
             <button onClick={() => setShowPrivacy(false)} className="text-sm text-indigo-600 hover:underline">返回确认</button>
-          </div>
-          <div className="p-4">
+          </DialogHeader>
+          <div className="p-4 overflow-y-auto flex-1">
             <PrivacyContent />
           </div>
-          <div className="sticky bottom-0 bg-card dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 flex gap-3">
+          <div className="sticky bottom-0 bg-card border-t border-gray-200 dark:border-gray-700 p-4 flex gap-3">
             <button onClick={() => setShowPrivacy(false)} className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700">返回</button>
             <button onClick={() => { try { localStorage.setItem(CONSENT_KEY, String(Date.now())); } catch (e) { handleError(e, { module: 'PrivacyPage', operation: 'SAVE_CONSENT', severity: 'debug' }); } onAccept(); }} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">我已阅读并同意</button>
           </div>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-card dark:bg-gray-800 rounded-2xl w-full max-w-md p-6" role="alertdialog" aria-modal="true" aria-label="确认同意">
+    <Dialog open={true} onOpenChange={(v) => { if (!v) onDecline(); }}>
+      <DialogContent className="sm:max-w-md p-6">
+        <DialogHeader>
+          <DialogTitle>欢迎来到团队业务中台</DialogTitle>
+          <DialogDescription>开始使用前，请确认以下事项</DialogDescription>
+        </DialogHeader>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
             <Shield size={24} className="text-indigo-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">欢迎来到团队业务中台</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">开始使用前，请确认以下事项</p>
           </div>
         </div>
 
@@ -220,8 +222,8 @@ export function ConsentDialog({ onAccept, onDecline }: { onAccept: () => void; o
           <button onClick={onDecline} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">不同意</button>
           <button onClick={() => { try { localStorage.setItem(CONSENT_KEY, String(Date.now())); } catch (e) { handleError(e, { module: 'PrivacyPage', operation: 'SAVE_CONSENT', severity: 'debug' }); } onAccept(); }} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 font-medium">我已阅读并同意</button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

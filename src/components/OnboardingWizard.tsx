@@ -9,7 +9,13 @@
  */
 import { useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   isOnboarded,
   markOnboarded,
@@ -67,7 +73,6 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   const steps = ['选择行业', '团队规模', '核心关注', '确认配置'];
 
   const handleSkip = useCallback(() => { markOnboarded(); onComplete(); }, [onComplete]);
-  const trapRef = useFocusTrap(true, handleSkip);
 
   const handleNext = useCallback(() => {
     if (step === 2 && industry && teamSize && focus) {
@@ -129,9 +134,13 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" role="presentation">
-      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" role="dialog" aria-modal="true" aria-label="新手引导" ref={trapRef}>
-        {/* 品牌头部 */}
+    <Dialog open={true} onOpenChange={(v) => { if (!v) handleSkip(); }}>
+      <DialogContent className="sm:max-w-lg p-0 gap-0 [&>button]:hidden" onInteractOutside={e => e.preventDefault()}>
+        <DialogHeader className="bg-gradient-to-r from-primary to-blue-600 px-6 pt-5 pb-4 sr-only">
+          <DialogTitle className="text-white">新手引导</DialogTitle>
+          <DialogDescription className="text-white/80">配置您的团队业务中台</DialogDescription>
+        </DialogHeader>
+        {/* 品牌头部 — 视觉可见的渐变头部，与sr-only DialogHeader共存以满足a11y */}
         <div className="bg-gradient-to-r from-primary to-blue-600 px-6 pt-5 pb-4">
           <div className="flex items-center gap-2 text-white/80 text-xs mb-2">
             <Building2 size={12} />
@@ -320,8 +329,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
