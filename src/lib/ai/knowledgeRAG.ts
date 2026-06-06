@@ -41,21 +41,21 @@ export function buildKnowledgeIndex(state: AppState): KnowledgeChunk[] {
 
   // Goals → 每个目标一个chunk
   for (const g of safeState.goals || []) {
-    if (g.deleted_at) continue;
+    if ((g as any).deletedAt) continue;
     const content = [g.title, g.description, ...(g.keyResults || []).map((kr: { title: string; currentValue: number; targetValue: number }) => `KR: ${kr.title} (${kr.currentValue}/${kr.targetValue})`)].filter(Boolean).join('\n');
     chunks.push({ id: `goal-${g.id}`, sourceId: g.id, sourceType: 'goal', sourceTitle: g.title || '目标', content, keywords: tokenize(content), updatedAt: g.updatedAt || g.createdAt || '' });
   }
 
   // Tasks → 每个任务一个chunk
   for (const t of safeState.tasks || []) {
-    if (t.deleted_at) continue;
+    if ((t as any).deletedAt) continue;
     const content = [t.title, t.description, t.status ? `状态:${t.status}` : '', t.priority ? `优先级:${t.priority}` : '', t.assigneeName ? `负责人:${t.assigneeName}` : ''].filter(Boolean).join('\n');
     chunks.push({ id: `task-${t.id}`, sourceId: t.id, sourceType: 'task', sourceTitle: t.title || '任务', content, keywords: tokenize(content), updatedAt: t.updatedAt || t.createdAt || '' });
   }
 
   // Knowledge entries
   for (const k of safeState.knowledge || []) {
-    if (k.deleted_at) continue;
+    if ((k as any).deletedAt) continue;
     const content = [k.title, k.content].filter(Boolean).join('\n');
     chunks.push({ id: `knowledge-${k.id}`, sourceId: k.id, sourceType: 'knowledge', sourceTitle: k.title || '知识', content, keywords: tokenize(content), updatedAt: k.updatedAt || '' });
   }

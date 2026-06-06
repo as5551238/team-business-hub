@@ -55,11 +55,21 @@ const SYSTEM_PROMPT = `你是团队管理中台的AI助手。你可以：
 /** 从AI回复中解析可执行操作 */
 function parseActions(text: string): AIAction[] {
   const actions: AIAction[] = [];
-  const regex = /<!--\s*ACTION:\s*(\{[^}]+\})\s*-->/g;
+  // Match from { to the closing --> allowing nested objects
+  const regex = /<!--\s*ACTION:\s*(\{[\s\S]*?\})\s*-->/g;
   let match;
   while ((match = regex.exec(text)) !== null) {
     try {
-      const action = JSON.parse(match[1]);
+      // Balance braces to find the correct closing }
+      let jsonStr = match[1];
+      let depth = 0;
+      let endIdx = 0;
+      for (let i = 0; i < jsonStr.length; i++) {
+        if (jsonStr[i] === '{') depth++;
+        else if (jsonStr[i] === '}') { depth--; if (depth === 0) { endIdx = i + 1; break; } }
+      }
+      if (endIdx > 0) jsonStr = jsonStr.slice(0, endIdx);
+      const action = JSON.parse(jsonStr);
       if (action.type && action.targetId && action.label) {
         actions.push(action as AIAction);
       }
@@ -70,7 +80,7 @@ function parseActions(text: string): AIAction[] {
 
 /** 从AI回复中移除ACTION标记（用户不需要看到） */
 function stripActionTags(text: string): string {
-  return text.replace(/<!--\s*ACTION:\s*\{[^}]+\}\s*-->/g, '').trim();
+  return text.replace(/<!--\s*ACTION:\s*\{[\s\S]*?\}\s*-->/g, '').trim();
 }
 
 export function AIChatAgent() {
@@ -84,6 +94,8 @@ export function AIChatAgent() {
   const abortRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef<KnowledgeChunk[] | null>(null);
+  const streamBufferRef = useRef<string>('');
+  const streamFlushRef = useRef<number>(0);
 
   // Build/refresh knowledge index on mount
   useEffect(() => {
@@ -145,10 +157,28 @@ export function AIChatAgent() {
 
     try {
       abortRef.current = new AbortController();
+      streamBufferRef.current = '';
+      const assistantId = `asst-${Date.now()}`;
+      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', timestamp: Date.now(), streaming: true, sources }]);
+
+      // Throttled stream update: batch chunks and flush every 80ms
+      const flushStream = () => {
+        const buffered = streamBufferRef.current;
+        if (!buffered) return;
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: buffered } : m));
+      };
+
       const fullText = await callLLMStream(convMessages, config, (chunk) => {
-        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + chunk } : m));
+        streamBufferRef.current += chunk;
+        const now = Date.now();
+        if (now - streamFlushRef.current > 80) {
+          streamFlushRef.current = now;
+          flushStream();
+        }
       }, { signal: abortRef.current.signal });
 
+      // Final flush
+      flushStream();
       setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: fullText, streaming: false, actions: parseActions(fullText) } : m));
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : '请求失败';
@@ -179,16 +209,16 @@ export function AIChatAgent() {
       try {
         switch (action.type) {
           case 'UPDATE_TASK_STATUS':
-            dispatch({ type: 'UPDATE_TASK', payload: { id: action.targetId, status: action.payload.status } });
+            dispatch({ type: 'UPDATE_TASK', payload: { id: action.targetId, updates: { status: action.payload.status, completedAt: action.payload.status === 'done' ? new Date().toISOString() : undefined } } });
             break;
           case 'UPDATE_TASK_PRIORITY':
-            dispatch({ type: 'UPDATE_TASK', payload: { id: action.targetId, priority: action.payload.priority } });
+            dispatch({ type: 'UPDATE_TASK', payload: { id: action.targetId, updates: { priority: action.payload.priority } } });
             break;
           case 'UPDATE_TASK_ASSIGNEE':
-            dispatch({ type: 'UPDATE_TASK', payload: { id: action.targetId, assigneeId: action.payload.assigneeId, assigneeName: action.payload.assigneeName } });
+            dispatch({ type: 'UPDATE_TASK', payload: { id: action.targetId, updates: { leaderId: action.payload.assigneeId } } });
             break;
           case 'UPDATE_GOAL_PROGRESS':
-            dispatch({ type: 'UPDATE_GOAL', payload: { id: action.targetId, progress: Number(action.payload.progress) } });
+            dispatch({ type: 'UPDATE_GOAL', payload: { id: action.targetId, updates: { progress: Number(action.payload.progress) } } });
             break;
         }
         // Mark as executed

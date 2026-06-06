@@ -10,7 +10,8 @@
  */
 import { useState } from 'react';
 import { useFeatureGate } from '@/hooks/useFeatureGate';
-import type { PlanLimitKey, PlanTier } from '@/types';
+import type { PlanLimitKey } from '@/lib/featureGating';
+import type { PlanTier } from '@/types';
 import { Lock, Crown, Sparkles } from 'lucide-react';
 import Paywall from '@/components/Paywall';
 import { getPlanName } from '@/lib/featureGating';

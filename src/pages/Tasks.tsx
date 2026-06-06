@@ -316,21 +316,23 @@ export default function Tasks() {
       </div>
     );
 
-    function renderKanbanColumns(cols: Array<{ key: string; label: string; color?: string }>, getItems: (col: string) => Task[], showStatus?: boolean, enableDrag?: boolean, onDropCustom?: (taskId: string, colKey: string) => void) {
-      return (
-        <div className="overflow-x-auto -mx-4 px-4 pb-2"><div className="flex gap-4 min-w-max">
-          {cols.map(col => {
-            const items = getItems(col.key);
-            return (
-              <div key={col.key} className={`w-[260px] sm:w-[300px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={(e: React.DragEvent) => e.preventDefault()}               onDrop={(e: React.DragEvent) => { e.preventDefault(); const taskId = e.dataTransfer.getData('text/plain'); if (!taskId || !can('tasks_edit')) return; if (onDropCustom) { onDropCustom(taskId, col.key); return; } if (enableDrag) { const validStatuses: Record<string, TaskStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done', blocked: 'blocked', cancelled: 'cancelled' }; const newStatus = validStatuses[col.key]; if (newStatus) { const t = state.tasks.find(x => x.id === taskId); dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'task', entityId: taskId, field: 'status', oldValue: t?.status || '', newValue: newStatus }); } } }}>
-                <div className={`flex items-center gap-2 px-4 pb-2 border-b-2 mx-3 mb-3 ${col.color || 'border-t-gray-400'}`}><span className="font-semibold text-sm">{col.label}</span><span className="text-xs text-muted-foreground ml-auto">{items.length}</span></div>
-                <div className="px-3 pb-3 space-y-2 max-h-[calc(100vh-320px)] overflow-y-auto">{items.length === 0 && <EmptyState title="暂无任务" compact />}{items.map(task => <TaskCard key={task.id} task={task} compact tags={tags} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={onOpenDetail} getName={getName} getAvatar={getAvatar} enableDrag={!!enableDrag || !!onDropCustom} />)}</div>
-              </div>
-            );
-          })}
-        </div></div>
-      );
-    }
+     function renderKanbanColumns(cols: Array<{ key: string; label: string; color?: string }>, getItems: (col: string) => Task[], showStatus?: boolean, enableDrag?: boolean, onDropCustom?: (taskId: string, colKey: string) => void) {
+       return (
+         <div className="overflow-x-auto -mx-4 px-4 pb-2"><div className="flex gap-4 min-w-max">
+           {cols.map(col => {
+             const items = getItems(col.key);
+             return (
+               <div key={col.key} className={`w-[260px] sm:w-[300px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={(e: React.DragEvent) => e.preventDefault()}               onDrop={(e: React.DragEvent) => { e.preventDefault(); const taskId = e.dataTransfer.getData('text/plain'); if (!taskId || !can('tasks_edit')) return; if (onDropCustom) { onDropCustom(taskId, col.key); return; } if (enableDrag) { const validStatuses: Record<string, TaskStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done', blocked: 'blocked', cancelled: 'cancelled' }; const newStatus = validStatuses[col.key]; if (newStatus) { const t = state.tasks.find(x => x.id === taskId); dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'task', entityId: taskId, field: 'status', oldValue: t?.status || '', newValue: newStatus }); } } }}>
+                 <div className={`flex items-center gap-2 px-4 pb-2 border-b-2 mx-3 mb-3 ${col.color || 'border-t-gray-400'}`}><span className="font-semibold text-sm">{col.label}</span><span className="text-xs text-muted-foreground ml-auto">{items.length}</span></div>
+                 <div className="px-3 pb-3 space-y-2 max-h-[calc(100vh-320px)] overflow-y-auto">{items.length === 0 && <EmptyState title="暂无任务" compact />}{items.map(task => <TaskCard key={task.id} task={task} compact tags={tags} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={onOpenDetail} getName={getName} getAvatar={getAvatar} enableDrag={!!enableDrag || !!onDropCustom} />)}</div>
+                 {/* Inline quick-add */}
+                 <form className="px-3 pb-2" onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); const title = (fd.get('quickTitle') as string || '').trim(); if (!title) return; const validStatuses: Record<string, TaskStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done', blocked: 'blocked', cancelled: 'cancelled' }; dispatch({ type: 'ADD_TASK', payload: { title, leaderId: currentUser?.id || '', status: validStatuses[col.key] || 'todo', priority: 'medium', description: '', projectId: null, goalId: null, parentId: null, supporterIds: [], tags: [], category: '', startDate: null, dueDate: null, reminderDate: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', blockedBy: [], sprintId: null, teamId: 'default', summary: '', discussionThreadId: null } }); e.currentTarget.reset(); }}><input name="quickTitle" placeholder="+ 回车快速创建..." className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-dashed border-muted-foreground/25 bg-transparent focus:border-primary focus:bg-card placeholder-muted-foreground/40 outline-none transition-colors" /></form>
+               </div>
+             );
+           })}
+         </div></div>
+       );
+     }
 
     if (kanbanGroupBy === 'tag') {
       const tagColumns = usedTagNames.length > 0 ? [...usedTagNames, '未分类'] : ['未分类'];

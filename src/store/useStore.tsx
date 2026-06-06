@@ -13,6 +13,7 @@ import { generateAllData } from '@/data/dataGenerator';
 import { ACTION_TO_TABLE, ACTION_TO_EVENT } from './actionMaps';
 import { notifySelectorListeners } from './selectorSystem';
 import { initRealtimeModule, setupRealtime, cleanupRealtime, destroyRealtimeModule } from './realtime';
+import { syncPlanTier } from '@/lib/ai/types';
 
 // Timeout wrapper for fetch operations — prevents infinite "连接中..." when Supabase is down
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -215,6 +216,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const savedTeamId = (() => { try { return localStorage.getItem('tbh-current-team'); } catch (e) { handleError(e, { module: 'store', operation: 'LS_READ_TEAM', severity: 'debug' }); return null; } })();
         const teamId = savedTeamId || data.currentTeamId || null;
         if (teamId) setCurrentTeamId(teamId);
+        // Sync plan tier from subscriptions to localStorage for feature gating
+        try { syncPlanTier(teamId || '', data.subscriptions || []); } catch { /* ignore */ }
         // Set RLS context for subsequent queries
         const savedUserId = (() => { try { return localStorage.getItem(CURRENT_USER_KEY); } catch (e) { handleError(e, { module: 'store', operation: 'LS_READ_USER', severity: 'debug' }); return null; } })();
         if (teamId && savedUserId) setRLSContext(teamId, savedUserId);

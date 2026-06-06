@@ -205,13 +205,22 @@ export function loadAIConfig(): AIConfig {
   return config;
 }
 
-/** Load plan tier from localStorage (synced from store) */
+/** Load plan tier from localStorage (synced from store via syncPlanTier) */
 function loadPlanTier(): string {
   try {
     const raw = localStorage.getItem('tbh-plan-tier');
     if (raw) return raw;
   } catch { /* ignore */ }
   return 'free';
+}
+
+/** Sync plan tier from store state to localStorage — call after login / subscription change */
+export function syncPlanTier(teamId: string, subscriptions: Array<{ teamId: string; tier: string; status: string }>): void {
+  try {
+    const sub = subscriptions.find(s => s.teamId === teamId && s.status === 'active');
+    const tier = sub?.tier ?? 'free';
+    localStorage.setItem('tbh-plan-tier', tier);
+  } catch { /* ignore */ }
 }
 
 export function saveAIConfig(c: AIConfig) {

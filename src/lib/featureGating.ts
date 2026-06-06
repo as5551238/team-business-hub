@@ -1,5 +1,8 @@
 import { PLAN_LIMITS, type PlanTier, type PlanLimit } from '@/types';
 
+/** PlanLimitKey — 功能限制键的联合类型，供组件使用 */
+export type PlanLimitKey = keyof PlanLimit;
+
 interface SubscriptionEntry {
   teamId: string;
   tier: PlanTier;

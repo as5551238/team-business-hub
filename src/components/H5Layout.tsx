@@ -58,8 +58,9 @@ export function H5Layout({ children }: H5LayoutProps) {
   const [detailItem, setDetailItem] = useState<{ type: 'task' | 'goal'; id: string } | null>(null);
 
   const handleRefresh = useCallback(() => {
-    // Dispatch a no-op to trigger re-render (Supabase realtime handles data freshness)
-  }, []);
+    // Force-refresh by dispatching MERGE_STATE with current data (triggers Supabase re-fetch)
+    dispatch({ type: 'MERGE_STATE', payload: { _refreshTrigger: Date.now() } as any });
+  }, [dispatch]);
 
   const { containerRef, pullDist, refreshing, onTouchStart, onTouchMove, onTouchEnd } = usePullToRefresh(handleRefresh);
 
