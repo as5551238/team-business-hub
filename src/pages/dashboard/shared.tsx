@@ -44,8 +44,8 @@ export interface DashboardTabProps {
 }
 
 // ── 数据卡片组件 ──
-export const StatCard = React.memo(function StatCard({ icon, label, value, sub, color, onClick }: {
-  icon: React.ReactNode; label: string; value: number | string; sub?: string; color: string; onClick?: () => void;
+export const StatCard = React.memo(function StatCard({ icon, label, value, sub, color, onClick, trend }: {
+  icon: React.ReactNode; label: string; value: number | string; sub?: string; color: string; onClick?: () => void; trend?: React.ReactNode;
 }) {
   return (
     <div className={`bg-card rounded-xl p-5 border border-border shadow-sm ${onClick ? 'cursor-pointer hover:shadow-md hover:border-primary/30 transition-all' : ''}`} onClick={onClick}>
@@ -53,7 +53,10 @@ export const StatCard = React.memo(function StatCard({ icon, label, value, sub, 
         <div>
           <p className="text-sm text-muted-foreground">{label}</p>
           <p className="text-2xl font-bold mt-1">{value}</p>
-          {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+          <div className="flex items-center gap-2 mt-1">
+            {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+            {trend}
+          </div>
         </div>
         <div className={`p-2.5 rounded-lg ${color}`}>{icon}</div>
       </div>

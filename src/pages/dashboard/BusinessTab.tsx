@@ -1,8 +1,8 @@
 /**
- * 业务现况 Tab — 数据概览 + 目标进度 + 完成趋势
+ * 业务现况 Tab — Executive Summary: 数据概览 + 周环比 + 活动流 + 目标进度
  */
 import { useMemo } from 'react';
-import { Target, FolderKanban, CheckCircle2, AlertTriangle, TrendingUp, Clock, BarChart3 } from 'lucide-react';
+import { Target, FolderKanban, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Minus, Clock, BarChart3, Activity, ArrowUpRight } from 'lucide-react';
 import { resolveToken } from '@/lib/resolveToken';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
@@ -17,6 +17,16 @@ import IndustryAdapter from '@/components/IndustryAdapter';
 import PredictiveInsights from '@/components/PredictiveInsights';
 import { useAppNavigate } from '@/lib/routes';
 import type { Page } from '@/components/layout/Layout';
+
+/** 周环比变化指示器 */
+function WeekOverWeek({ current, previous }: { current: number; previous: number }) {
+  if (previous === 0 && current === 0) return <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground"><Minus size={10} />持平</span>;
+  if (previous === 0) return <span className="flex items-center gap-0.5 text-[10px] text-emerald-600"><TrendingUp size={10} />新增</span>;
+  const pct = Math.round(((current - previous) / previous) * 100);
+  if (pct > 0) return <span className="flex items-center gap-0.5 text-[10px] text-red-500"><TrendingUp size={10} />+{pct}%</span>;
+  if (pct < 0) return <span className="flex items-center gap-0.5 text-[10px] text-emerald-600"><TrendingDown size={10} />{pct}%</span>;
+  return <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground"><Minus size={10} />持平</span>;
+}
 
 export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTabProps) {
   const { state, memberGoals, memberTasks, memberProjects, todayStr, getMemberName, commentCountMap } = useFilteredData();
@@ -34,10 +44,24 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
       const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
       return d >= weekAgo;
     });
+    const completedLastWeek = memberTasks.filter(t => {
+      if (!t.completedAt) return false;
+      const d = new Date(t.completedAt);
+      const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+      return d >= twoWeeksAgo && d < weekAgo;
+    });
+    const overdueLastWeek = memberTasks.filter(t => {
+      if (t.status === 'done' || t.status === 'cancelled') return false;
+      if (!t.dueDate) return false;
+      const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+      return t.dueDate < weekAgo.toISOString().split('T')[0];
+    });
     return {
       activeGoals: activeGoals.length, activeProjects: activeProjects.length,
       myTasks: myTasks.length, overdueTasks: overdueTasks.length, todayTodos,
-      completedThisWeek: completedThisWeek.length,
+      completedThisWeek: completedThisWeek.length, completedLastWeek: completedLastWeek.length,
+      overdueLastWeek: overdueLastWeek.length,
       overallGoalProgress: activeGoals.length > 0 ? Math.round(activeGoals.reduce((s, g) => s + g.progress, 0) / activeGoals.length) : 0,
     };
   }, [memberGoals, memberProjects, memberTasks, state.currentUser, todayStr]);
@@ -55,6 +79,24 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
   }, [memberTasks]);
 
   const activeGoals = useMemo(() => memberGoals.filter(g => g.status === 'in_progress'), [memberGoals]);
+
+  /** 团队活动流 — 最近 10 条 */
+  const activityFeed = useMemo(() => {
+    const items: { id: string; actor: string; action: string; target: string; time: string }[] = [];
+    const threeDaysAgo = new Date(); threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    // 已完成任务
+    memberTasks.filter(t => t.status === 'done' && t.completedAt && new Date(t.completedAt) >= threeDaysAgo)
+      .forEach(t => items.push({ id: t.id + '-done', actor: getMemberName(t.leaderId), action: '完成了', target: t.title, time: t.completedAt! }));
+    // 新建任务
+    memberTasks.filter(t => t.createdAt && new Date(t.createdAt) >= threeDaysAgo)
+      .forEach(t => items.push({ id: t.id + '-create', actor: getMemberName(t.leaderId), action: '创建了', target: t.title, time: t.createdAt! }));
+    // 目标进度更新（progress > 0 且近期有更新）
+    memberGoals.filter(g => g.updatedAt && new Date(g.updatedAt) >= threeDaysAgo && g.progress > 0)
+      .forEach(g => items.push({ id: g.id + '-progress', actor: getMemberName(g.leaderId), action: '更新了进度', target: g.title, time: g.updatedAt! }));
+    // 按时间倒序
+    items.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    return items.slice(0, 10);
+  }, [memberTasks, memberGoals, getMemberName]);
 
   const funnelMetrics = useMemo(() => getFunnelMetrics(), []);
 
@@ -111,12 +153,12 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
         );
       })()}
 
-      {/* 4 统计卡片 */}
+      {/* 4 统计卡片 — 含周环比 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard icon={<Target size={20} className="text-blue-600" />} label="进行中目标" value={stats.activeGoals} sub={`平均进度 ${stats.overallGoalProgress}%`} color="bg-blue-50" onClick={() => goWithFilter('goals', { statuses: 'in_progress' })} />
         <StatCard icon={<FolderKanban size={20} className="text-emerald-600" />} label="活跃项目" value={stats.activeProjects} color="bg-emerald-50" onClick={() => goWithFilter('projects', { statuses: 'in_progress' })} />
-        <StatCard icon={<Clock size={20} className="text-orange-600" />} label="我的待办" value={stats.myTasks} sub={`今日 ${stats.todayTodos.length} 项`} color="bg-orange-50" onClick={() => goWithFilter('tasks', { statuses: 'todo,in_progress', persons: state.currentUser?.id || '' })} />
-        <StatCard icon={<AlertTriangle size={20} className="text-red-600" />} label="已逾期" value={stats.overdueTasks} color="bg-red-50" onClick={() => goWithFilter('tasks', { timeFilter: 'overdue', persons: state.currentUser?.id || '' })} />
+        <StatCard icon={<Clock size={20} className="text-orange-600" />} label="我的待办" value={stats.myTasks} sub={`今日 ${stats.todayTodos.length} 项`} color="bg-orange-50" onClick={() => goWithFilter('tasks', { statuses: 'todo,in_progress', persons: state.currentUser?.id || '' })} trend={<WeekOverWeek current={stats.completedThisWeek} previous={stats.completedLastWeek} />} />
+        <StatCard icon={<AlertTriangle size={20} className="text-red-600" />} label="已逾期" value={stats.overdueTasks} color="bg-red-50" onClick={() => goWithFilter('tasks', { timeFilter: 'overdue', persons: state.currentUser?.id || '' })} trend={<WeekOverWeek current={stats.overdueTasks} previous={stats.overdueLastWeek} />} />
       </div>
 
       {/* P0: 行为画像 — 管理员可见当前用户画像 */}
@@ -211,6 +253,27 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
           {activeGoals.length === 0 && <div className="px-5 py-10 text-center text-muted-foreground text-sm">暂无进行中的目标</div>}
         </div>
       </div>
+
+      {/* 团队活动流 */}
+      {activityFeed.length > 0 && (
+        <div className="bg-card rounded-xl border border-border shadow-sm">
+          <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-border">
+            <div className="flex items-center gap-2"><Activity size={16} className="text-primary" /><h2 className="font-semibold text-sm">团队动态</h2></div>
+            <span className="text-[10px] text-muted-foreground">近3天</span>
+          </div>
+          <div className="divide-y divide-border max-h-[280px] overflow-y-auto">
+            {activityFeed.map(item => (
+              <div key={item.id} className="px-4 md:px-5 py-2.5 flex items-start gap-2">
+                <ArrowUpRight size={12} className="mt-1 text-muted-foreground/50 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs"><span className="font-medium text-foreground">{item.actor}</span> <span className="text-muted-foreground">{item.action}</span> <span className="text-foreground truncate">{item.target}</span></p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">{new Date(item.time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 管理员效能概览 */}
       {state.currentUser?.role === 'admin' && funnelMetrics.totalSessions > 0 && (<div className="bg-card rounded-xl border border-border shadow-sm p-4"><div className="flex items-center gap-2 mb-2"><BarChart3 size={16} className="text-indigo-500" /><span className="text-xs font-semibold text-muted-foreground">效能概览</span></div><div className="text-xs text-muted-foreground space-y-1"><p>平均步数 <span className="font-medium text-foreground">{funnelMetrics.avgSteps.toFixed(1)}</span> · 平均耗时 <span className="font-medium text-foreground">{(funnelMetrics.avgDurationMs / 1000).toFixed(0)}s</span> · 闭环率 <span className="font-medium text-foreground">{(funnelMetrics.completionRate * 100).toFixed(0)}%</span></p><p>共 <span className="font-medium text-foreground">{funnelMetrics.totalSessions}</span> 个会话</p></div></div>)}
