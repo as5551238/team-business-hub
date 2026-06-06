@@ -8,6 +8,7 @@ import type { PeriodSnapshot } from './dataCollector';
 import { PROVIDER_PRESETS, loadAIConfig, COST_ROUTING_MAP, detectTaskComplexity } from './types';
 import { getSupabaseClient } from '@/supabase/client'; // TDZ fix: static import instead of dynamic import
 import { handleError } from '@/lib/errorHandler';
+import { getAITodayCount, incrementAICallCount } from '@/hooks/useFeatureGate';
 
 /** 简易响应缓存（相同prompt→直接返回，3分钟TTL） */
 const responseCache = new Map<string, { result: string; expire: number }>();
@@ -97,6 +98,15 @@ interface LLMResponse {
 }
 
 export async function callLLM(prompt: string, config: AIConfig, complexity?: TaskComplexity): Promise<string | null> {
+  // Feature gate: AI daily call limit
+  const todayCount = getAITodayCount();
+  const PLAN_AI_LIMITS: Record<string, number> = { 'free': 10, 'pro': 1000, 'enterprise': 999999 };
+  const plan = config._planTier || 'free';
+  const aiLimit = PLAN_AI_LIMITS[plan] ?? 10;
+  if (todayCount >= aiLimit) {
+    throw new Error(`今日AI调用次数已达上限(${aiLimit}次)。请升级套餐或明日再试。`);
+  }
+
   const preset = PROVIDER_PRESETS[config.provider];
   const baseUrl = (config.baseUrl || preset.baseUrl).replace(/\/+$/, '');
 
@@ -147,7 +157,7 @@ export async function callLLM(prompt: string, config: AIConfig, complexity?: Tas
       }
       const data = await resp.json();
       const result = data.choices?.[0]?.message?.content || null;
-      if (result) setCachedResult(cacheKey, result);
+      if (result) { setCachedResult(cacheKey, result); incrementAICallCount(); }
       return result;
     } finally {
       clearTimeout(timeout);
@@ -215,6 +225,15 @@ export async function callLLMStream(
   onChunk: (text: string) => void,
   options?: { complexity?: TaskComplexity; signal?: AbortSignal }
 ): Promise<string> {
+  // Feature gate: AI daily call limit
+  const todayCount = getAITodayCount();
+  const PLAN_AI_LIMITS: Record<string, number> = { 'free': 10, 'pro': 1000, 'enterprise': 999999 };
+  const plan = config._planTier || 'free';
+  const aiLimit = PLAN_AI_LIMITS[plan] ?? 10;
+  if (todayCount >= aiLimit) {
+    throw new Error(`今日AI调用次数已达上限(${aiLimit}次)。请升级套餐或明日再试。`);
+  }
+
   const preset = PROVIDER_PRESETS[config.provider];
   const baseUrl = (config.baseUrl || preset.baseUrl).replace(/\/+$/, '');
   const detectedComplexity = options?.complexity || detectTaskComplexity(messages[messages.length - 1]?.content || '');
@@ -265,6 +284,7 @@ export async function callLLMStream(
         }
       }
     }
+    incrementAICallCount();
     return fullText;
   } catch (streamErr) {
     // Fallback: non-streaming call

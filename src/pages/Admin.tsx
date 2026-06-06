@@ -3,6 +3,7 @@ import { Users, Wrench, Calendar, Settings as SettingsIcon, GitBranch, Zap, Glob
 import type { AdminTab } from './admin/constants';
 import { useStore } from '@/store/useStore';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
+import { UpgradeGate } from '@/components/UpgradeGate';
 
 const TeamTab = lazy(() => import('./admin/TeamTab').then(m => ({ default: m.TeamTab })));
 const ToolboxTab = lazy(() => import('./admin/ToolboxTab').then(m => ({ default: m.ToolboxTab })));
@@ -230,15 +231,15 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
           {tab === 'mcptools' && <TabErrorBoundary key="mcptools" name={TAB_LABELS.mcptools}><Suspense fallback={<TabLoader />}><McpToolsTab /></Suspense></TabErrorBoundary>}
           {tab === 'billing' && <TabErrorBoundary key="billing" name={TAB_LABELS.billing}><Suspense fallback={<TabLoader />}><BillingTab /></Suspense></TabErrorBoundary>}
           {tab === 'retro' && <TabErrorBoundary key="retro" name={TAB_LABELS.retro}><Suspense fallback={<TabLoader />}><RetroTrackingTab /></Suspense></TabErrorBoundary>}
-          {tab === 'marketplace' && <TabErrorBoundary key="marketplace" name={TAB_LABELS.marketplace}><Suspense fallback={<TabLoader />}><AgentMarketplaceTab /></Suspense></TabErrorBoundary>}
-          {tab === 'compliance' && <TabErrorBoundary key="compliance" name={TAB_LABELS.compliance}><Suspense fallback={<TabLoader />}><ComplianceBaselineTab /></Suspense></TabErrorBoundary>}
+          {tab === 'marketplace' && <UpgradeGate feature="agentMarketplace"><TabErrorBoundary key="marketplace" name={TAB_LABELS.marketplace}><Suspense fallback={<TabLoader />}><AgentMarketplaceTab /></Suspense></TabErrorBoundary></UpgradeGate>}
+          {tab === 'compliance' && <UpgradeGate feature="advancedPermissions"><TabErrorBoundary key="compliance" name={TAB_LABELS.compliance}><Suspense fallback={<TabLoader />}><ComplianceBaselineTab /></Suspense></TabErrorBoundary></UpgradeGate>}
           {tab === 'collab' && <TabErrorBoundary key="collab" name={TAB_LABELS.collab}><Suspense fallback={<TabLoader />}><CollabTab /></Suspense></TabErrorBoundary>}
-          {tab === 'automaton' && <TabErrorBoundary key="automaton" name={TAB_LABELS.automaton}><Suspense fallback={<TabLoader />}><AutomatonTab /></Suspense></TabErrorBoundary>}
+          {tab === 'automaton' && <UpgradeGate feature="agentAutomation"><TabErrorBoundary key="automaton" name={TAB_LABELS.automaton}><Suspense fallback={<TabLoader />}><AutomatonTab /></Suspense></TabErrorBoundary></UpgradeGate>}
           {tab === 'templates' && <TabErrorBoundary key="templates" name={TAB_LABELS.templates}><Suspense fallback={<TabLoader />}><TemplateMarketTab /></Suspense></TabErrorBoundary>}
           {tab === 'privacy' && <TabErrorBoundary key="privacy" name={TAB_LABELS.privacy}><Suspense fallback={<TabLoader />}><PrivacyTab /></Suspense></TabErrorBoundary>}
-          {tab === 'budget' && <TabErrorBoundary key="budget" name={TAB_LABELS.budget}><Suspense fallback={<TabLoader />}><BudgetTab /></Suspense></TabErrorBoundary>}
-          {tab === 'performance' && <TabErrorBoundary key="performance" name={TAB_LABELS.performance}><Suspense fallback={<TabLoader />}><PerformanceTab /></Suspense></TabErrorBoundary>}
-          {tab === 'skillmatrix' && <TabErrorBoundary key="skillmatrix" name={TAB_LABELS.skillmatrix}><Suspense fallback={<TabLoader />}><SkillMatrixTab /></Suspense></TabErrorBoundary>}
+          {tab === 'budget' && <UpgradeGate feature="advancedPermissions"><TabErrorBoundary key="budget" name={TAB_LABELS.budget}><Suspense fallback={<TabLoader />}><BudgetTab /></Suspense></TabErrorBoundary></UpgradeGate>}
+          {tab === 'performance' && <UpgradeGate feature="advancedPermissions"><TabErrorBoundary key="performance" name={TAB_LABELS.performance}><Suspense fallback={<TabLoader />}><PerformanceTab /></Suspense></TabErrorBoundary></UpgradeGate>}
+          {tab === 'skillmatrix' && <UpgradeGate feature="advancedPermissions"><TabErrorBoundary key="skillmatrix" name={TAB_LABELS.skillmatrix}><Suspense fallback={<TabLoader />}><SkillMatrixTab /></Suspense></TabErrorBoundary></UpgradeGate>}
           {tab === 'effectiveness' && <TabErrorBoundary key="effectiveness" name={TAB_LABELS.effectiveness}><Suspense fallback={<TabLoader />}><EffectivenessTab /></Suspense></TabErrorBoundary>}
           {tab === 'dste' && <TabErrorBoundary key="dste" name={TAB_LABELS.dste}><Suspense fallback={<TabLoader />}><DSTETab /></Suspense></TabErrorBoundary>}
         </div>

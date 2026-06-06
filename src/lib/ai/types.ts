@@ -18,6 +18,8 @@ export interface AIConfig {
   enabled: boolean;
   /** 是否启用成本路由（自动按任务复杂度选模型） */
   costRouting?: boolean;
+  /** 当前套餐层级（门禁用） */
+  _planTier?: string;
 }
 
 export type SuggestedAction = {
@@ -193,10 +195,23 @@ export function loadAIConfig(): AIConfig {
       if (old && old.baseUrls.includes(saved.baseUrl)) { saved.baseUrl = ''; migrated = true; }
       if (old && old.models.includes(saved.model)) { saved.model = ''; migrated = true; }
       if (migrated) saveAIConfig(saved);
+      // Inject plan tier for feature gating
+      saved._planTier = loadPlanTier();
       return saved;
     }
   } catch (e) { handleError(e, { module: 'aiTypes', operation: 'LOAD_AI_CONFIG', severity: 'debug' }); }
-  return { ...DEFAULT_AI_CONFIG };
+  const config = { ...DEFAULT_AI_CONFIG };
+  config._planTier = loadPlanTier();
+  return config;
+}
+
+/** Load plan tier from localStorage (synced from store) */
+function loadPlanTier(): string {
+  try {
+    const raw = localStorage.getItem('tbh-plan-tier');
+    if (raw) return raw;
+  } catch { /* ignore */ }
+  return 'free';
 }
 
 export function saveAIConfig(c: AIConfig) {

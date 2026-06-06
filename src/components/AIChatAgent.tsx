@@ -13,6 +13,7 @@ import { callLLMStream } from '@/lib/ai/llmService';
 import { loadAIConfig } from '@/lib/ai/types';
 import { buildKnowledgeIndex, searchKnowledge, buildRAGContext, loadIndex, saveIndex, type KnowledgeChunk } from '@/lib/ai/knowledgeRAG';
 import { handleError } from '@/lib/errorHandler';
+import { useAICallGate, getAITodayCount } from '@/hooks/useFeatureGate';
 import { Send, Bot, User, Sparkles, X, Trash2, Play, Check } from 'lucide-react';
 
 /** AI 可执行的 action 类型 */
@@ -74,6 +75,7 @@ function stripActionTags(text: string): string {
 
 export function AIChatAgent() {
   const { state, dispatch } = useStore();
+  const aiGate = useAICallGate();
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'welcome', role: 'assistant', content: '你好，我是团队AI助手。可以问我任何关于团队目标、项目进展、任务分配的问题，我会基于团队实时数据为你分析。', timestamp: Date.now() },
   ]);
@@ -105,6 +107,13 @@ export function AIChatAgent() {
     const config = loadAIConfig();
     if (!config.enabled || !config.apiKey) {
       setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: 'system', content: 'AI未启用。请先在设置中配置API Key。', timestamp: Date.now() }]);
+      return;
+    }
+    // Feature gate: AI daily call limit
+    const todayCount = getAITodayCount();
+    const aiLimit = aiGate.max;
+    if (todayCount >= aiLimit) {
+      setMessages(prev => [...prev, { id: `gate-${Date.now()}`, role: 'system', content: `今日AI调用次数已达上限(${aiLimit}次)。升级专业版可享受每天1000次调用。`, timestamp: Date.now() }]);
       return;
     }
 
@@ -258,6 +267,14 @@ export function AIChatAgent() {
             <button onClick={handleSend} disabled={!input.trim()} className="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40">
               <Send size={16} />
             </button>
+          )}
+        </div>
+        <div className="mt-1 flex items-center justify-between">
+          <span className={`text-[10px] ${aiGate.count >= aiGate.max ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
+            AI调用: {aiGate.count}/{aiGate.max}
+          </span>
+          {aiGate.count >= aiGate.max * 0.8 && aiGate.count < aiGate.max && (
+            <span className="text-[10px] text-amber-600">接近上限，升级可获更多</span>
           )}
         </div>
       </div>
