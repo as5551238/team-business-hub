@@ -3,6 +3,7 @@ import { useStore } from '@/store/useStore';
 import type { AutomationRule, AutomationTrigger, AutomationAction, ItemType } from '@/types';
 import { Plus, Trash2, Bell, Edit2, UserPlus, Zap, ToggleLeft, ToggleRight, Sparkles, Activity, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SimpleSelect } from '@/components/ui/simple-select';
 import { createRuleFromIntent, getWorkflowPatternSummary } from '@/lib/ai/aiWorkflowEngine';
 import { getAutomationLog, clearAutomationLog } from '@/store/shared';
 import type { AutomationLogEntry } from '@/store/shared';
@@ -202,24 +203,18 @@ export function AutomationTab() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">适用类型</label>
-              <select className="w-full border border-input rounded px-2 py-1 text-sm mt-1" value={form.itemType} onChange={e => setForm({ ...form, itemType: e.target.value as ItemType })}>
-                {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              <SimpleSelect value={form.itemType} onValueChange={(v) => setForm({ ...form, itemType: v as ItemType })} options={ITEM_TYPES.map(t => ({ value: t.value, label: t.label }))} className="w-full h-8 text-sm mt-1" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">触发条件</label>
-              <select className="w-full border border-input rounded px-2 py-1 text-sm mt-1" value={form.trigger} onChange={e => setForm({ ...form, trigger: e.target.value as AutomationTrigger })}>
-                {TRIGGERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              <SimpleSelect value={form.trigger} onValueChange={(v) => setForm({ ...form, trigger: v as AutomationTrigger })} options={TRIGGERS.map(t => ({ value: t.value, label: t.label }))} className="w-full h-8 text-sm mt-1" />
             </div>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">条件</label>
             <div className="grid grid-cols-3 gap-2 mt-1">
               <input className="border border-input rounded px-2 py-1 text-sm" placeholder="字段" value={form.conditionField} onChange={e => setForm({ ...form, conditionField: e.target.value })} />
-              <select className="border border-input rounded px-2 py-1 text-sm" value={form.conditionOperator} onChange={e => setForm({ ...form, conditionOperator: e.target.value })}>
-                <option value="eq">等于</option><option value="neq">不等于</option><option value="contains">包含</option><option value="empty">为空</option><option value="not_empty">不为空</option><option value="gt">大于</option><option value="lt">小于</option>
-              </select>
+              <SimpleSelect value={form.conditionOperator} onValueChange={(v) => setForm({ ...form, conditionOperator: v })} options={[{ value: 'eq', label: '等于' }, { value: 'neq', label: '不等于' }, { value: 'contains', label: '包含' }, { value: 'empty', label: '为空' }, { value: 'not_empty', label: '不为空' }, { value: 'gt', label: '大于' }, { value: 'lt', label: '小于' }]} className="h-8 text-sm" />
               <input className="border border-input rounded px-2 py-1 text-sm" placeholder="值" value={form.conditionValue} onChange={e => setForm({ ...form, conditionValue: e.target.value })} />
             </div>
           </div>
@@ -236,9 +231,9 @@ export function AutomationTab() {
                   <span className="font-medium whitespace-nowrap">{ACTIONS.find(a => a.value === act.type)?.label}</span>
                   {(act.type === 'notify' || act.type === 'escalation') && <input className="flex-1 border border-input rounded px-1.5 py-0.5" placeholder="消息内容" value={act.config.message ?? ''} onChange={e => updateAction(i, { ...act.config, message: e.target.value })} />}
                   {act.type === 'set_field' && <><input className="w-16 border border-input rounded px-1.5 py-0.5" placeholder="字段" value={act.config.field ?? ''} onChange={e => updateAction(i, { ...act.config, field: e.target.value })} /><input className="w-16 border border-input rounded px-1.5 py-0.5" placeholder="值" value={act.config.value ?? ''} onChange={e => updateAction(i, { ...act.config, value: e.target.value })} /></>}
-                  {act.type === 'assign' && <select className="border border-input rounded px-1.5 py-0.5" value={act.config.memberId ?? ''} onChange={e => updateAction(i, { ...act.config, memberId: e.target.value })}><option value="">选择成员</option>{state.members.filter(m => m.status === 'active').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>}
+                  {act.type === 'assign' && <SimpleSelect value={act.config.memberId ?? ''} onValueChange={(v) => updateAction(i, { ...act.config, memberId: v })} options={state.members.filter(m => m.status === 'active').map(m => ({ value: m.id, label: m.name }))} placeholder="选择成员" className="h-7 text-xs" />}
                   {act.type === 'create_subtask' && <input className="flex-1 border border-input rounded px-1.5 py-0.5" placeholder="子任务标题" value={act.config.title ?? ''} onChange={e => updateAction(i, { ...act.config, title: e.target.value })} />}
-                  {act.type === 'ai_action' && <select className="border border-input rounded px-1.5 py-0.5" value={act.config.actionId ?? 'smart_assign'} onChange={e => updateAction(i, { ...act.config, actionId: e.target.value })}><option value="smart_assign">智能分配</option><option value="auto_complete_goal">自动完成目标</option><option value="get_risk_items">风险检测</option><option value="get_team_load">团队负载</option><option value="get_overdue_tasks">逾期查询</option><option value="get_goal_progress">目标进度</option></select>}
+                  {act.type === 'ai_action' && <SimpleSelect value={act.config.actionId ?? 'smart_assign'} onValueChange={(v) => updateAction(i, { ...act.config, actionId: v })} options={[{ value: 'smart_assign', label: '智能分配' }, { value: 'auto_complete_goal', label: '自动完成目标' }, { value: 'get_risk_items', label: '风险检测' }, { value: 'get_team_load', label: '团队负载' }, { value: 'get_overdue_tasks', label: '逾期查询' }, { value: 'get_goal_progress', label: '目标进度' }]} className="h-7 text-xs" />}
                   <button onClick={() => removeAction(i)} className="text-muted-foreground hover:text-destructive cursor-pointer" aria-label="移除动作"><Trash2 size={12} /></button>
                 </div>
               ))}

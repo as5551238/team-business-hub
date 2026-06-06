@@ -11,6 +11,7 @@ import {
 import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag, X, Filter, Save, GitCompare, Sparkles, Zap } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SimpleSelect } from '@/components/ui/simple-select';
 import { handleError } from '@/lib/errorHandler';
 import { autoScheduleLocal, autoScheduleDeep, type ScheduleSuggestion } from '@/lib/ai/aiAutoScheduler';
 import {
@@ -287,21 +288,9 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
           {canEditTasks && <button onClick={handleAddTask} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"><Plus size={14} />添加任务</button>}
           <div className="flex items-center gap-1.5">
             <Filter size={13} className="text-muted-foreground" />
-            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-card" value={filterProject} onChange={e => setFilterProject(e.target.value)}>
-              <option value="">全部项目</option>
-              {state.projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-            </select>
-            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-card" value={groupBy} onChange={e => setGroupBy(e.target.value as GroupBy)}>
-              <option value="none">不分组</option>
-              <option value="project">按项目</option>
-              <option value="leader">按负责人</option>
-              <option value="priority">按优先级</option>
-              <option value="status">按状态</option>
-            </select>
-            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-card" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="">全部状态</option>
-              {(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
+            <SimpleSelect value={filterProject || '__EMPTY__'} onValueChange={(v) => setFilterProject(v === '__EMPTY__' ? '' : v)} options={[{ value: '__EMPTY__', label: '全部项目' }, ...state.projects.map(p => ({ value: p.id, label: p.title }))]} className="border border-input rounded-lg px-2 py-1 text-xs bg-card" />
+            <SimpleSelect value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)} options={[{ value: 'none', label: '不分组' }, { value: 'project', label: '按项目' }, { value: 'leader', label: '按负责人' }, { value: 'priority', label: '按优先级' }, { value: 'status', label: '按状态' }]} className="border border-input rounded-lg px-2 py-1 text-xs bg-card" />
+            <SimpleSelect value={filterStatus || '__EMPTY__'} onValueChange={(v) => setFilterStatus(v === '__EMPTY__' ? '' : v)} options={[{ value: '__EMPTY__', label: '全部状态' }, ...(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => ({ value: k, label: v }))]} className="border border-input rounded-lg px-2 py-1 text-xs bg-card" />
           </div>
           <div className="flex-1" />
           <button onClick={() => { if (timelineScrollRef.current) timelineScrollRef.current.scrollLeft -= 200; }} className="p-1 rounded hover:bg-muted" aria-label="向左滚动"><ChevronLeft size={16} /></button>
@@ -319,10 +308,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
         {showBaseline && (
           <div className="px-5 py-2 border-b border-border bg-amber-50/50 flex items-center gap-2 flex-wrap">
             <span className="text-xs font-medium">基线对比</span>
-            <select className="border border-input rounded-lg px-2 py-1 text-xs bg-card" value={activeBaselineId} onChange={e => setActiveBaselineId(e.target.value)}>
-              <option value="">不显示基线</option>
-              {baselines.map(b => <option key={b.id} value={b.id}>{b.name} ({new Date(b.createdAt).toLocaleDateString('zh-CN')})</option>)}
-            </select>
+            <SimpleSelect value={activeBaselineId || '__EMPTY__'} onValueChange={(v) => setActiveBaselineId(v === '__EMPTY__' ? '' : v)} options={[{ value: '__EMPTY__', label: '不显示基线' }, ...baselines.map(b => ({ value: b.id, label: `${b.name} (${new Date(b.createdAt).toLocaleDateString('zh-CN')})` }))]} className="border border-input rounded-lg px-2 py-1 text-xs bg-card" />
             <input type="text" className="border border-input rounded-lg px-2 py-1 text-xs w-28" placeholder="基线名称" value={baselineName} onChange={e => setBaselineName(e.target.value)} />
             <button onClick={handleSaveBaseline} className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90"><Save size={12} />保存当前快照</button>
             {activeBaselineId && <button onClick={() => handleDeleteBaseline(activeBaselineId)} className="text-xs text-destructive hover:underline">删除当前基线</button>}
@@ -529,14 +515,14 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
                 <DialogDescription className="sr-only">编辑任务详情</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-              <div><label className="text-xs text-muted-foreground block mb-1">状态</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.status} onChange={e => handleUpdateTask(et.id, { status: e.target.value as TaskStatus })}>{(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-              <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.leaderId || ''} onChange={e => handleUpdateTask(et.id, { leaderId: e.target.value })}><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
+              <div><label className="text-xs text-muted-foreground block mb-1">状态</label><SimpleSelect value={et.status} onValueChange={(v) => handleUpdateTask(et.id, { status: v as TaskStatus })} options={(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => ({ value: k, label: v }))} className="w-full h-10 text-sm" /></div>
+              <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><SimpleSelect value={et.leaderId || '__EMPTY__'} onValueChange={(v) => handleUpdateTask(et.id, { leaderId: v === '__EMPTY__' ? '' : v })} options={[{ value: '__EMPTY__', label: '未指定' }, ...activeMembers.map(m => ({ value: m.id, label: m.name }))]} className="w-full h-10 text-sm" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-muted-foreground block mb-1">开始日期</label><input type="date" className="w-full text-sm border border-input rounded-lg px-3 py-2" value={et.startDate || ''} onChange={e => handleUpdateTask(et.id, { startDate: e.target.value || null })} /></div>
                 <div><label className="text-xs text-muted-foreground block mb-1">截止日期</label><input type="date" className="w-full text-sm border border-input rounded-lg px-3 py-2" value={et.dueDate || ''} onChange={e => handleUpdateTask(et.id, { dueDate: e.target.value || null })} /></div>
               </div>
-              <div><label className="text-xs text-muted-foreground block mb-1">紧急程度</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.priority} onChange={e => handleUpdateTask(et.id, { priority: e.target.value as TaskPriority })}><option value="urgent">紧急 (S)</option><option value="high">高 (A)</option><option value="medium">中 (B)</option><option value="low">低 (C)</option></select></div>
-              <div><label className="text-xs text-muted-foreground block mb-1">前置依赖</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value="" onChange={e => { if (!e.target.value) return; const current = (et.blockedBy ?? []) as string[]; if (!current.includes(e.target.value)) handleUpdateTask(et.id, { blockedBy: [...current, e.target.value] }); }}><option value="">添加依赖...</option>{allTasks.filter(t => t.id !== et.id).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select>
+              <div><label className="text-xs text-muted-foreground block mb-1">紧急程度</label><SimpleSelect value={et.priority} onValueChange={(v) => handleUpdateTask(et.id, { priority: v as TaskPriority })} options={[{ value: 'urgent', label: '紧急 (S)' }, { value: 'high', label: '高 (A)' }, { value: 'medium', label: '中 (B)' }, { value: 'low', label: '低 (C)' }]} className="w-full h-10 text-sm" /></div>
+              <div><label className="text-xs text-muted-foreground block mb-1">前置依赖</label><SimpleSelect value="__EMPTY__" onValueChange={(v) => { if (v === '__EMPTY__') return; const current = (et.blockedBy ?? []) as string[]; if (!current.includes(v)) handleUpdateTask(et.id, { blockedBy: [...current, v] }); }} options={[{ value: '__EMPTY__', label: '添加依赖...' }, ...allTasks.filter(t => t.id !== et.id).map(t => ({ value: t.id, label: t.title }))]} className="w-full h-10 text-sm" />
                 <div className="flex flex-wrap gap-1 mt-2">{((et.blockedBy ?? []) as string[]).map(bid => { const dep = allTasks.find(t => t.id === bid); if (!dep) return null; return <span key={bid} className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1">{dep.title}<button className="hover:text-red-500" onClick={() => handleUpdateTask(et.id, { blockedBy: ((et.blockedBy ?? []) as string[]).filter((id: string) => id !== bid) })} aria-label="移除依赖"><X size={12} /></button></span>; })}</div>
               </div>
               </div>

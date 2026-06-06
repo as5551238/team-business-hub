@@ -5,6 +5,7 @@ import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag, X } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { SimpleSelect } from '@/components/ui/simple-select';
 import {
   DAY_MS, parseDate, formatDate, addDays, computeTimeRange,
   STATUS_COLORS, STATUS_BAR_COLORS, STATUS_LABELS, CRITICAL_BAR_CLASS,
@@ -268,13 +269,13 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
               <DialogTitle>{et.title}</DialogTitle>
               <DialogDescription className="sr-only">编辑任务属性</DialogDescription>
             </DialogHeader>
-            <div><label className="text-xs text-muted-foreground block mb-1">状态</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.status} onChange={e => handleUpdateTask(et.id, { status: e.target.value as TaskStatus })}>{(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-            <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.leaderId || ''} onChange={e => handleUpdateTask(et.id, { leaderId: e.target.value })}><option value="">未指定</option>{activeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
+            <div><label className="text-xs text-muted-foreground block mb-1">状态</label><SimpleSelect value={et.status} onValueChange={v => handleUpdateTask(et.id, { status: v as TaskStatus })} options={(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([k, v]) => ({ value: k, label: v }))} className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" /></div>
+            <div><label className="text-xs text-muted-foreground block mb-1">负责人</label><SimpleSelect value={et.leaderId || ''} onValueChange={v => handleUpdateTask(et.id, { leaderId: v })} options={[{ value: '', label: '未指定' }, ...activeMembers.map(m => ({ value: m.id, label: m.name }))]} className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs text-muted-foreground block mb-1">开始日期</label><input type="date" className="w-full text-sm border border-input rounded-lg px-3 py-2" value={et.startDate || ''} onChange={e => handleUpdateTask(et.id, { startDate: e.target.value || null })} /></div>
               <div><label className="text-xs text-muted-foreground block mb-1">截止日期</label><input type="date" className="w-full text-sm border border-input rounded-lg px-3 py-2" value={et.dueDate || ''} onChange={e => handleUpdateTask(et.id, { dueDate: e.target.value || null })} /></div>
             </div>
-            <div><label className="text-xs text-muted-foreground block mb-1">紧急程度</label><select className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" value={et.priority} onChange={e => handleUpdateTask(et.id, { priority: e.target.value as TaskPriority })}><option value="urgent">紧急 (S)</option><option value="high">高 (A)</option><option value="medium">中 (B)</option><option value="low">低 (C)</option></select></div>
+            <div><label className="text-xs text-muted-foreground block mb-1">紧急程度</label><SimpleSelect value={et.priority} onValueChange={v => handleUpdateTask(et.id, { priority: v as TaskPriority })} options={[{ value: 'urgent', label: '紧急 (S)' }, { value: 'high', label: '高 (A)' }, { value: 'medium', label: '中 (B)' }, { value: 'low', label: '低 (C)' }]} className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-card" /></div>
           </DialogContent>
         </Dialog>
       ); })()}

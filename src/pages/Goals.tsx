@@ -6,6 +6,7 @@ import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
 import { Trash2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check, Users, EyeOff, Eye } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { SimpleSelect } from '@/components/ui/simple-select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
@@ -381,20 +382,11 @@ export default function Goals() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium mb-1">类型</label>
-                  <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={formData.type} onChange={e => setFormData(f => ({ ...f, type: e.target.value as GoalType }))}>
-                    <option value="okr">OKR</option>
-                    <option value="kpi">KPI</option>
-                    <option value="milestone">里程碑</option>
-                  </select>
+                  <SimpleSelect value={formData.type} onValueChange={(v) => setFormData(f => ({ ...f, type: v as GoalType }))} options={[{ value: 'okr', label: 'OKR' }, { value: 'kpi', label: 'KPI' }, { value: 'milestone', label: '里程碑' }]} className="w-full h-10 text-sm" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">重要程度</label>
-                  <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={formData.priority} onChange={e => setFormData(f => ({ ...f, priority: e.target.value as TaskPriority }))}>
-                    <option value="low">C级-低</option>
-                    <option value="medium">B级-中</option>
-                    <option value="high">A级-高</option>
-                    <option value="urgent">S级-紧急</option>
-                  </select>
+                  <SimpleSelect value={formData.priority} onValueChange={(v) => setFormData(f => ({ ...f, priority: v as TaskPriority }))} options={[{ value: 'low', label: 'C级-低' }, { value: 'medium', label: 'B级-中' }, { value: 'high', label: 'A级-高' }, { value: 'urgent', label: 'S级-紧急' }]} className="w-full h-10 text-sm" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -409,16 +401,7 @@ export default function Goals() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">循环方式</label>
-                <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={formData.repeatCycle} onChange={e => setFormData(f => ({ ...f, repeatCycle: e.target.value as RepeatCycle }))}>
-                  <option value="none">无</option>
-                  <option value="daily">每天</option>
-                  <option value="weekly">每周</option>
-                  <option value="biweekly">每两周</option>
-                  <option value="monthly">每月</option>
-                  <option value="quarterly">每季度</option>
-                  <option value="yearly">每年</option>
-                  <option value="custom">自定义</option>
-                </select>
+                <SimpleSelect value={formData.repeatCycle} onValueChange={(v) => setFormData(f => ({ ...f, repeatCycle: v as RepeatCycle }))} options={[{ value: 'none', label: '无' }, { value: 'daily', label: '每天' }, { value: 'weekly', label: '每周' }, { value: 'biweekly', label: '每两周' }, { value: 'monthly', label: '每月' }, { value: 'quarterly', label: '每季度' }, { value: 'yearly', label: '每年' }, { value: 'custom', label: '自定义' }]} className="w-full h-10 text-sm" />
               </div>
               {formData.repeatCycle === 'custom' && (
                 <div className="grid grid-cols-2 gap-2">
@@ -434,17 +417,11 @@ export default function Goals() {
               )}
               <div>
                 <label className="block text-sm font-medium mb-1">分类</label>
-                <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={formData.category} onChange={e => setFormData(f => ({ ...f, category: e.target.value }))}>
-                  <option value="">无分类</option>
-                  {state.categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                </select>
+                <SimpleSelect value={formData.category} onValueChange={(v) => setFormData(f => ({ ...f, category: v }))} options={state.categories.map(c => ({ value: c.name, label: c.name }))} placeholder="无分类" className="w-full h-10 text-sm" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">父级目标</label>
-                <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={formData.parentId} onChange={e => setFormData(f => ({ ...f, parentId: e.target.value }))}>
-                  <option value="">无（顶级目标）</option>
-                  {state.goals.map(g => <option key={g.id} value={g.id}>{'\u3000'.repeat(g.level) + (g.level > 0 ? '\u2514 ' : '')}{g.title}</option>)}
-                </select>
+                <SimpleSelect value={formData.parentId} onValueChange={(v) => setFormData(f => ({ ...f, parentId: v }))} options={state.goals.map(g => ({ value: g.id, label: '\u3000'.repeat(g.level) + (g.level > 0 ? '\u2514 ' : '') + g.title }))} placeholder="无（顶级目标）" className="w-full h-10 text-sm" />
               </div>
               <div className="border-t pt-4">
                 <div className="text-sm font-medium mb-2">关键结果（可选）</div>

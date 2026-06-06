@@ -1,4 +1,3 @@
-// TeamTab 组件 - 团队管理
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { usePermissions } from '@/store/hooks';
@@ -9,6 +8,7 @@ import { handleError } from '@/lib/errorHandler';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { gatedAction, checkLimit } from '@/lib/featureGating';
 import { getPlanName } from '@/lib/featureGating';
+import { SimpleSelect } from '@/components/ui/simple-select';
 
 export function TeamTab() {
   const { state, dispatch } = useStore();
@@ -164,15 +164,11 @@ export function TeamTab() {
                   <div><label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Phone size={12} /> 手机号</label><input className={inputCls} value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} /></div>
                   <div><label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Mail size={12} /> 邮箱</label><input type="email" className={inputCls} value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} /></div>
                   <div><label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Briefcase size={12} /> 部门</label><input className={inputCls} value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} /></div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Shield size={12} /> 角色</label>
-                    <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}>
-                      <option value="member">成员</option><option value="manager">负责人</option><option value="leader">组长</option><option value="admin">管理员</option>
-                    </select>
+                   <div><label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><Shield size={12} /> 角色</label>
+                    <SimpleSelect value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v as MemberRole }))} options={[{ value: 'member', label: '成员' }, { value: 'manager', label: '负责人' }, { value: 'leader', label: '组长' }, { value: 'admin', label: '管理员' }]} className="w-full border border-border rounded-lg px-3 py-2 text-sm" />
                   </div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">状态</label>
-                    <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
-                      <option value="active">活跃</option><option value="inactive">已停用</option>
-                    </select>
+                   <div><label className="block text-xs font-medium text-muted-foreground mb-1">状态</label>
+                    <SimpleSelect value={editForm.status} onValueChange={v => setEditForm(f => ({ ...f, status: v }))} options={[{ value: 'active', label: '活跃' }, { value: 'inactive', label: '已停用' }]} className="w-full border border-border rounded-lg px-3 py-2 text-sm" />
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pt-2">
@@ -313,10 +309,8 @@ export function TeamTab() {
               </div>
               <div><label className="block text-sm font-medium mb-1 flex items-center gap-1"><Mail size={14} /> 邮箱</label><input type="email" className={inputCls} placeholder="email@example.com" value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-sm font-medium mb-1">角色</label>
-                  <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={addForm.role} onChange={e => setAddForm(f => ({ ...f, role: e.target.value as MemberRole }))}>
-                    <option value="member">成员</option><option value="manager">负责人</option><option value="admin">管理员</option>
-                  </select>
+                 <div><label className="block text-sm font-medium mb-1">角色</label>
+                  <SimpleSelect value={addForm.role} onValueChange={v => setAddForm(f => ({ ...f, role: v as MemberRole }))} options={[{ value: 'member', label: '成员' }, { value: 'manager', label: '负责人' }, { value: 'admin', label: '管理员' }]} className="w-full border border-border rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <div><label className="block text-sm font-medium mb-1">部门</label><input className={inputCls} placeholder="默认 SQ Team" value={addForm.department} onChange={e => setAddForm(f => ({ ...f, department: e.target.value }))} /></div>
               </div>

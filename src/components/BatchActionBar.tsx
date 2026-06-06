@@ -2,8 +2,9 @@
  * BatchActionBar — 统一的批量操作工具栏
  * 通用: 已选计数 / 删除 / 改状态 / 分配人 / 优先级 / 标签 / 日期 / 清空
  */
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Trash2, X, CheckSquare, Tag, Calendar, ArrowUpCircle } from 'lucide-react';
+import { SimpleSelect } from '@/components/ui/simple-select';
 import type { BatchSelectionState } from '@/hooks/useBatchSelection';
 
 interface BatchActionBarProps {
@@ -51,6 +52,12 @@ export const BatchActionBar = React.memo(function BatchActionBar({
   const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.has(id));
   const ids = Array.from(selectedIds);
   const disabled = selectedIds.size === 0;
+  const [batchStatusVal, setBatchStatusVal] = useState('');
+  const [batchAssignVal, setBatchAssignVal] = useState('');
+  const [batchPriorityVal, setBatchPriorityVal] = useState('');
+  const [batchAddTagVal, setBatchAddTagVal] = useState('');
+  const [batchRemoveTagVal, setBatchRemoveTagVal] = useState('');
+  const [batchMoveVal, setBatchMoveVal] = useState('');
 
   const handleSelectAll = useCallback(() => {
     if (allSelected) clearSelection();
@@ -65,46 +72,46 @@ export const BatchActionBar = React.memo(function BatchActionBar({
     exitBatchMode();
   }, [selectedIds, itemLabel, onBatchDelete, exitBatchMode]);
 
-  const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (disabled || !e.target.value) return;
-    onBatchStatus(ids, e.target.value);
-    e.target.value = '';
-  }, [selectedIds, onBatchStatus]);
+  const handleStatusChange = useCallback((val: string) => {
+    if (disabled || !val) return;
+    onBatchStatus(ids, val);
+    setBatchStatusVal('');
+  }, [disabled, ids, onBatchStatus]);
 
-  const handleAssignChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (disabled || !e.target.value) return;
-    onBatchAssign(ids, e.target.value);
-    e.target.value = '';
-  }, [selectedIds, onBatchAssign]);
+  const handleAssignChange = useCallback((val: string) => {
+    if (disabled || !val) return;
+    onBatchAssign(ids, val);
+    setBatchAssignVal('');
+  }, [disabled, ids, onBatchAssign]);
 
-  const handlePriorityChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (disabled || !e.target.value || !onBatchPriority) return;
-    onBatchPriority(ids, e.target.value);
-    e.target.value = '';
-  }, [selectedIds, onBatchPriority]);
+  const handlePriorityChange = useCallback((val: string) => {
+    if (disabled || !val || !onBatchPriority) return;
+    onBatchPriority(ids, val);
+    setBatchPriorityVal('');
+  }, [disabled, ids, onBatchPriority]);
 
-  const handleAddTagChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (disabled || !e.target.value || !onBatchAddTags) return;
-    onBatchAddTags(ids, [e.target.value]);
-    e.target.value = '';
-  }, [selectedIds, onBatchAddTags]);
+  const handleAddTagChange = useCallback((val: string) => {
+    if (disabled || !val || !onBatchAddTags) return;
+    onBatchAddTags(ids, [val]);
+    setBatchAddTagVal('');
+  }, [disabled, ids, onBatchAddTags]);
 
-  const handleRemoveTagChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (disabled || !e.target.value || !onBatchRemoveTags) return;
-    onBatchRemoveTags(ids, [e.target.value]);
-    e.target.value = '';
-  }, [selectedIds, onBatchRemoveTags]);
+  const handleRemoveTagChange = useCallback((val: string) => {
+    if (disabled || !val || !onBatchRemoveTags) return;
+    onBatchRemoveTags(ids, [val]);
+    setBatchRemoveTagVal('');
+  }, [disabled, ids, onBatchRemoveTags]);
 
   const handleDateChange = useCallback((field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled || !onBatchSetDate) return;
     onBatchSetDate(ids, field, e.target.value);
   }, [selectedIds, onBatchSetDate]);
 
-  const handleMoveChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (disabled || !e.target.value || !onBatchMove) return;
-    onBatchMove(ids, e.target.value);
-    e.target.value = '';
-  }, [selectedIds, onBatchMove]);
+  const handleMoveChange = useCallback((val: string) => {
+    if (disabled || !val || !onBatchMove) return;
+    onBatchMove(ids, val);
+    setBatchMoveVal('');
+  }, [disabled, ids, onBatchMove]);
 
   return (
     <div className="flex items-center gap-1.5 bg-primary/5 border border-primary/20 rounded-lg px-3 py-1.5 mr-1 flex-wrap">
@@ -119,36 +126,21 @@ export const BatchActionBar = React.memo(function BatchActionBar({
         </button>
       )}
       {canEdit && (
-        <select className="text-xs border border-border rounded px-1.5 py-0.5 bg-card" defaultValue="" onChange={handleStatusChange} disabled={disabled}>
-          <option value="" disabled>改状态</option>
-          {statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
+        <SimpleSelect value={batchStatusVal} onValueChange={handleStatusChange} options={statuses} className="h-7 text-xs w-[90px]" placeholder="改状态" disabled={disabled} />
       )}
       {canEdit && members.length > 0 && (
-        <select className="text-xs border border-border rounded px-1.5 py-0.5 bg-card max-w-[120px]" defaultValue="" onChange={handleAssignChange} disabled={disabled}>
-          <option value="" disabled>分配给</option>
-          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
+        <SimpleSelect value={batchAssignVal} onValueChange={handleAssignChange} options={members.map(m => ({ value: m.id, label: m.name }))} className="h-7 text-xs w-[100px]" placeholder="分配给" disabled={disabled} />
       )}
       {canEdit && priorities && priorities.length > 0 && onBatchPriority && (
-        <select className="text-xs border border-border rounded px-1.5 py-0.5 bg-card" defaultValue="" onChange={handlePriorityChange} disabled={disabled}>
-          <option value="" disabled>优先级</option>
-          {priorities.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>
+        <SimpleSelect value={batchPriorityVal} onValueChange={handlePriorityChange} options={priorities} className="h-7 text-xs w-[90px]" placeholder="优先级" disabled={disabled} />
       )}
       {canEdit && tags && tags.length > 0 && (onBatchAddTags || onBatchRemoveTags) && (
         <>
           {onBatchAddTags && (
-            <select className="text-xs border border-border rounded px-1.5 py-0.5 bg-card max-w-[120px]" defaultValue="" onChange={handleAddTagChange} disabled={disabled}>
-              <option value="" disabled>+标签</option>
-              {tags.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <SimpleSelect value={batchAddTagVal} onValueChange={handleAddTagChange} options={tags.map(t => ({ value: t, label: t }))} className="h-7 text-xs w-[100px]" placeholder="+标签" disabled={disabled} />
           )}
           {onBatchRemoveTags && (
-            <select className="text-xs border border-border rounded px-1.5 py-0.5 bg-card max-w-[120px]" defaultValue="" onChange={handleRemoveTagChange} disabled={disabled}>
-              <option value="" disabled>-标签</option>
-              {tags.map(t => <option key={'rm-' + t} value={t}>{t}</option>)}
-            </select>
+            <SimpleSelect value={batchRemoveTagVal} onValueChange={handleRemoveTagChange} options={tags.map(t => ({ value: t, label: t }))} className="h-7 text-xs w-[100px]" placeholder="-标签" disabled={disabled} />
           )}
         </>
       )}
@@ -161,10 +153,7 @@ export const BatchActionBar = React.memo(function BatchActionBar({
         ))
       )}
       {canEdit && moveTargets && moveTargets.length > 0 && onBatchMove && (
-        <select className="text-xs border border-border rounded px-1.5 py-0.5 bg-card max-w-[140px]" defaultValue="" onChange={handleMoveChange} disabled={disabled}>
-          <option value="" disabled>{moveLabel || '移动到'}</option>
-          {moveTargets.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+        <SimpleSelect value={batchMoveVal} onValueChange={handleMoveChange} options={moveTargets} className="h-7 text-xs w-[120px]" placeholder={moveLabel || '移动到'} disabled={disabled} />
       )}
       <button onClick={clearSelection} className="flex items-center gap-1 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted rounded">
         <X size={12} /> 清空

@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { useStore } from '@/store/useStore';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Plus, FolderKanban, CheckSquare } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
-import { ProjectGanttChart } from '@/components/ProjectGanttChart';
+const ProjectGanttChart = lazy(() => import('@/components/ProjectGanttChart').then(m => ({ default: m.ProjectGanttChart })));
 import { Section, STATUS_MAP } from './detail-shared';
 
 interface DetailProjectSectionsProps {
@@ -36,7 +36,7 @@ export function DetailProjectSections({ project, startDate, endDate }: DetailPro
   return (
     <>
       <Section title="项目计划" icon={<FolderKanban className="w-3.5 h-3.5" />}>
-        <ProjectGanttChart projectId={project.id} projectStartDate={startDate} projectEndDate={endDate} />
+        <Suspense fallback={<div className="animate-pulse bg-muted h-48 rounded-lg" />}><ProjectGanttChart projectId={project.id} projectStartDate={startDate} projectEndDate={endDate} /></Suspense>
       </Section>
 
       {pTotal > 0 && (

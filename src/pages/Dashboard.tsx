@@ -8,7 +8,7 @@ import { useStore } from '@/store/useStore';
 import { handleError } from '@/lib/errorHandler';
 import { useViewingMember } from '@/store/hooks';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
-import { GanttModal } from '@/components/GanttModal';
+const GanttModal = lazy(() => import('@/components/GanttModal').then(m => ({ default: m.GanttModal })));
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
 import { TrendingUp, AlertTriangle, Calendar, BarChart3, Settings, CheckCircle2, X, Rocket, UserPlus, Sparkles, Target, Zap, ListTodo, Sun } from 'lucide-react';
@@ -211,7 +211,7 @@ export default function Dashboard() {
       {selectedItemId && selectedItemType && (
         <ItemDetailPanel isOpen={true} onClose={closeDetail} itemId={selectedItemId} itemType={selectedItemType} />
       )}
-      <GanttModal open={ganttModalOpen} onClose={() => setGanttModalOpen(false)} />
+      <Suspense fallback={null}><GanttModal open={ganttModalOpen} onClose={() => setGanttModalOpen(false)} /></Suspense>
     </div>
   );
 }

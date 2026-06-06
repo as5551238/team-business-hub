@@ -4,6 +4,7 @@ import type { Goal, Project, Task, ItemType } from '@/types';
 import { Target, FolderKanban, CheckSquare } from 'lucide-react';
 import { Section } from './detail-shared';
 import { collectDescendantIds } from './detail-shared';
+import { SimpleSelect } from '@/components/ui/simple-select';
 
 interface DetailRelationshipsProps {
   itemType: ItemType;
@@ -46,27 +47,18 @@ export function DetailRelationships({ itemType, itemId, goal, project, task, can
       {itemType === 'goal' && (
         <div className="space-y-2">
           <label className="text-xs text-muted-foreground">父目标</label>
-          <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card" value={(goal as Goal)?.parentId || ''} onChange={e => handleParentChange('parentId', e.target.value || null)}>
-            <option value="">无</option>
-            {availableParentGoals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
-          </select>
+          <SimpleSelect value={(goal as Goal)?.parentId || '__EMPTY__'} onValueChange={(v) => handleParentChange('parentId', v === '__EMPTY__' ? null : v)} options={[{ value: '__EMPTY__', label: '无' }, ...availableParentGoals.map(g => ({ value: g.id, label: g.title }))]} className="w-full h-9 text-sm" />
         </div>
       )}
       {itemType === 'project' && (
         <div className="space-y-2">
           <div>
             <label className="text-xs text-muted-foreground">父项目</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-1" value={(project as Project)?.parentId || ''} onChange={e => handleParentChange('parentId', e.target.value || null)}>
-              <option value="">无</option>
-              {availableParentProjects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-            </select>
+            <SimpleSelect value={(project as Project)?.parentId || '__EMPTY__'} onValueChange={(v) => handleParentChange('parentId', v === '__EMPTY__' ? null : v)} options={[{ value: '__EMPTY__', label: '无' }, ...availableParentProjects.map(p => ({ value: p.id, label: p.title }))]} className="w-full h-9 text-sm mt-1" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground">关联目标</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-1" value={(project as Project)?.goalId || ''} onChange={e => handleParentChange('goalId', e.target.value || null)}>
-              <option value="">无</option>
-              {state.goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
-            </select>
+            <SimpleSelect value={(project as Project)?.goalId || '__EMPTY__'} onValueChange={(v) => handleParentChange('goalId', v === '__EMPTY__' ? null : v)} options={[{ value: '__EMPTY__', label: '无' }, ...state.goals.map(g => ({ value: g.id, label: g.title }))]} className="w-full h-9 text-sm mt-1" />
           </div>
           {(project as Project)?.goalId && (
             <div className="flex items-center gap-1.5 mt-1">
@@ -80,24 +72,15 @@ export function DetailRelationships({ itemType, itemId, goal, project, task, can
         <div className="space-y-2">
           <div>
             <label className="text-xs text-muted-foreground">父任务</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-1" value={(task as Task)?.parentId || ''} onChange={e => handleParentChange('parentId', e.target.value || null)}>
-              <option value="">无</option>
-              {availableParentTasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-            </select>
+            <SimpleSelect value={(task as Task)?.parentId || '__EMPTY__'} onValueChange={(v) => handleParentChange('parentId', v === '__EMPTY__' ? null : v)} options={[{ value: '__EMPTY__', label: '无' }, ...availableParentTasks.map(t => ({ value: t.id, label: t.title }))]} className="w-full h-9 text-sm mt-1" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground">所属项目</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-1" value={(task as Task)?.projectId || ''} onChange={e => handleParentChange('projectId', e.target.value || null)}>
-              <option value="">无</option>
-              {state.projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-            </select>
+            <SimpleSelect value={(task as Task)?.projectId || '__EMPTY__'} onValueChange={(v) => handleParentChange('projectId', v === '__EMPTY__' ? null : v)} options={[{ value: '__EMPTY__', label: '无' }, ...state.projects.map(p => ({ value: p.id, label: p.title }))]} className="w-full h-9 text-sm mt-1" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground">关联目标</label>
-            <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-1" value={(task as Task)?.goalId || ''} onChange={e => { handleParentChange('goalId', e.target.value || null); if (!e.target.value) updateItem({ krId: undefined }); }}>
-              <option value="">无</option>
-              {state.goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
-            </select>
+            <SimpleSelect value={(task as Task)?.goalId || '__EMPTY__'} onValueChange={(v) => { const val = v === '__EMPTY__' ? null : v; handleParentChange('goalId', val); if (val === null) updateItem({ krId: undefined }); }} options={[{ value: '__EMPTY__', label: '无' }, ...state.goals.map(g => ({ value: g.id, label: g.title }))]} className="w-full h-9 text-sm mt-1" />
           </div>
           {(task as Task)?.goalId && (() => {
             const linkedGoal = state.goals.find(g => g.id === (task as Task)?.goalId);
@@ -106,10 +89,7 @@ export function DetailRelationships({ itemType, itemId, goal, project, task, can
               <div>
                 <label className="text-xs text-muted-foreground">关联关键结果</label>
                 <p className="text-[10px] text-muted-foreground mb-1">任务完成时自动+1该KR的当前值</p>
-                <select className="w-full text-sm border border-input rounded px-2 py-1.5 bg-card mt-0.5" value={(task as Task)?.krId || ''} onChange={e => updateItem({ krId: e.target.value || undefined })}>
-                  <option value="">不关联</option>
-                  {krs.map(kr => <option key={kr.id} value={kr.id}>{kr.title} ({kr.currentValue}/{kr.targetValue})</option>)}
-                </select>
+                <SimpleSelect value={(task as Task)?.krId || '__EMPTY__'} onValueChange={(v) => updateItem({ krId: v === '__EMPTY__' ? undefined : v })} options={[{ value: '__EMPTY__', label: '不关联' }, ...krs.map(kr => ({ value: kr.id, label: `${kr.title} (${kr.currentValue}/${kr.targetValue})` }))]} className="w-full h-9 text-sm mt-0.5" />
               </div>
             ) : null;
           })()}

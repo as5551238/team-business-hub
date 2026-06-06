@@ -1,10 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Suspense, lazy } from 'react';
 import { useStore } from '@/store/useStore';
 import { usePermissions, useActiveMembers } from '@/store/hooks';
 import type { Sprint, SprintStatus, Task } from '@/types';
 import { Plus, Trash2, Edit2, Play, CheckCircle, BarChart3, Clock, AlertTriangle } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const Recharts = lazy(() => import('recharts'));
+
+const CHART_FALLBACK = <div className="animate-pulse bg-muted h-48 rounded-lg" />;
 import { resolveToken } from '@/lib/resolveToken';
 
 const STATUS_LABELS: Record<SprintStatus, string> = { planning: '规划中', active: '进行中', completed: '已完成' };
@@ -180,16 +183,18 @@ export function SprintTab() {
             </div>
           )}
           {burndownData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={burndownData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={resolveToken('border')} />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Area type="monotone" dataKey="ideal" stroke={resolveToken('muted-foreground')} fill={resolveToken('muted')} strokeWidth={2} strokeDasharray="5 5" name="理想线" />
-                <Area type="monotone" dataKey="actual" stroke={resolveToken('primary')} fill={resolveToken('primary', 0.1)} strokeWidth={2} name="实际线" />
-              </AreaChart>
-            </ResponsiveContainer>
+            <Suspense fallback={CHART_FALLBACK}>
+            <Recharts.ResponsiveContainer width="100%" height={220}>
+              <Recharts.AreaChart data={burndownData}>
+                <Recharts.CartesianGrid strokeDasharray="3 3" stroke={resolveToken('border')} />
+                <Recharts.XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                <Recharts.YAxis tick={{ fontSize: 11 }} />
+                <Recharts.Tooltip />
+                <Recharts.Area type="monotone" dataKey="ideal" stroke={resolveToken('muted-foreground')} fill={resolveToken('muted')} strokeWidth={2} strokeDasharray="5 5" name="理想线" />
+                <Recharts.Area type="monotone" dataKey="actual" stroke={resolveToken('primary')} fill={resolveToken('primary', 0.1)} strokeWidth={2} name="实际线" />
+              </Recharts.AreaChart>
+            </Recharts.ResponsiveContainer>
+            </Suspense>
           ) : (
             <p className="text-xs text-muted-foreground py-6 text-center">暂无燃尽数据（需关联任务到该迭代）</p>
           )}

@@ -4,6 +4,7 @@ import type { StatusFlowRule, StatusFlowAutoAction, MemberRole } from '@/types';
 import { getDefaultStatusFlowRules } from '@/store/shared';
 import { Plus, Trash2, Bell, Edit2, UserPlus, ArrowRight, Download } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SimpleSelect } from '@/components/ui/simple-select';
 
 const STATUSES = ['todo', 'in_progress', 'done', 'blocked', 'cancelled'];
 const STATUS_LABELS: Record<string, string> = { todo: '待办', in_progress: '进行中', done: '已完成', blocked: '阻塞', cancelled: '已取消' };
@@ -99,10 +100,7 @@ export function FlowConfigTab() {
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-sm">状态流转规则</h3>
         <div className="flex items-center gap-2">
-          {rules.length > 0 && (<select className="border border-input rounded px-2 py-1 text-xs" onChange={e => { if (e.target.value) { const preset = FLOW_PRESETS[e.target.value]; if (preset) dispatch({ type: 'SET_STATUS_FLOW_RULES', payload: preset.rules }); e.target.value = ''; } }} defaultValue="">
-            <option value="" disabled>重置为预设模板...</option>
-            {Object.entries(FLOW_PRESETS).map(([key, preset]) => (<option key={key} value={key}>{preset.label}—{preset.desc}</option>))}
-          </select>)}
+          {rules.length > 0 && (<SimpleSelect value="" onValueChange={v => { if (v) { const preset = FLOW_PRESETS[v]; if (preset) dispatch({ type: 'SET_STATUS_FLOW_RULES', payload: preset.rules }); } }} options={[{ value: '', label: '重置为预设模板...' }, ...Object.entries(FLOW_PRESETS).map(([key, preset]) => ({ value: key, label: `${preset.label}—${preset.desc}` }))]} className="border border-input rounded px-2 py-1 text-xs" />)}
           <button onClick={() => { setForm({ fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [] }); setEditingIdx(rules.length); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"><Plus size={14} /> 新增规则</button>
         </div>
       </div>
@@ -129,13 +127,9 @@ export function FlowConfigTab() {
         <div className="border border-border rounded-lg p-4 space-y-3 bg-card">
           <h4 className="text-xs font-semibold">{editingIdx < rules.length ? '编辑规则' : '新建规则'}</h4>
           <div className="flex items-center gap-2">
-            <select className="border border-input rounded px-2 py-1 text-sm" value={form.fromStatus} onChange={e => setForm({ ...form, fromStatus: e.target.value })}>
-              {STATUSES.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-            </select>
+            <SimpleSelect value={form.fromStatus} onValueChange={v => setForm({ ...form, fromStatus: v })} options={STATUSES.map(s => ({ value: s, label: STATUS_LABELS[s] }))} className="border border-input rounded px-2 py-1 text-sm" />
             <ArrowRight size={16} />
-            <select className="border border-input rounded px-2 py-1 text-sm" value={form.toStatus} onChange={e => setForm({ ...form, toStatus: e.target.value })}>
-              {STATUSES.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-            </select>
+            <SimpleSelect value={form.toStatus} onValueChange={v => setForm({ ...form, toStatus: v })} options={STATUSES.map(s => ({ value: s, label: STATUS_LABELS[s] }))} className="border border-input rounded px-2 py-1 text-sm" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground">允许的角色（不选=全部）</label>
@@ -169,10 +163,7 @@ export function FlowConfigTab() {
                     </>
                   )}
                   {act.type === 'assign' && (
-                    <select className="border border-input rounded px-1.5 py-0.5 text-xs" value={act.config.memberId ?? ''} onChange={e => updateAction(i, { ...act.config, memberId: e.target.value })}>
-                      <option value="">选择成员</option>
-                      {state.members.filter(m => m.status === 'active').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
+                    <SimpleSelect value={act.config.memberId ?? ''} onValueChange={v => updateAction(i, { ...act.config, memberId: v })} options={[{ value: '', label: '选择成员' }, ...state.members.filter(m => m.status === 'active').map(m => ({ value: m.id, label: m.name }))]} className="border border-input rounded px-1.5 py-0.5 text-xs" />
                   )}
                   <button onClick={() => removeAction(i)} className="text-muted-foreground hover:text-destructive cursor-pointer" aria-label="移除动作"><Trash2 size={12} /></button>
                 </div>

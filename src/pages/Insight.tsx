@@ -1,7 +1,6 @@
 import { useMemo, useState, useCallback, Suspense, lazy } from 'react';
 import { useStore } from '@/store/useStore';
 import { useViewingMember, useReviewList, usePermissions } from '@/store/hooks';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { BarChart3, Target, CheckCircle2, Clock, TrendingUp, Users, FolderKanban, FileText, Lightbulb, Save, Calendar, Brain, Sparkles } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
@@ -9,8 +8,11 @@ import ViewModeSwitch from '@/components/ViewModeSwitch';
 import { resolveToken } from '@/lib/resolveToken';
 import type { ReviewPeriod, ReviewMetrics, Goal, Project, Task, ReviewEntry } from '@/types';
 
+const Recharts = lazy(() => import('recharts'));
 const AIAnalysisTab = lazy(() => import('@/pages/admin/AIAnalysisTab'));
 const AIReviewPanel = lazy(() => import('@/components/AIReviewPanel'));
+
+const CHART_FALLBACK = <div className="animate-pulse bg-muted h-48 rounded-lg" />;
 
 const COLORS = [resolveToken('primary'), resolveToken('success'), resolveToken('warning'), resolveToken('destructive'), resolveToken('chart-purple'), resolveToken('chart-pink')];
 
@@ -313,20 +315,20 @@ export default function Insight() {
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-primary" />周任务趋势</h3>
               <div className="overflow-x-auto -mx-5 px-5">
                 <div className="min-w-[400px]">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <AreaChart data={weeklyTrend}>
+                  <Recharts.ResponsiveContainer width="100%" height={260}>
+                    <Recharts.AreaChart data={weeklyTrend}>
                       <defs>
                         <linearGradient id="gC" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={resolveToken('primary')} stopOpacity={0.3} /><stop offset="95%" stopColor={resolveToken('primary')} stopOpacity={0} /></linearGradient>
                         <linearGradient id="gN" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={resolveToken('success')} stopOpacity={0.3} /><stop offset="95%" stopColor={resolveToken('success')} stopOpacity={0} /></linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
-                      <XAxis dataKey="week" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip />
-                      <Area type="monotone" dataKey="completed" name="完成" stroke={resolveToken('primary')} fill="url(#gC)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="created" name="新建" stroke={resolveToken('success')} fill="url(#gN)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                      <Recharts.CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
+                      <Recharts.XAxis dataKey="week" tick={{ fontSize: 12 }} />
+                      <Recharts.YAxis tick={{ fontSize: 12 }} />
+                      <Recharts.Tooltip />
+                      <Recharts.Area type="monotone" dataKey="completed" name="完成" stroke={resolveToken('primary')} fill="url(#gC)" strokeWidth={2} />
+                      <Recharts.Area type="monotone" dataKey="created" name="新建" stroke={resolveToken('success')} fill="url(#gN)" strokeWidth={2} />
+                    </Recharts.AreaChart>
+                  </Recharts.ResponsiveContainer>
                 </div>
               </div>
             </div>
@@ -334,9 +336,9 @@ export default function Insight() {
             <div className="bg-card rounded-xl border border-border shadow-sm p-5">
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><Target size={16} className="text-primary" />目标状态分布</h3>
               <div className="flex items-center gap-8">
-                <ResponsiveContainer width="50%" height={200}>
-                  <PieChart><Pie data={goalStats} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" paddingAngle={3}>{goalStats.map((entry, i) => <Cell key={i} fill={entry.color} />)}</Pie><Tooltip /></PieChart>
-                </ResponsiveContainer>
+                <Recharts.ResponsiveContainer width="50%" height={200}>
+                  <Recharts.PieChart><Recharts.Pie data={goalStats} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" paddingAngle={3}>{goalStats.map((entry, i) => <Recharts.Cell key={i} fill={entry.color} />)}</Recharts.Pie><Recharts.Tooltip /></Recharts.PieChart>
+                </Recharts.ResponsiveContainer>
                 <div className="space-y-2">{goalStats.map((d, i) => <div key={i} className="flex items-center gap-2 text-sm"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} /><span className="text-muted-foreground">{d.name}</span><span className="font-medium ml-auto">{d.value}</span></div>)}</div>
               </div>
             </div>
@@ -347,17 +349,17 @@ export default function Insight() {
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><Users size={16} className="text-primary" />成员任务分布 (Top 10)</h3>
               <div className="overflow-x-auto -mx-5 px-5">
                 <div className="min-w-[400px]">
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={memberTaskStats} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
-                      <XAxis type="number" tick={{ fontSize: 12 }} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={60} />
-                      <Tooltip />
-                      <Bar dataKey="completed" name="已完成" fill={resolveToken('success')} stackId="a" />
-                      <Bar dataKey="inProgress" name="进行中" fill={resolveToken('primary')} stackId="a" />
-                      <Bar dataKey="todo" name="待处理" fill={resolveToken('warning')} stackId="a" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <Recharts.ResponsiveContainer width="100%" height={280}>
+                    <Recharts.BarChart data={memberTaskStats} layout="vertical">
+                      <Recharts.CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
+                      <Recharts.XAxis type="number" tick={{ fontSize: 12 }} />
+                      <Recharts.YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={60} />
+                      <Recharts.Tooltip />
+                      <Recharts.Bar dataKey="completed" name="已完成" fill={resolveToken('success')} stackId="a" />
+                      <Recharts.Bar dataKey="inProgress" name="进行中" fill={resolveToken('primary')} stackId="a" />
+                      <Recharts.Bar dataKey="todo" name="待处理" fill={resolveToken('warning')} stackId="a" radius={[0, 4, 4, 0]} />
+                    </Recharts.BarChart>
+                  </Recharts.ResponsiveContainer>
                 </div>
               </div>
             </div>
@@ -519,16 +521,16 @@ export default function Insight() {
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-primary" />完成率对比</h3>
               <div className="overflow-x-auto -mx-5 px-5">
                 <div className="min-w-[400px]">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={comparisonData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
-                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip />
-                      <Bar dataKey="rate" name="完成率(%)" fill={resolveToken('primary')} radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="overdue" name="逾期" fill={resolveToken('destructive')} radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <Recharts.ResponsiveContainer width="100%" height={300}>
+                    <Recharts.BarChart data={comparisonData}>
+                      <Recharts.CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
+                      <Recharts.XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <Recharts.YAxis tick={{ fontSize: 12 }} />
+                      <Recharts.Tooltip />
+                      <Recharts.Bar dataKey="rate" name="完成率(%)" fill={resolveToken('primary')} radius={[4, 4, 0, 0]} />
+                      <Recharts.Bar dataKey="overdue" name="逾期" fill={resolveToken('destructive')} radius={[4, 4, 0, 0]} />
+                    </Recharts.BarChart>
+                  </Recharts.ResponsiveContainer>
                 </div>
               </div>
             </div>
@@ -536,16 +538,16 @@ export default function Insight() {
               <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><Target size={16} className="text-primary" />任务量分布</h3>
               <div className="overflow-x-auto -mx-5 px-5">
                 <div className="min-w-[400px]">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={comparisonData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
-                      <XAxis type="number" tick={{ fontSize: 12 }} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={60} />
-                      <Tooltip />
-                      <Bar dataKey="done" name="已完成" fill={resolveToken('success')} stackId="a" />
-                      <Bar dataKey="tasks" name="未完成" fill={resolveToken('warning')} stackId="a" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <Recharts.ResponsiveContainer width="100%" height={300}>
+                    <Recharts.BarChart data={comparisonData} layout="vertical">
+                      <Recharts.CartesianGrid strokeDasharray="3 3" stroke={resolveToken('muted')} />
+                      <Recharts.XAxis type="number" tick={{ fontSize: 12 }} />
+                      <Recharts.YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={60} />
+                      <Recharts.Tooltip />
+                      <Recharts.Bar dataKey="done" name="已完成" fill={resolveToken('success')} stackId="a" />
+                      <Recharts.Bar dataKey="tasks" name="未完成" fill={resolveToken('warning')} stackId="a" radius={[0, 4, 4, 0]} />
+                    </Recharts.BarChart>
+                  </Recharts.ResponsiveContainer>
                 </div>
               </div>
             </div>

@@ -5,7 +5,6 @@ import { setCurrentTeamId } from '@/store/supabase';
 import { setRLSContext, getSupabaseClient } from '@/supabase/client';
 import { wechatOAuthLogin, phoneOtpLogin, emailMagicLink } from '@/lib/authBridge';
 import { genId } from '@/store/utils';
-import { setSentryUser } from '@/lib/sentry';
 import { handleError } from '@/lib/errorHandler';
 
 const LOGIN_KEY = 'tbh-current-user';
@@ -222,7 +221,7 @@ export function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) 
     dispatch({ type: 'SET_CURRENT_TEAM', payload: teamId });
     setCurrentTeamId(teamId);
     setRLSContext(teamId, userId);
-    setSentryUser(userId, member?.name);
+    if (import.meta.env.PROD) { import('@/lib/sentry').then(m => m.setSentryUser(userId, member?.name)).catch(() => {}); }
     // Login audit: write to audit_logs
     try {
       const sb = getSupabaseClient();

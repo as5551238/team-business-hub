@@ -1,11 +1,14 @@
 /**
  * 业务现况 Tab — Executive Summary: 数据概览 + 周环比 + 活动流 + 目标进度
  */
-import { useMemo } from 'react';
+import { useMemo, Suspense, lazy } from 'react';
 import { Target, FolderKanban, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Minus, Clock, BarChart3, Activity, ArrowUpRight } from 'lucide-react';
 import { resolveToken } from '@/lib/resolveToken';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
+
+const Recharts = lazy(() => import('recharts'));
+
+const CHART_FALLBACK = <div className="animate-pulse bg-muted h-48 rounded-lg" />;
 import { getFunnelMetrics } from '@/lib/analytics';
 import { CHART_COLORS, StatCard, useFilteredData } from './shared';
 import type { DashboardTabProps } from './shared';
@@ -188,11 +191,11 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-card rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => goToPage('tasks')}>
           <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold text-muted-foreground">任务状态分布</span><BarChart3 size={14} className="text-muted-foreground/50" /></div>
-          <div className="h-[120px]">{taskStatusData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={taskStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>{taskStatusData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={(v: number, n: string) => [`${v} 项`, n]} /></PieChart></ResponsiveContainer>) : (<div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>)}</div>
+          <div className="h-[120px]">{taskStatusData.length > 0 ? (<Suspense fallback={CHART_FALLBACK}><Recharts.ResponsiveContainer width="100%" height="100%"><Recharts.PieChart><Recharts.Pie data={taskStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>{taskStatusData.map((_, i) => <Recharts.Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Recharts.Pie><Recharts.Tooltip formatter={(v: number, n: string) => [`${v} 项`, n]} /></Recharts.PieChart></Recharts.ResponsiveContainer></Suspense>) : (<div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>)}</div>
         </div>
         <div className="bg-card rounded-xl border border-border shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={() => goToPage('tasks')}>
           <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold text-muted-foreground">优先级分布</span><BarChart3 size={14} className="text-muted-foreground/50" /></div>
-          <div className="h-[120px]">{taskPriorityData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={taskPriorityData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>{taskPriorityData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={(v: number, n: string) => [`${v} 项`, n]} /></PieChart></ResponsiveContainer>) : (<div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>)}</div>
+          <div className="h-[120px]">{taskPriorityData.length > 0 ? (<Suspense fallback={CHART_FALLBACK}><Recharts.ResponsiveContainer width="100%" height="100%"><Recharts.PieChart><Recharts.Pie data={taskPriorityData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>{taskPriorityData.map((_, i) => <Recharts.Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Recharts.Pie><Recharts.Tooltip formatter={(v: number, n: string) => [`${v} 项`, n]} /></Recharts.PieChart></Recharts.ResponsiveContainer></Suspense>) : (<div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>)}</div>
         </div>
       </div>
 
@@ -207,15 +210,17 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
         </div>
         <div className="h-[160px]">
           {trendData.some(d => d.created > 0 || d.completed > 0) ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData}>
-                <XAxis dataKey="day" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip formatter={(v: number) => [`${v} 项`]} />
-                <Line type="monotone" dataKey="created" stroke={resolveToken('primary')} strokeWidth={2} dot={{ r: 3 }} name="新建" />
-                <Line type="monotone" dataKey="completed" stroke={resolveToken('success')} strokeWidth={2} dot={{ r: 3 }} name="完成" />
-              </LineChart>
-            </ResponsiveContainer>
+            <Suspense fallback={CHART_FALLBACK}>
+            <Recharts.ResponsiveContainer width="100%" height="100%">
+              <Recharts.LineChart data={trendData}>
+                <Recharts.XAxis dataKey="day" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Recharts.YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Recharts.Tooltip formatter={(v: number) => [`${v} 项`]} />
+                <Recharts.Line type="monotone" dataKey="created" stroke={resolveToken('primary')} strokeWidth={2} dot={{ r: 3 }} name="新建" />
+                <Recharts.Line type="monotone" dataKey="completed" stroke={resolveToken('success')} strokeWidth={2} dot={{ r: 3 }} name="完成" />
+              </Recharts.LineChart>
+            </Recharts.ResponsiveContainer>
+            </Suspense>
           ) : (
             <div className="h-full flex items-center justify-center text-xs text-muted-foreground">暂无数据</div>
           )}

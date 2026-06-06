@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense, Component, useMemo, type ReactNode, type ErrorInfo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Layout from '@/components/layout/Layout';
-import { initSentry } from '@/lib/sentry';
 import { DegradedBanner } from '@/components/DegradedMode';
 import { FeatureFlagProvider } from '@/lib/featureFlags';
 import { handleError } from '@/lib/errorHandler';
@@ -128,8 +127,8 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
 }
 
 function App() {
-  // Initialize Sentry on first load
-  useEffect(() => { initSentry(); }, []);
+  // Initialize Sentry on first load (prod only)
+  useEffect(() => { if (import.meta.env.PROD) { import('@/lib/sentry').then(m => m.initSentry()).catch(() => {}); } }, []);
 
   // Force SW update: detect new version and reload to bust stale PWA cache
   useEffect(() => {

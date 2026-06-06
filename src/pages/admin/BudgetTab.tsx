@@ -3,6 +3,7 @@ import { useStore } from '@/store/useStore';
 import type { Budget, BudgetItem, CostEntry, BudgetCategory } from '@/types';
 import { Plus, X, AlertTriangle, CheckCircle, Clock, DollarSign, TrendingUp, TrendingDown, ChevronDown, ChevronRight } from 'lucide-react';
 import { inputCls, primaryBtnCls, btnCls } from './constants';
+import { SimpleSelect } from '@/components/ui/simple-select';
 
 const CATEGORY_LABELS: Record<BudgetCategory, string> = {
   labor: '人力成本',
@@ -474,18 +475,11 @@ export function BudgetTab() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-medium block mb-1">关联项目</label>
-                  <select className={inputCls} value={formProjectId} onChange={e => setFormProjectId(e.target.value)}>
-                    <option value="">无</option>
-                    {state.projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-                  </select>
+                  <SimpleSelect value={formProjectId} onValueChange={setFormProjectId} options={state.projects.map(p => ({ value: p.id, label: p.title }))} placeholder="无" className="w-full h-10 text-sm" />
                 </div>
                 <div>
                   <label className="text-[11px] font-medium block mb-1">币种</label>
-                  <select className={inputCls} value={formCurrency} onChange={e => setFormCurrency(e.target.value)}>
-                    <option value="CNY">CNY (¥)</option>
-                    <option value="USD">USD ($)</option>
-                    <option value="EUR">EUR (€)</option>
-                  </select>
+                  <SimpleSelect value={formCurrency} onValueChange={setFormCurrency} options={[{ value: 'CNY', label: 'CNY (¥)' }, { value: 'USD', label: 'USD ($)' }, { value: 'EUR', label: 'EUR (€)' }]} className="w-full h-10 text-sm" />
                 </div>
               </div>
 
@@ -498,13 +492,7 @@ export function BudgetTab() {
                 <div className="space-y-2">
                   {formItems.map((item, idx) => (
                     <div key={item.id} className="flex items-center gap-2 p-2 border rounded-lg">
-                      <select
-                        className="border rounded px-1.5 py-1 text-[10px]"
-                        value={item.category}
-                        onChange={e => updateFormItem(idx, { category: e.target.value as BudgetCategory })}
-                      >
-                        {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
+                      <SimpleSelect value={item.category} onValueChange={(v) => updateFormItem(idx, { category: v as BudgetCategory })} options={Object.entries(CATEGORY_LABELS).map(([k, v]) => ({ value: k, label: v }))} className="h-7 text-[10px]" />
                       <input
                         className="flex-1 min-w-0 border rounded px-1.5 py-1 text-[10px]"
                         placeholder="名称"
@@ -549,23 +537,12 @@ export function BudgetTab() {
             <div className="px-5 py-4 space-y-3">
               <div>
                 <label className="text-[11px] font-medium block mb-1">关联预算 *</label>
-                <select
-                  className={inputCls}
-                  value={selectedBudget || ''}
-                  onChange={e => setSelectedBudget(e.target.value)}
-                >
-                  <option value="">选择预算</option>
-                  {budgets.filter(b => b.status === 'active' || b.status === 'approved').map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
+                <SimpleSelect value={selectedBudget || ''} onValueChange={setSelectedBudget} options={budgets.filter(b => b.status === 'active' || b.status === 'approved').map(b => ({ value: b.id, label: b.name }))} placeholder="选择预算" className="w-full h-10 text-sm" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-medium block mb-1">类别 *</label>
-                  <select className={inputCls} value={costCategory} onChange={e => setCostCategory(e.target.value as BudgetCategory)}>
-                    {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
+                  <SimpleSelect value={costCategory} onValueChange={(v) => setCostCategory(v as BudgetCategory)} options={Object.entries(CATEGORY_LABELS).map(([k, v]) => ({ value: k, label: v }))} className="w-full h-10 text-sm" />
                 </div>
                 <div>
                   <label className="text-[11px] font-medium block mb-1">金额 *</label>
@@ -579,17 +556,11 @@ export function BudgetTab() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-medium block mb-1">关联项目</label>
-                  <select className={inputCls} value={costProjectId} onChange={e => setCostProjectId(e.target.value)}>
-                    <option value="">无</option>
-                    {state.projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-                  </select>
+                  <SimpleSelect value={costProjectId} onValueChange={setCostProjectId} options={state.projects.map(p => ({ value: p.id, label: p.title }))} placeholder="无" className="w-full h-10 text-sm" />
                 </div>
                 <div>
                   <label className="text-[11px] font-medium block mb-1">关联任务</label>
-                  <select className={inputCls} value={costTaskId} onChange={e => setCostTaskId(e.target.value)}>
-                    <option value="">无</option>
-                    {state.tasks.slice(0, 30).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                  </select>
+                  <SimpleSelect value={costTaskId} onValueChange={setCostTaskId} options={state.tasks.slice(0, 30).map(t => ({ value: t.id, label: t.title }))} placeholder="无" className="w-full h-10 text-sm" />
                 </div>
               </div>
             </div>

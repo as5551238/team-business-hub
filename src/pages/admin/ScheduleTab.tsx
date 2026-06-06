@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Switch } from '@/components/ui/switch';
+import { SimpleSelect } from '@/components/ui/simple-select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useStore } from '@/store/useStore';
 import { useViewingMember, useScheduleEvents } from '@/store/hooks';
@@ -197,26 +198,17 @@ export function ScheduleTab() {
               <div className="flex gap-2">{PRESET_COLORS.map(c => <button key={c} className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110" style={{ backgroundColor: c, borderColor: form.color === c ? '#000' : 'transparent' }} onClick={() => setForm(f => ({ ...f, color: c }))} />)}</div>
             </div>
             <div><label className="block text-sm font-medium mb-1">重复</label>
-              <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={form.repeatCycle} onChange={e => setForm(f => ({ ...f, repeatCycle: e.target.value as RepeatCycle }))}>{Object.entries(repeatLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+              <SimpleSelect value={form.repeatCycle} onValueChange={v => setForm(f => ({ ...f, repeatCycle: v as RepeatCycle }))} options={Object.entries(repeatLabels).map(([k, v]) => ({ value: k, label: v }))} className="w-full" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">关联项</label>
               <div className="flex gap-2">
-                <select className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={form.linkedItemType || ''} onChange={e => setForm(f => ({ ...f, linkedItemType: (e.target.value || null) as EvtForm['linkedItemType'], linkedItemId: '' }))}>
-                  <option value="">无</option><option value="goal">目标</option><option value="project">项目</option><option value="task">任务</option>
-                </select>
-                {form.linkedItemType && <select className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={form.linkedItemId} onChange={e => setForm(f => ({ ...f, linkedItemId: e.target.value }))}>
-                  <option value="">选择...</option>
-                  {form.linkedItemType === 'goal' && goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
-                  {form.linkedItemType === 'project' && projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-                  {form.linkedItemType === 'task' && tasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                </select>}
+                <SimpleSelect value={form.linkedItemType || ''} onValueChange={v => setForm(f => ({ ...f, linkedItemType: (v || null) as EvtForm['linkedItemType'], linkedItemId: '' }))} options={[{ value: '', label: '无' }, { value: 'goal', label: '目标' }, { value: 'project', label: '项目' }, { value: 'task', label: '任务' }]} className="border border-border rounded-lg px-3 py-2 text-sm" />
+                {form.linkedItemType && <SimpleSelect value={form.linkedItemId} onValueChange={v => setForm(f => ({ ...f, linkedItemId: v }))} options={[{ value: '', label: '选择...' }, ...(form.linkedItemType === 'goal' ? goals.map(g => ({ value: g.id, label: g.title })) : form.linkedItemType === 'project' ? projects.map(p => ({ value: p.id, label: p.title })) : tasks.map(t => ({ value: t.id, label: t.title })))]} className="flex-1 border border-border rounded-lg px-3 py-2 text-sm" />}
               </div>
             </div>
             <div><label className="block text-sm font-medium mb-1">成员</label>
-              <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" value={form.memberId} onChange={e => setForm(f => ({ ...f, memberId: e.target.value }))}>
-                <option value="">选择成员</option>{members.filter(m => m.status === 'active').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
+              <SimpleSelect value={form.memberId} onValueChange={v => setForm(f => ({ ...f, memberId: v }))} options={[{ value: '', label: '选择成员' }, ...members.filter(m => m.status === 'active').map(m => ({ value: m.id, label: m.name }))]} className="w-full border border-border rounded-lg px-3 py-2 text-sm" />
             </div>
           </div>
           <div className="px-6 py-4 border-t border-border flex justify-end gap-3">
