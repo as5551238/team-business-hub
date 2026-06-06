@@ -16,6 +16,7 @@ import { pushTaskEvent } from '@/lib/pushEventEngine';
 import { useCollabPresence } from '@/lib/collab';
 import { CollabPresenceBar } from '@/components/CollabPresenceBar';
 import { H5Layout } from '@/components/H5Layout';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { OperationToast } from '@/components/OperationToast';
 import { requestNotificationPermission, sendBrowserNotification, isNotificationSupported } from '@/lib/browserNotify';
@@ -437,6 +438,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
   const notificationsMemo = useMemo(() => state.notifications.filter(n => !n.memberId || n.memberId === user?.id), [state.notifications, user?.id]);
 
   return (
+    <TooltipProvider delayDuration={300}>
     <div className="flex h-screen overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* Skip-to-content for keyboard users */}
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-lg focus:text-sm focus:font-medium">跳到主内容</a>
@@ -459,9 +461,14 @@ export default function Layout({ children, currentUser }: LayoutProps) {
               <div className="text-xs text-sidebar-foreground/50">Team Business Hub</div>
             </div>
           )}
-          <button className="ml-auto p-1 rounded hover:bg-sidebar-accent transition-colors" onClick={cycleSidebarMode} title={sidebarMode === 'wide' ? '收窄侧边栏' : sidebarMode === 'narrow' ? '隐藏侧边栏' : '展开侧边栏'} aria-label={sidebarMode === 'wide' ? '收窄侧边栏' : sidebarMode === 'narrow' ? '隐藏侧边栏' : '展开侧边栏'}>
-            {sidebarMode === 'wide' ? <PanelLeftClose size={16} /> : sidebarMode === 'narrow' ? <ChevronsLeft size={16} /> : <ChevronsRight size={16} />}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button className="ml-auto p-1 rounded hover:bg-sidebar-accent transition-colors" onClick={cycleSidebarMode} aria-label={sidebarMode === 'wide' ? '收窄侧边栏' : sidebarMode === 'narrow' ? '隐藏侧边栏' : '展开侧边栏'}>
+                {sidebarMode === 'wide' ? <PanelLeftClose size={16} /> : sidebarMode === 'narrow' ? <ChevronsLeft size={16} /> : <ChevronsRight size={16} />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{sidebarMode === 'wide' ? '收窄侧边栏' : sidebarMode === 'narrow' ? '隐藏侧边栏' : '展开侧边栏'}</TooltipContent>
+          </Tooltip>
           <button className="md:hidden" onClick={() => setSidebarOpen(false)} aria-label="关闭侧边栏"><X size={18} /></button>
         </div>
 
@@ -707,5 +714,6 @@ export default function Layout({ children, currentUser }: LayoutProps) {
       <OperationToast />
       <FloatingAIPanel />
     </div>
+    </TooltipProvider>
   );
 }

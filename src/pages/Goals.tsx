@@ -4,6 +4,7 @@ import { useTags, useViewingMember, useMemberLookup, usePermissions, useActiveMe
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
 import { Trash2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check, Users, EyeOff, Eye } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
@@ -310,7 +311,7 @@ export default function Goals() {
           <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1"><X size={12} /> 清除 ({activeFilterCount})</button>
         )}
         <span className="text-xs text-muted-foreground ml-auto">{filteredGoals.length} 条</span>
-        <button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`} title={showCompleted ? '隐藏已完成' : '显示已完成'}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+        <Tooltip><TooltipTrigger asChild><button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button></TooltipTrigger><TooltipContent>{showCompleted ? '隐藏已完成' : '显示已完成'}</TooltipContent></Tooltip>
       </div>
 
       {effectiveViewMode === 'detail' && (

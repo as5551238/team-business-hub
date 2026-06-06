@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
+import { Switch } from '@/components/ui/switch';
 import { useStore } from '@/store/useStore';
 import { useTemplates } from '@/store/hooks';
 import { uploadFile, BUCKET_NAMES } from '@/supabase/storage';
@@ -107,7 +108,7 @@ export function ToolboxTab() {
                 <div><label className="block text-sm font-medium mb-1">分类</label><input className={inputCls} placeholder="分类名称" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} /></div>
               </div>
               <div><label className="block text-sm font-medium mb-1">内容</label><textarea className={inputCls + ' min-h-[120px] resize-y'} placeholder="模板内容..." value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} /></div>
-              <div><label className="flex items-center gap-2 cursor-pointer text-sm"><input type="checkbox" className="rounded" checked={form.isPublic} onChange={e => setForm(f => ({ ...f, isPublic: e.target.checked }))} />公开模板（团队成员可见）</label></div>
+              <div className="flex items-center gap-2 text-sm"><Switch checked={form.isPublic} onCheckedChange={v => setForm(f => ({ ...f, isPublic: v }))} /><span>公开模板（团队成员可见）</span></div>
               <div>
                 <label className="block text-sm font-medium mb-1">附件</label>
                 <div className="flex items-center gap-2">

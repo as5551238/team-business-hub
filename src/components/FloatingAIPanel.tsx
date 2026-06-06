@@ -10,6 +10,7 @@
  */
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Sparkles, X, MessageCircle } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const AIChatAgent = lazy(() =>
   import('@/components/AIChatAgent').then(m => ({ default: m.AIChatAgent }))
@@ -68,15 +69,19 @@ export function FloatingAIPanel() {
     <>
       {/* FAB trigger button */}
       {!isOpen && (
-        <button
-          onClick={toggle}
-          className="fixed bottom-6 right-6 z-50 md:bottom-8 md:right-8 w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center group"
-          title="AI 助手 (Ctrl+Shift+K)"
-          aria-label="打开AI助手"
-        >
-          <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />
-          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-400 border-2 border-background animate-pulse" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={toggle}
+              className="fixed bottom-6 right-6 z-50 md:bottom-8 md:right-8 w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center group"
+              aria-label="打开AI助手"
+            >
+              <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-400 border-2 border-background animate-pulse" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">AI 助手 (Ctrl+Shift+K)</TooltipContent>
+        </Tooltip>
       )}
 
       {/* Slide-in panel */}

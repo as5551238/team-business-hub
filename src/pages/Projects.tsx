@@ -4,6 +4,8 @@ import { useTags, useViewingMember, usePermissions, useActiveMembers } from '@/s
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { TaskPriority } from '@/types';
 import { Plus, FolderKanban, Search, Check, Users, X, Filter, ChevronDown, EyeOff, Eye } from 'lucide-react';
+import { SimpleSelect } from '@/components/ui/simple-select';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence } from '@/lib/collab';
@@ -246,10 +248,10 @@ export default function Projects() {
             </div>
           )}
         </div>
-        <select className="border border-border rounded-lg px-2 py-1 text-xs bg-card focus:outline-none focus:ring-1 focus:ring-primary/20" value={timeFilter} onChange={e => setTimeFilter(e.target.value)}>{timeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+        <SimpleSelect value={timeFilter} onValueChange={v => setTimeFilter(v)} options={timeOptions.map(o => ({ value: o.value, label: o.label }))} className="w-[120px] h-7 text-xs" />
         {activeFilterCount > 0 && <button className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1" onClick={clearFilters}><X size={12} />清除 ({activeFilterCount})</button>}
         <span className="text-xs text-muted-foreground ml-auto">{filteredProjects.length} 条</span>
-        <button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`} title={showCompleted ? '隐藏已完成' : '显示已完成'}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+        <Tooltip><TooltipTrigger asChild><button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button></TooltipTrigger><TooltipContent>{showCompleted ? '隐藏已完成' : '显示已完成'}</TooltipContent></Tooltip>
       </div>
 
       {viewMode === 'detail' && (

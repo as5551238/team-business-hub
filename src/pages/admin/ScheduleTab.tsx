@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Switch } from '@/components/ui/switch';
 import { useStore } from '@/store/useStore';
 import { useViewingMember, useScheduleEvents } from '@/store/hooks';
 import type { RepeatCycle, OutlookCalendarEvent } from '@/types';
@@ -188,7 +189,7 @@ export function ScheduleTab() {
                 <div><label className="block text-sm font-medium mb-1">开始日期 *</label><input type="date" className={inputCls} value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} /></div>
                 <div><label className="block text-sm font-medium mb-1">结束日期</label><input type="date" className={inputCls} value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} /></div>
               </div>
-              <label className="flex items-center gap-2 cursor-pointer text-sm"><input type="checkbox" className="rounded" checked={form.allDay} onChange={e => setForm(f => ({ ...f, allDay: e.target.checked }))} />全天日程</label>
+              <div className="flex items-center gap-2 text-sm"><Switch checked={form.allDay} onCheckedChange={v => setForm(f => ({ ...f, allDay: v }))} /><span>全天日程</span></div>
               <div>
                 <label className="block text-sm font-medium mb-1">颜色</label>
                 <div className="flex gap-2">{PRESET_COLORS.map(c => <button key={c} className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110" style={{ backgroundColor: c, borderColor: form.color === c ? '#000' : 'transparent' }} onClick={() => setForm(f => ({ ...f, color: c }))} />)}</div>

@@ -7,6 +7,8 @@ import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { cn } from '@/lib/utils';
 import { handleError } from '@/lib/errorHandler';
 import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, FileText, Copy, MessageSquare, Trash2, Check, Filter, Sparkles, Users, EyeOff, Eye } from 'lucide-react';
+import { SimpleSelect } from '@/components/ui/simple-select';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
@@ -631,13 +633,13 @@ export default function Tasks() {
                 </div>
               )}
             </div>
-            <select className="border border-border rounded-lg px-2 py-1 text-xs bg-card focus:outline-none focus:ring-1 focus:ring-primary/20" value={timeFilter} onChange={e => { setTimeFilter(e.target.value); if (e.target.value === 'custom') setShowCustomDate(true); else setShowCustomDate(false); }}>{TIME_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select>
+            <SimpleSelect value={timeFilter} onValueChange={v => { setTimeFilter(v); if (v === 'custom') setShowCustomDate(true); else setShowCustomDate(false); }} options={TIME_OPTIONS.map(o => ({ value: o.key, label: o.label }))} className="w-[120px] h-7 text-xs" />
             {showCustomDate && <input type="date" className="border border-border rounded-lg px-2 py-1 text-xs bg-card" value={customDateFrom} onChange={e => setCustomDateFrom(e.target.value)} />}
             {showCustomDate && <input type="date" className="border border-border rounded-lg px-2 py-1 text-xs bg-card" value={customDateTo} onChange={e => setCustomDateTo(e.target.value)} />}
             {viewMode === 'list' && <button className={cn('text-xs px-2 py-1 rounded-md bg-muted/50 text-muted-foreground hover:text-foreground border border-border flex items-center gap-1', groupByDate && 'bg-primary/10 text-primary border-primary')} onClick={() => setGroupByDate(!groupByDate)}><Calendar className="w-3 h-3" />按日期</button>}
             {activeFilterCount > 0 && <button className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1" onClick={clearFilters}><X size={12} />清除 ({activeFilterCount})</button>}
             <span className="text-xs text-muted-foreground ml-auto">{filteredTasks.length} 条</span>
-            <button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`} title={showCompleted ? '隐藏已完成' : '显示已完成'}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+            <Tooltip><TooltipTrigger asChild><button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button></TooltipTrigger><TooltipContent>{showCompleted ? '隐藏已完成' : '显示已完成'}</TooltipContent></Tooltip>
           </div>
 
           {viewMode === 'board' && renderBoard()}

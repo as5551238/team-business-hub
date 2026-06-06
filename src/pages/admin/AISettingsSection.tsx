@@ -3,6 +3,7 @@
  * 集成到管理中心的"设置"Tab 下
  */
 import { useState, useEffect, useRef } from 'react';
+import { Switch } from '@/components/ui/switch';
 import { Key, Check, AlertCircle, Loader2, ChevronDown } from 'lucide-react';
 import { loadAIConfig, saveAIConfig, PROVIDER_PRESETS, callLLM } from '@/lib/ai';
 import type { AIConfig, AIModelProvider } from '@/lib/ai';
@@ -71,10 +72,10 @@ export function AISettingsSection() {
       <p className="text-xs text-muted-foreground">配置大模型 API 后，可启用 AI 深度分析（健康度评估、风险预警、效率分析、改进建议）。支持 DeepSeek 和豆包免费模型。</p>
 
       <div className="flex items-center gap-3">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={config.enabled} onChange={(e) => update({ enabled: e.target.checked })} className="w-4 h-4 rounded border-border" />
+        <div className="flex items-center gap-2">
+          <Switch checked={config.enabled} onCheckedChange={(v) => update({ enabled: v })} />
           <span className="text-sm">启用 AI 深度分析</span>
-        </label>
+        </div>
       </div>
 
       <div className="space-y-1.5">

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Switch } from '@/components/ui/switch';
 import { DEFAULT_DEPLOY_CONFIG, generateDockerCompose, generateEnvFile, generateCaddyfile, generateDeployReadme, exportAllData, downloadExport, type DeployConfig } from '@/lib/deployKit';
 import { useStore } from '@/store/useStore';
 import { Server, Download, Copy, Check, FileText, Database, Shield } from 'lucide-react';
@@ -61,11 +62,9 @@ export function DeployTab() {
             <label className="text-xs text-muted-foreground block mb-1">Supabase Key</label>
             <input type="password" className="w-full border rounded px-2 py-1.5 text-sm font-mono text-xs" value={config.supabaseKey} onChange={e => setConfig({ ...config, supabaseKey: e.target.value })} />
           </div>
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={config.enableSSL} onChange={e => setConfig({ ...config, enableSSL: e.target.checked })} className="rounded" />
-              启用 SSL (Caddy)
-            </label>
+          <div className="flex items-center gap-2 text-sm">
+            <Switch checked={config.enableSSL} onCheckedChange={v => setConfig({ ...config, enableSSL: v })} />
+            <span>启用 SSL (Caddy)</span>
           </div>
         </div>
       </div>
