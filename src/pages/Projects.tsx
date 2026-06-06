@@ -6,6 +6,7 @@ import type { TaskPriority } from '@/types';
 import { Plus, FolderKanban, Search, Check, Users, X, Filter, ChevronDown, EyeOff, Eye } from 'lucide-react';
 import { SimpleSelect } from '@/components/ui/simple-select';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence } from '@/lib/collab';
@@ -267,14 +268,11 @@ export default function Projects() {
       {viewMode === 'timeline' && (filteredProjects.length > 0 ? <ProjectTimelineView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
 
 
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowCreateDialog(false)} />
-          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up" role="dialog" aria-modal="true" aria-label="新建项目">
-            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-              <h3 className="font-semibold">新建项目</h3>
-              <button className="p-1 rounded hover:bg-muted" onClick={() => setShowCreateDialog(false)} aria-label="关闭新建项目对话框"><X size={16} /></button>
-            </div>
+      <Dialog open={showCreateDialog} onOpenChange={(v) => { if (!v) setShowCreateDialog(false); }}>
+        <DialogContent className="sm:max-w-lg p-0 gap-0">
+          <DialogHeader className="px-6 py-4 border-b border-border flex flex-row items-center justify-between space-y-0">
+            <DialogTitle className="font-semibold">新建项目</DialogTitle>
+          </DialogHeader>
             <div className="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
               <div><label className="block text-sm font-medium mb-1">项目名称 *</label><input className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="例：Q2产品迭代" value={formData.title} onChange={e => setFormData(f => ({ ...f, title: e.target.value }))} /></div>
               {projectTemplates.length > 0 && <div className="flex items-center gap-2"><button className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${useTemplate ? 'bg-primary/10 border-primary/40 text-primary' : 'border-border hover:bg-muted'}`} onClick={() => setUseTemplate(!useTemplate)}>从模板创建</button></div>}
@@ -308,9 +306,8 @@ export default function Projects() {
               <button className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-muted transition-colors" onClick={() => setShowCreateDialog(false)}>关闭</button>
               <button className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors" onClick={handleCreate}>创建项目</button>
             </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={!!detailItem} onClose={closeProjectDetail} itemType={detailItem.type} itemId={detailItem.id} />}
     </div>

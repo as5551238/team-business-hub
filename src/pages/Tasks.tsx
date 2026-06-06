@@ -9,6 +9,7 @@ import { handleError } from '@/lib/errorHandler';
 import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, FileText, Copy, MessageSquare, Trash2, Check, Filter, Sparkles, Users, EyeOff, Eye } from 'lucide-react';
 import { SimpleSelect } from '@/components/ui/simple-select';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
@@ -652,10 +653,11 @@ export default function Tasks() {
 
 
       {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50" onClick={closeCreateDialog} />
-          <div className="relative bg-card rounded-xl shadow-xl border border-border w-full max-w-lg animate-slide-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="新建任务">
-            <div className="px-5 md:px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0"><h3 className="font-semibold">新建任务</h3><button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={closeCreateDialog} aria-label="关闭新建任务对话框"><X size={16} /></button></div>
+        <Dialog open={showCreateDialog} onOpenChange={(v) => { if (!v) closeCreateDialog(); }}>
+          <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="px-5 md:px-6 py-4 border-b border-border flex flex-row items-center justify-between space-y-0">
+              <DialogTitle className="font-semibold">新建任务</DialogTitle>
+            </DialogHeader>
             <div className="px-5 md:px-6 py-4 space-y-4 overflow-y-auto flex-1">
               {!fromTemplate ? (
                 <div className="space-y-4">
@@ -692,8 +694,8 @@ export default function Tasks() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={closeTaskDetail} itemType={detailItem.type} itemId={detailItem.id} />}

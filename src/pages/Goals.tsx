@@ -5,6 +5,7 @@ import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
 import { Trash2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check, Users, EyeOff, Eye } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
@@ -347,14 +348,11 @@ export default function Goals() {
         </div>
       )}
 
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50" onClick={() => { setShowCreateDialog(false); setShowTemplateDropdown(false); }} />
-          <div className="relative bg-card rounded-xl shadow-xl border w-full max-w-lg animate-slide-up max-h-[90vh] flex flex-col" role="dialog" aria-modal="true" aria-label="新建目标">
-            <div className="px-5 md:px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
-              <h3 className="font-semibold">新建目标</h3>
-              <button onClick={() => { setShowCreateDialog(false); setShowTemplateDropdown(false); }} className="p-1 rounded hover:bg-muted" aria-label="关闭新建目标对话框"><X size={16} /></button>
-            </div>
+      <Dialog open={showCreateDialog} onOpenChange={(v) => { if (!v) { setShowCreateDialog(false); setShowTemplateDropdown(false); } }}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-5 md:px-6 py-4 border-b flex flex-row items-center justify-between space-y-0">
+            <DialogTitle className="font-semibold">新建目标</DialogTitle>
+          </DialogHeader>
             <div className="px-5 md:px-6 py-4 space-y-4 overflow-y-auto flex-1">
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowTemplateDropdown(!showTemplateDropdown)} className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-muted flex items-center gap-1">
@@ -460,9 +458,8 @@ export default function Goals() {
               <button className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-muted transition-colors" onClick={() => { setShowCreateDialog(false); setShowTemplateDropdown(false); }}>取消</button>
               <button className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors" onClick={handleCreateGoal}>创建目标</button>
             </div>
-           </div>
-         </div>
-       )}
+          </DialogContent>
+        </Dialog>
 
       {effectiveViewMode === 'okr' && <OKRAlignmentView />}
       {effectiveViewMode === 'strategy' && <StrategyHierarchyView />}

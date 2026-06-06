@@ -1,6 +1,13 @@
 import { PLAN_LIMITS, type PlanTier, type PlanLimit } from '@/types';
-import { Lock, Check, X, Crown, Sparkles } from 'lucide-react';
+import { Lock, Check, Crown, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 interface PaywallProps {
   feature: string;
@@ -72,33 +79,21 @@ export default function Paywall({ feature, currentTier, onClose, onUpgrade }: Pa
   const upgradeTier = getUpgradeTier(currentTier);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div
-        className="relative w-full max-w-lg mx-4 bg-card rounded-2xl shadow-2xl p-6"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="升级提示"
-      >
-        <button
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
-          onClick={onClose}
-          type="button"
-        >
-          <X className="h-5 w-5" />
-        </button>
-
-        <div className="flex items-center gap-3 mb-2">
-          <div className="flex items-center justify-center h-10 w-10 rounded-full bg-indigo-100">
-            <Crown className="h-5 w-5 text-indigo-600" />
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center h-10 w-10 rounded-full bg-indigo-100">
+              <Crown className="h-5 w-5 text-indigo-600" />
+            </div>
+            <div>
+              <DialogTitle className="text-xl font-bold">升级到{TIER_NAMES[upgradeTier]}</DialogTitle>
+              <DialogDescription className="text-sm">解锁更多强大功能</DialogDescription>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">升级到{TIER_NAMES[upgradeTier]}</h2>
-            <p className="text-sm text-gray-500">解锁更多强大功能</p>
-          </div>
-        </div>
+        </DialogHeader>
 
-        <div className="flex items-center gap-2 mt-4 px-3 py-2 bg-amber-50 rounded-lg border border-amber-200">
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 rounded-lg border border-amber-200">
           <Lock className="h-4 w-4 text-amber-600 shrink-0" />
           <span className="text-sm text-amber-800">
             <strong>{feature}</strong> 在当前{TIER_NAMES[currentTier]}中不可用
@@ -107,7 +102,7 @@ export default function Paywall({ feature, currentTier, onClose, onUpgrade }: Pa
 
         <ComparisonTable currentTier={currentTier} upgradeTier={upgradeTier} />
 
-        <div className="mt-6 flex flex-col items-center gap-3">
+        <div className="mt-4 flex flex-col items-center gap-3">
           <button
             className={cn(
               'w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-white font-semibold',
@@ -127,7 +122,7 @@ export default function Paywall({ feature, currentTier, onClose, onUpgrade }: Pa
             稍后再说
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
