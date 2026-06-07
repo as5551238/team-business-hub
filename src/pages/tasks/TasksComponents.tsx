@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Task, TaskStatus, TaskPriority, Tag } from '@/types';
 import { cn } from '@/lib/utils';
 import { Calendar, ChevronDown, ChevronRight, CheckCircle2, MessageSquare, GripVertical } from 'lucide-react';
@@ -8,9 +8,12 @@ import {
   priorityToBP, isOverdue, type BatchProps
 } from './constants';
 
-const StatusBadge = React.memo(function StatusBadge({ status }: { status: TaskStatus }) { const c = STATUS_CONFIG[status] || STATUS_CONFIG.todo; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', c.color)}>{c.label}</span>; });
+export const STATUS_CYCLE: TaskStatus[] = ['todo', 'in_progress', 'done'];
+export const PRIORITY_CYCLE: TaskPriority[] = ['urgent', 'high', 'medium', 'low'];
 
-const PriorityBadge = React.memo(function PriorityBadge({ priority }: { priority: TaskPriority }) { const c = URGENCY_CONFIG[priority] || URGENCY_CONFIG.medium; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', c.color)}>{c.label}</span>; });
+const StatusBadge = React.memo(function StatusBadge({ status, onClick }: { status: TaskStatus; onClick?: (e: React.MouseEvent) => void }) { const c = STATUS_CONFIG[status] || STATUS_CONFIG.todo; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', onClick && 'cursor-pointer hover:opacity-80 transition-opacity', c.color)} onClick={onClick}>{c.label}</span>; });
+
+const PriorityBadge = React.memo(function PriorityBadge({ priority, onClick }: { priority: TaskPriority; onClick?: (e: React.MouseEvent) => void }) { const c = URGENCY_CONFIG[priority] || URGENCY_CONFIG.medium; return <span className={cn('text-xs px-1.5 py-0.5 rounded whitespace-nowrap', onClick && 'cursor-pointer hover:opacity-80 transition-opacity', c.color)} onClick={onClick}>{c.label}</span>; });
 
 export { StatusBadge, PriorityBadge };
 
@@ -57,25 +60,61 @@ export const TaskCard = React.memo(function TaskCard({ task, compact, tags, comm
   );
 });
 
-interface TaskRowProps { task: Task; depth: number; childMap: Record<string, Task[]>; expandedTask: string | null; commentCounts: Record<string, number>; batchProps: BatchProps; onOpenDetail: (task: Task) => void; onToggleExpand: (id: string) => void; onToggleSubtask: (taskId: string, subtaskId: string) => void; onUpdateStatus: (taskId: string, status: TaskStatus) => void; getName: (id: string) => string; getAvatar: (id: string) => string; getProjectTitle: (id: string | null) => string; }
+interface TaskRowProps { task: Task; depth: number; childMap: Record<string, Task[]>; expandedTask: string | null; commentCounts: Record<string, number>; batchProps: BatchProps; onOpenDetail: (task: Task) => void; onToggleExpand: (id: string) => void; onToggleSubtask: (taskId: string, subtaskId: string) => void; onUpdateStatus: (taskId: string, status: TaskStatus) => void; onUpdatePriority: (taskId: string, priority: TaskPriority) => void; onUpdateLeader: (taskId: string, leaderId: string) => void; getName: (id: string) => string; getAvatar: (id: string) => string; getProjectTitle: (id: string | null) => string; members: Array<{ id: string; name: string }>; }
 
-export const TaskRow = React.memo(function TaskRow({ task, depth, childMap, expandedTask, commentCounts, batchProps, onOpenDetail, onToggleExpand, onToggleSubtask, onUpdateStatus, getName, getAvatar, getProjectTitle }: TaskRowProps) {
+export const TaskRow = React.memo(function TaskRow({ task, depth, childMap, expandedTask, commentCounts, batchProps, onOpenDetail, onToggleExpand, onToggleSubtask, onUpdateStatus, onUpdatePriority, onUpdateLeader, getName, getAvatar, getProjectTitle, members }: TaskRowProps) {
   const isExpanded = expandedTask === task.id;
   const children = childMap[task.id] || [];
   const overdue = isOverdue(task);
   const stDone = (task.subtasks || []).filter(s => s.completed).length;
   const cc = commentCounts[task.id] || 0;
+  const [showLeaderPicker, setShowLeaderPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showLeaderPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowLeaderPicker(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showLeaderPicker]);
+
+  const handleStatusClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const idx = STATUS_CYCLE.indexOf(task.status);
+    onUpdateStatus(task.id, idx >= 0 ? STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length] : 'todo');
+  };
+  const handlePriorityClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const idx = PRIORITY_CYCLE.indexOf(task.priority);
+    onUpdatePriority(task.id, PRIORITY_CYCLE[(idx + 1) % PRIORITY_CYCLE.length]);
+  };
+
   return (
     <div>
       <div data-item-id={task.id} data-item-type="task" className={cn('flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50', overdue && 'bg-red-50/30')} style={{ paddingLeft: `${12 + depth * 24}px` }} onClick={() => onOpenDetail(task)}>
         {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded flex-shrink-0" onChange={e => { const fn = (e.nativeEvent?.shiftKey && batchProps.shiftSelect) ? batchProps.shiftSelect : batchProps.onToggleSelect; fn(task.id); }} /></span>}
         {children.length > 0 ? <button className="p-0.5 hover:bg-accent rounded flex-shrink-0" onClick={e => { e.stopPropagation(); onToggleExpand(task.id); }}>{isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}</button> : <span className="w-4 flex-shrink-0" />}
-        <StatusBadge status={task.status} />
+        <StatusBadge status={task.status} onClick={handleStatusClick} />
         <h4 className={cn('flex-1 text-sm truncate min-w-0', task.status === 'done' && 'line-through text-muted-foreground')}>{task.title}</h4>
         {cc > 0 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 flex-shrink-0"><MessageSquare size={10} />{cc}</span>}
-        <PriorityBadge priority={task.priority} />
+        <PriorityBadge priority={task.priority} onClick={handlePriorityClick} />
         <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">{getProjectTitle(task.projectId)}</span>
-        <div className="flex items-center gap-1 whitespace-nowrap hidden md:flex"><div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-bold flex-shrink-0">{getAvatar(task.leaderId)}</div><span className="text-xs text-muted-foreground">{getName(task.leaderId)}</span></div>
+        <div ref={pickerRef} className="relative hidden md:block" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1 whitespace-nowrap cursor-pointer hover:bg-accent/50 rounded px-1 py-0.5 transition-colors" onClick={() => setShowLeaderPicker(!showLeaderPicker)}>
+            <div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-bold flex-shrink-0">{getAvatar(task.leaderId)}</div>
+            <span className="text-xs text-muted-foreground">{getName(task.leaderId)}</span>
+          </div>
+          {showLeaderPicker && (
+            <div className="absolute top-full right-0 z-50 mt-1 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[120px] max-h-40 overflow-y-auto">
+              <button type="button" className="w-full text-xs px-2 py-1.5 text-left hover:bg-accent text-muted-foreground" onClick={() => { onUpdateLeader(task.id, ''); setShowLeaderPicker(false); }}>未指定</button>
+              {members.map(m => (
+                <button key={m.id} type="button" className={cn('w-full text-xs px-2 py-1.5 text-left hover:bg-accent', m.id === task.leaderId && 'bg-primary/10 text-primary font-medium')} onClick={() => { onUpdateLeader(task.id, m.id); setShowLeaderPicker(false); }}>{m.name}</button>
+              ))}
+            </div>
+          )}
+        </div>
         {task.dueDate && <span className={cn('text-xs whitespace-nowrap flex items-center gap-0.5 hidden sm:flex', overdue ? 'text-red-500 font-medium' : 'text-muted-foreground')}><Calendar className="w-3 h-3" />{task.dueDate}</span>}
         {(task.subtasks || []).length > 0 && <span className="text-xs text-muted-foreground whitespace-nowrap hidden lg:inline">{stDone}/{(task.subtasks || []).length}</span>}
       </div>
@@ -99,7 +138,7 @@ export const TaskRow = React.memo(function TaskRow({ task, depth, childMap, expa
           </div>
         </div>
       )}
-      {children.length > 0 && children.map(c => <TaskRow key={c.id} task={c} depth={depth + 1} childMap={childMap} expandedTask={expandedTask} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={onOpenDetail} onToggleExpand={onToggleExpand} onToggleSubtask={onToggleSubtask} onUpdateStatus={onUpdateStatus} getName={getName} getAvatar={getAvatar} getProjectTitle={getProjectTitle} />)}
+      {children.length > 0 && children.map(c => <TaskRow key={c.id} task={c} depth={depth + 1} childMap={childMap} expandedTask={expandedTask} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={onOpenDetail} onToggleExpand={onToggleExpand} onToggleSubtask={onToggleSubtask} onUpdateStatus={onUpdateStatus} onUpdatePriority={onUpdatePriority} onUpdateLeader={onUpdateLeader} getName={getName} getAvatar={getAvatar} getProjectTitle={getProjectTitle} members={members} />)}
     </div>
   );
 });

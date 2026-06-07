@@ -18,6 +18,7 @@ import TeamDiagnosticsPanel from '@/components/TeamDiagnosticsPanel';
 import ContributionLens from '@/components/ContributionLens';
 import IndustryAdapter from '@/components/IndustryAdapter';
 import PredictiveInsights from '@/components/PredictiveInsights';
+import { WeeklyDigestPanel } from '@/components/WeeklyDigestPanel';
 import { useAppNavigate } from '@/lib/routes';
 import type { Page } from '@/components/layout/Layout';
 
@@ -129,6 +130,9 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
 
   return (
     <div className="space-y-6">
+      {/* AI 周报摘要 */}
+      <WeeklyDigestPanel />
+
       {/* 关键风险信号 — D1信息流畅度提升 */}
       {(() => {
         const blockedTasks = memberTasks.filter(t => t.status === 'blocked');

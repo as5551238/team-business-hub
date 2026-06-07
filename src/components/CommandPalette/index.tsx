@@ -89,9 +89,10 @@ interface CommandPaletteProps {
   onPageChange: (page: string) => void;
   onNavigateItem?: (id: string, type: ItemType) => void;
   onCreateItem?: (type: 'goal' | 'project' | 'task') => void;
+  currentPage?: string;
 }
 
-export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, onCreateItem }: CommandPaletteProps) {
+export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, onCreateItem, currentPage }: CommandPaletteProps) {
   const { state } = useStore();
   const { goToPage, goToItem } = useAppNavigate();
   const [query, setQuery] = useState('');
@@ -159,8 +160,18 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
       result.push({ id: `member-${m.id}`, label: m.name, group: 'members', icon: <User className="w-4 h-4" />, keywords: [m.name, m.nickname ?? '', m.department ?? '', m.role], action: () => { goToPage('tasks'); onClose(); } });
     }
 
+    // Context-sensitive actions based on current page
+    if (currentPage === 'tasks') {
+      result.push({ id: 'ctx-tasks-board', label: '切换看板视图', group: 'views', icon: <Layers className="w-4 h-4" />, keywords: ['看板', 'board', '视图', 'kanban'], action: () => { window.dispatchEvent(new CustomEvent('tbh-switch-view', { detail: 'board' })); onClose(); } });
+      result.push({ id: 'ctx-tasks-list', label: '切换清单视图', group: 'views', icon: <CheckSquare className="w-4 h-4" />, keywords: ['清单', 'list', '视图'], action: () => { window.dispatchEvent(new CustomEvent('tbh-switch-view', { detail: 'list' })); onClose(); } });
+      result.push({ id: 'ctx-tasks-table', label: '切换全量视图', group: 'views', icon: <BarChart3 className="w-4 h-4" />, keywords: ['全量', 'table', '表格', '视图'], action: () => { window.dispatchEvent(new CustomEvent('tbh-switch-view', { detail: 'table' })); onClose(); } });
+      result.push({ id: 'ctx-tasks-matrix', label: '切换四象限视图', group: 'views', icon: <Target className="w-4 h-4" />, keywords: ['四象限', 'matrix', '矩阵', '视图'], action: () => { window.dispatchEvent(new CustomEvent('tbh-switch-view', { detail: 'matrix' })); onClose(); } });
+      result.push({ id: 'ctx-tasks-batch', label: '进入批量操作', group: 'actions', icon: <CheckSquare className="w-4 h-4" />, keywords: ['批量', 'batch', '多选', '操作'], shortcut: 'B', action: () => { window.dispatchEvent(new CustomEvent('tbh-toggle-batch')); onClose(); } });
+      result.push({ id: 'ctx-tasks-filter', label: '聚焦搜索框', group: 'actions', icon: <Search className="w-4 h-4" />, keywords: ['搜索', '筛选', 'filter', '查找'], shortcut: '/', action: () => { window.dispatchEvent(new CustomEvent('tbh-focus-filter')); onClose(); } });
+    }
+
     return result;
-  }, [state.goals, state.projects, state.tasks, state.members, onCreateItem, onClose, goToPage, goToItem, query]);
+  }, [state.goals, state.projects, state.tasks, state.members, onCreateItem, onClose, goToPage, goToItem, query, currentPage]);
 
   const filtered = useMemo(() => fuzzyMatch(items, query), [items, query]);
 
@@ -271,10 +282,11 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
           })()}
         </div>
         {/* Footer hint */}
-        <div className="flex items-center gap-4 px-4 py-2 border-t border-border text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 px-4 py-2 border-t border-border text-xs text-muted-foreground">
           <span><kbd className="px-1 border border-border rounded">↑↓</kbd> 导航</span>
           <span><kbd className="px-1 border border-border rounded">Enter</kbd> 执行</span>
           <span><kbd className="px-1 border border-border rounded">Esc</kbd> 关闭</span>
+          <span className="ml-auto text-muted-foreground/60">J/K 导航任务 · E 编辑 · C 完成</span>
         </div>
       </div>
     </div>,

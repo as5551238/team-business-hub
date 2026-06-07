@@ -722,6 +722,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onPageChange={onPageChange}
+        currentPage={currentPage}
         onNavigateItem={(id, type) => { goToItem(type as 'goal' | 'project' | 'task', id); }}
         onCreateItem={(type) => {
           if (type === 'task') { navigate('/tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'task' } })), 200); }

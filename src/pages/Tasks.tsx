@@ -14,7 +14,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useCollabPresence, useCollabBroadcast } from '@/lib/collab';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import { AIMatchPanel } from '@/components/AIMatchPanel';
-import { TaskCard, TaskRow, StatusBadge, PriorityBadge } from './tasks/TasksComponents';
+import { TaskCard, TaskRow, StatusBadge, PriorityBadge, STATUS_CYCLE, PRIORITY_CYCLE } from './tasks/TasksComponents';
 import { TaskMatrixView } from './tasks/TasksMatrix';
 import { TaskTimelineView } from './tasks/TasksTimeline';
 import {
@@ -467,6 +467,8 @@ export default function Tasks() {
     const onToggleExpand = (id: string) => setExpandedTask(prev => prev === id ? null : id);
     const onToggleSubtask = (taskId: string, subtaskId: string) => dispatch({ type: 'TOGGLE_SUBTASK', payload: { taskId, subtaskId } });
     const onUpdateStatus = (taskId: string, status: TaskStatus) => { if (!can('tasks_edit')) return; dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status } } }); };
+    const onUpdatePriority = (taskId: string, priority: TaskPriority) => { if (!can('tasks_edit')) return; dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { priority } } }); };
+    const onUpdateLeader = (taskId: string, leaderId: string) => { if (!can('tasks_edit')) return; dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { leaderId } } }); };
     const allShownTaskIds = topTasks.filter(t => !shownIds || shownIds.has(t.id)).map(t => t.id);
     const allSelected = allShownTaskIds.length > 0 && allShownTaskIds.every(id => selectedIds.has(id));
     const someSelected = allShownTaskIds.some(id => selectedIds.has(id));
@@ -485,7 +487,7 @@ export default function Tasks() {
             {topTasks.map(task => {
               if (shownIds && !shownIds.has(task.id)) return null;
               if (shownIds) { const desc = [task, ...getAllDescendants(task.id)]; if (!desc.every(d => shownIds.has(d.id))) return null; }
-              return <TaskRow key={task.id} task={task} depth={0} childMap={childMap} expandedTask={expandedTask} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={onOpenDetail} onToggleExpand={onToggleExpand} onToggleSubtask={onToggleSubtask} onUpdateStatus={onUpdateStatus} getName={getName} getAvatar={getAvatar} getProjectTitle={getProjectTitleFn} />;
+              return <TaskRow key={task.id} task={task} depth={0} childMap={childMap} expandedTask={expandedTask} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={onOpenDetail} onToggleExpand={onToggleExpand} onToggleSubtask={onToggleSubtask} onUpdateStatus={onUpdateStatus} onUpdatePriority={onUpdatePriority} onUpdateLeader={onUpdateLeader} getName={getName} getAvatar={getAvatar} getProjectTitle={getProjectTitleFn} members={batchMembers} />;
             })}
           </div>
         ))}
@@ -522,8 +524,8 @@ export default function Tasks() {
                   <tr key={task.id} className={cn('border-b border-border/50 hover:bg-muted/30 cursor-pointer transition-colors', od && 'bg-red-50/30')} onClick={() => setDetailItem({ type: 'task', id: task.id })}>
                     {batchProps.batchMode && <td className="px-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded" onChange={() => batchProps.onToggleSelect(task.id)} /></td>}
                     <td className="px-4 py-2.5"><div className="flex items-center gap-2 min-w-[200px]">{task.parentId && <ChevronRight className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />}<span className={cn('truncate', task.status === 'done' && 'line-through text-muted-foreground')}>{task.title}</span>{getTaskTitle(task.parentId) && <span className="text-[10px] text-purple-600 bg-purple-50 px-1 py-0.5 rounded whitespace-nowrap flex-shrink-0">{getTaskTitle(task.parentId)}</span>}</div></td>
-                    <td className="px-4 py-2.5"><StatusBadge status={task.status} /></td>
-                    <td className="px-4 py-2.5"><PriorityBadge priority={task.priority} /></td>
+                    <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}><StatusBadge status={task.status} onClick={e2 => { e2.stopPropagation(); if (!can('tasks_edit')) return; const idx = STATUS_CYCLE.indexOf(task.status); dispatch({ type: 'UPDATE_TASK', payload: { id: task.id, updates: { status: idx >= 0 ? STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length] : 'todo' } } }); }} /></td>
+                    <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}><PriorityBadge priority={task.priority} onClick={e2 => { e2.stopPropagation(); if (!can('tasks_edit')) return; const idx = PRIORITY_CYCLE.indexOf(task.priority); dispatch({ type: 'UPDATE_TASK', payload: { id: task.id, updates: { priority: PRIORITY_CYCLE[(idx + 1) % PRIORITY_CYCLE.length] } } }); }} /></td>
                     <td className="px-4 py-2.5 text-xs text-muted-foreground">{task.category || '-'}</td>
                     <td className="px-4 py-2.5"><div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-bold flex-shrink-0">{getAvatar(task.leaderId)}</div><span className="text-xs">{getName(task.leaderId)}</span></div></td>
                     <td className="px-4 py-2.5"><span className={cn('text-xs whitespace-nowrap', od ? 'text-red-500 font-medium' : 'text-muted-foreground')}>{task.dueDate || '-'}</span></td>
