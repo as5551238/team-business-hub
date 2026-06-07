@@ -8,6 +8,7 @@ import {
   FolderKanban, GripVertical, ChevronRight, CheckCircle2,
   MessageSquare
 } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import {
   statusLabels, statusColors, typeLabels, typeColors,
   bizLabels, bizColors, progressColor
@@ -64,9 +65,9 @@ export const GoalCard = React.memo(function GoalCard({ goal, members, projects, 
               <input type="checkbox" checked={selected} readOnly className="w-4 h-4 rounded" />
             </button>
           ) : null}
-          <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0 mt-0.5" title="拖拽调整层级">
+          <Tooltip><TooltipTrigger asChild><div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0 mt-0.5">
             <GripVertical size={16} />
-          </div>
+          </div></TooltipTrigger><TooltipContent>拖拽调整层级</TooltipContent></Tooltip>
           {hasChildren ? (
             <button className="flex-shrink-0 mt-0.5 text-muted-foreground hover:text-foreground transition-transform" onClick={e => { e.stopPropagation(); onToggle(); }}>
               <ChevronRight size={16} className={`transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />

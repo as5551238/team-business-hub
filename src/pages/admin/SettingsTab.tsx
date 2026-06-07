@@ -10,6 +10,7 @@ import {
   Database, Download, Upload, Copy, Mail, Trash2, ChevronDown,
   Tag as TagIcon,
 } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
 import { inputCls, loadEmailConfig, saveEmailConfig } from './constants';
@@ -231,7 +232,7 @@ function WeChatSection() {
       </div>
       <div className="flex items-center gap-2 pt-2 border-t border-border">
         <button onClick={handleTest} disabled={!isReady || testResult === 'sending'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50 transition-colors">{testResult === 'sending' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}{testResult === 'success' ? '发送成功!' : testResult === 'error' ? '发送失败' : '发送测试消息'}</button>
-        {testResult === 'error' && testError && <div className="text-[10px] text-red-500 mt-1 max-w-[200px] truncate" title={testError}>{testError}</div>}
+        {testResult === 'error' && testError && <Tooltip><TooltipTrigger asChild><div className="text-[10px] text-red-500 mt-1 max-w-[200px] truncate">{testError}</div></TooltipTrigger><TooltipContent>{testError}</TooltipContent></Tooltip>}
         <button onClick={sendDigest} disabled={!isReady || digestResult === 'sending'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50 transition-colors">{digestResult === 'sending' ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />}{digestResult === 'success' ? '发送成功!' : digestResult === 'error' ? '发送失败' : '发送今日摘要'}</button>
       </div>
     </div>

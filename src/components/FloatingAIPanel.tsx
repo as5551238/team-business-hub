@@ -103,14 +103,13 @@ export function FloatingAIPanel() {
                 <span className="font-semibold text-sm">AI 助手</span>
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">RAG</span>
               </div>
-              <button
+              <Tooltip><TooltipTrigger asChild><button
                 onClick={close}
                 className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
-                title="关闭 (Esc)"
                 aria-label="关闭AI助手"
               >
                 <X size={16} />
-              </button>
+              </button></TooltipTrigger><TooltipContent>关闭 (Esc)</TooltipContent></Tooltip>
             </div>
             {/* Chat content */}
             <div className="flex-1 overflow-hidden">

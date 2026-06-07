@@ -5,6 +5,7 @@ import type { Project, ProjectStatus, TaskPriority } from '@/types';
 import { FolderKanban, Calendar, MoreHorizontal, Edit2, Trash2, GripVertical, ChevronRight, MessageSquare, CheckCircle2, Target, Tag } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { statusLabels, statusColors, priorityLabels, priorityColors, bpLabels, bpFromPriority, getTouchPos } from './constants';
 import type { BatchProps } from './constants';
 import { useVirtualScroll } from '@/hooks/useVirtualScroll';
@@ -73,20 +74,20 @@ const ProjectCard = React.memo(function ProjectCard({ project, members, expanded
         <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t border-border/50">
           <div className="flex items-center gap-2">
             {leader && (
-              <div className="flex items-center gap-1" title={`主导人: ${leader.name}`}>
+              <Tooltip><TooltipTrigger asChild><div className="flex items-center gap-1">
                 <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center ring-1 ring-primary/40"><span className="text-[10px] font-bold text-primary leading-none">{leader.name.charAt(0)}</span></div>
                 <span className="font-medium text-foreground/80">{leader.name}</span>
                 <span className="text-[10px] bg-primary/10 text-primary px-1 rounded">主导</span>
-              </div>
+              </div></TooltipTrigger><TooltipContent>{`主导人: ${leader.name}`}</TooltipContent></Tooltip>
             )}
             {supporters.length > 0 && (
-              <div className="flex items-center gap-1 ml-1" title={`支持人: ${supporters.map(s => s!.name).join(', ')}`}>
+              <Tooltip><TooltipTrigger asChild><div className="flex items-center gap-1 ml-1">
                 <span className="text-[10px] text-muted-foreground mr-0.5">支持</span>
                 <div className="flex -space-x-1.5">
                   {supporters.slice(0, 4).map(s => <div key={s!.id} className="w-4 h-4 rounded-full bg-muted flex items-center justify-center ring-1 ring-white"><span className="text-[8px] font-medium text-muted-foreground leading-none">{s!.name.charAt(0)}</span></div>)}
                   {supporters.length > 4 && <div className="w-4 h-4 rounded-full bg-muted flex items-center justify-center ring-1 ring-white"><span className="text-[8px] text-muted-foreground">+{supporters.length - 4}</span></div>}
                 </div>
-              </div>
+              </div></TooltipTrigger><TooltipContent>{`支持人: ${supporters.map(s => s!.name).join(', ')}`}</TooltipContent></Tooltip>
             )}
           </div>
           <div className="flex items-center gap-3">

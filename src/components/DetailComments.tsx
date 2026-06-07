@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { MessageSquare, Edit2, Save, Trash2, Bell, Sparkles, ListChecks, CornerDownRight, Paperclip, ChevronDown, ChevronRight } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { handleError } from '@/lib/errorHandler';
 import { genId } from '@/store/utils';
 import { Section } from './detail-shared';
@@ -403,14 +404,14 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
                     </span>
                   )}
                   <div className="ml-auto flex items-center gap-1 shrink-0">
-                    <button className={cn('p-0.5 hover:bg-accent rounded cursor-pointer text-muted-foreground hover:text-primary flex items-center gap-0.5', isReplying && 'text-primary bg-accent')} title="回复" aria-label="回复评论" onClick={() => { setReplyingTo(isReplying ? null : c.id); commentInputRef.current?.focus(); }}><CornerDownRight className="w-3 h-3" />{replies.length > 0 && <span className="text-[10px]">{replies.length}</span>}</button>
-                    {!isAi && <button className="p-0.5 hover:bg-accent rounded cursor-pointer text-muted-foreground hover:text-primary" title="转为任务" aria-label="转为任务" onClick={() => handleConvertToTask(c.id)}><ListChecks className="w-3 h-3" /></button>}
-                    {!isAi && <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="切换跟进状态" aria-label="切换跟进状态" onClick={() => handleToggleFollowUp(c.id)}><Bell className="w-3 h-3 text-muted-foreground" /></button>}
+                    <Tooltip><TooltipTrigger asChild><button className={cn('p-0.5 hover:bg-accent rounded cursor-pointer text-muted-foreground hover:text-primary flex items-center gap-0.5', isReplying && 'text-primary bg-accent')} aria-label="回复评论" onClick={() => { setReplyingTo(isReplying ? null : c.id); commentInputRef.current?.focus(); }}><CornerDownRight className="w-3 h-3" />{replies.length > 0 && <span className="text-[10px]">{replies.length}</span>}</button></TooltipTrigger><TooltipContent>回复</TooltipContent></Tooltip>
+                    {!isAi && <Tooltip><TooltipTrigger asChild><button className="p-0.5 hover:bg-accent rounded cursor-pointer text-muted-foreground hover:text-primary" aria-label="转为任务" onClick={() => handleConvertToTask(c.id)}><ListChecks className="w-3 h-3" /></button></TooltipTrigger><TooltipContent>转为任务</TooltipContent></Tooltip>}
+                    {!isAi && <Tooltip><TooltipTrigger asChild><button className="p-0.5 hover:bg-accent rounded cursor-pointer" aria-label="切换跟进状态" onClick={() => handleToggleFollowUp(c.id)}><Bell className="w-3 h-3 text-muted-foreground" /></button></TooltipTrigger><TooltipContent>切换跟进状态</TooltipContent></Tooltip>}
                     {!isAi && c.memberId === state.currentUser?.id && (
-                      <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="编辑" aria-label="编辑评论" onClick={() => handleStartEditComment(c.id)}><Edit2 className="w-3 h-3 text-muted-foreground" /></button>
+                      <Tooltip><TooltipTrigger asChild><button className="p-0.5 hover:bg-accent rounded cursor-pointer" aria-label="编辑评论" onClick={() => handleStartEditComment(c.id)}><Edit2 className="w-3 h-3 text-muted-foreground" /></button></TooltipTrigger><TooltipContent>编辑</TooltipContent></Tooltip>
                     )}
                     {!isAi && c.memberId === state.currentUser?.id && (
-                      <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" title="删除" aria-label="删除评论" onClick={() => handleDeleteComment(c.id)}><Trash2 className="w-3 h-3 text-destructive" /></button>
+                      <Tooltip><TooltipTrigger asChild><button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" aria-label="删除评论" onClick={() => handleDeleteComment(c.id)}><Trash2 className="w-3 h-3 text-destructive" /></button></TooltipTrigger><TooltipContent>删除</TooltipContent></Tooltip>
                     )}
                   </div>
                 </div>
@@ -472,10 +473,10 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
                                 <span className="text-[10px] text-muted-foreground shrink-0">{new Date(r.createdAt).toLocaleString('zh-CN')}</span>
                                 <div className="ml-auto flex items-center gap-1 shrink-0">
                                   {!isAiR && r.memberId === state.currentUser?.id && (
-                                    <button className="p-0.5 hover:bg-accent rounded cursor-pointer" title="编辑" aria-label="编辑回复" onClick={() => handleStartEditComment(r.id)}><Edit2 className="w-2.5 h-2.5 text-muted-foreground" /></button>
+                                    <Tooltip><TooltipTrigger asChild><button className="p-0.5 hover:bg-accent rounded cursor-pointer" aria-label="编辑回复" onClick={() => handleStartEditComment(r.id)}><Edit2 className="w-2.5 h-2.5 text-muted-foreground" /></button></TooltipTrigger><TooltipContent>编辑</TooltipContent></Tooltip>
                                   )}
                                   {!isAiR && r.memberId === state.currentUser?.id && (
-                                    <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" title="删除" aria-label="删除回复" onClick={() => handleDeleteComment(r.id)}><Trash2 className="w-2.5 h-2.5 text-destructive" /></button>
+                                    <Tooltip><TooltipTrigger asChild><button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" aria-label="删除回复" onClick={() => handleDeleteComment(r.id)}><Trash2 className="w-2.5 h-2.5 text-destructive" /></button></TooltipTrigger><TooltipContent>删除</TooltipContent></Tooltip>
                                   )}
                                 </div>
                               </div>
@@ -524,7 +525,7 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
           <textarea ref={commentInputRef} className="w-full text-sm border border-input rounded px-2 py-1.5 min-h-[60px] resize-none" placeholder={replyingTo ? '回复评论，输入@提及成员...' : '发表评论，输入@提及成员，输入@AI召唤助手，支持粘贴图片...'} value={newComment} onChange={e => { setNewComment(e.target.value); handleTypingBroadcast(); const val = e.target.value; const cursorPos = e.target.selectionStart; const textBefore = val.substring(0, cursorPos); if (AI_TRIGGER_RE.test(textBefore)) { setAiDropdownOpen(true); } else { setAiDropdownOpen(false); } const mentionCtx = getMentionContext(val, cursorPos); if (mentionCtx !== null) { setMentionOpen(true); setMentionSearch(mentionCtx); setMentionSelectedIndex(0); } else if (mentionOpen && !val.includes('@')) { setMentionOpen(false); setMentionSearch(''); } }} onKeyDown={e => { if (mentionOpen && filteredMentionMembers.length > 0) { if (e.key === 'ArrowDown') { e.preventDefault(); setMentionSelectedIndex(i => Math.min(i + 1, filteredMentionMembers.length - 1)); return; } if (e.key === 'ArrowUp') { e.preventDefault(); setMentionSelectedIndex(i => Math.max(i - 1, 0)); return; } if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(filteredMentionMembers[mentionSelectedIndex].name); return; } if (e.key === 'Escape') { e.preventDefault(); setMentionOpen(false); setMentionSearch(''); return; } } if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleAddComment(); } }} onPaste={handlePasteImage} />
            <div className="flex items-center gap-2">
              <input type="file" className="hidden" id="comment-attach-input" multiple onChange={async e => { const files = Array.from(e.target.files || []); for (const file of files) { try { const path = `${itemType}/${itemId}/${Date.now()}_${file.name}`; const url = await uploadFile(BUCKET_NAMES.attachments, path, file); if (url) { setCommentAttachments(prev => [...prev, { id: genId('att'), name: file.name, type: file.type, size: file.size, url, uploadedBy: state.currentUser?.id || '', uploadedAt: new Date().toISOString() }]); } } catch (err) { handleError(err, { module: 'DetailComments', operation: 'ATTACH_UPLOAD', severity: 'warn' }); } } e.target.value = ''; }} />
-             <button className="px-2 py-1 text-xs border border-border rounded hover:bg-accent cursor-pointer" title="上传附件" aria-label="上传附件" onClick={() => document.getElementById('comment-attach-input')?.click()}><Paperclip className="w-3.5 h-3.5" /></button>
+             <Tooltip><TooltipTrigger asChild><button className="px-2 py-1 text-xs border border-border rounded hover:bg-accent cursor-pointer" aria-label="上传附件" onClick={() => document.getElementById('comment-attach-input')?.click()}><Paperclip className="w-3.5 h-3.5" /></button></TooltipTrigger><TooltipContent>上传附件</TooltipContent></Tooltip>
              {commentAttachments.length > 0 && (
                <div className="flex items-center gap-1 flex-wrap">
                  {commentAttachments.map(a => (

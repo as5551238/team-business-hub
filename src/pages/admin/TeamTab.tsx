@@ -8,6 +8,7 @@ import { handleError } from '@/lib/errorHandler';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { gatedAction, checkLimit } from '@/lib/featureGating';
 import { getPlanName } from '@/lib/featureGating';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { SimpleSelect } from '@/components/ui/simple-select';
 
 export function TeamTab() {
@@ -246,9 +247,9 @@ export function TeamTab() {
                 <div className="text-sm font-semibold">{currentTeam.name} - 邀请码</div>
                 <div className="flex items-center gap-2 mt-1">
                   <code className="text-lg font-mono font-bold tracking-widest text-primary bg-card px-3 py-0.5 rounded border border-primary/20">{currentTeam.inviteCode || '未生成'}</code>
-                  <button onClick={copyInviteCode} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="复制">
+                  <Tooltip><TooltipTrigger asChild><button onClick={copyInviteCode} className="p-1.5 rounded-md hover:bg-muted transition-colors">
                     {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} className="text-muted-foreground" />}
-                  </button>
+                  </button></TooltipTrigger><TooltipContent>复制</TooltipContent></Tooltip>
                 </div>
               </div>
             </div>

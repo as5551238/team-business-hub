@@ -375,11 +375,11 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
                   const slackDisplay = Number.isNaN(slack) ? '循环' : `${slack}天`;
                   return (
                     <div key={task.id} className={`flex items-center px-3 border-b border-border/50 hover:bg-muted/30 group cursor-pointer ${isCritical ? 'bg-red-50/40' : ''}`} style={{ height: rowHeight }} onDoubleClick={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}>
-                      <button onClick={() => handleToggleMilestone(task)} className={`mr-1 flex-shrink-0 ${isMilestone ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`} title="里程碑" aria-label="切换里程碑"><Flag size={13} /></button>
+                      <Tooltip><TooltipTrigger asChild><button onClick={() => handleToggleMilestone(task)} className={`mr-1 flex-shrink-0 ${isMilestone ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`} aria-label="切换里程碑"><Flag size={13} /></button></TooltipTrigger><TooltipContent>里程碑</TooltipContent></Tooltip>
                       <input value={task.title} onChange={e => handleTitleChange(task.id, e.target.value)} className={`flex-1 text-xs bg-transparent border-none outline-none truncate min-w-0 hover:bg-muted/50 px-1 py-0.5 rounded ${isCritical ? 'font-medium text-red-700' : ''}`} readOnly={!canEditTasks} />
-                      {canEditTasks ? <button className="w-14 text-[10px] text-muted-foreground truncate text-center flex-shrink-0 hover:text-primary hover:underline" onClick={e => { e.stopPropagation(); setEditingTaskId(task.id); }} title="点击编辑负责人">{getName(task.leaderId) || '未指定'}</button> : <span className="w-14 text-[10px] text-muted-foreground truncate text-center flex-shrink-0">{getName(task.leaderId)}</span>}
+                      {canEditTasks ? <Tooltip><TooltipTrigger asChild><button className="w-14 text-[10px] text-muted-foreground truncate text-center flex-shrink-0 hover:text-primary hover:underline" onClick={e => { e.stopPropagation(); setEditingTaskId(task.id); }}>{getName(task.leaderId) || '未指定'}</button></TooltipTrigger><TooltipContent>点击编辑负责人</TooltipContent></Tooltip> : <span className="w-14 text-[10px] text-muted-foreground truncate text-center flex-shrink-0">{getName(task.leaderId)}</span>}
                       {canDeleteTasks && <button onClick={() => handleDeleteTask(task.id)} className="ml-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" aria-label="删除任务"><Trash2 size={12} /></button>}
-                      {isCritical && <span className="ml-1 text-[8px] text-red-400 flex-shrink-0" title={`浮动: ${slackDisplay}`}>CP</span>}
+                      {isCritical && <Tooltip><TooltipTrigger asChild><span className="ml-1 text-[8px] text-red-400 flex-shrink-0">CP</span></TooltipTrigger><TooltipContent>{`浮动: ${slackDisplay}`}</TooltipContent></Tooltip>}
                     </div>
                   );
                 })}
@@ -438,7 +438,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
                         <div key={task.id} className="relative border-b border-border/20" style={{ height: rowHeight }} onClick={canEditTasks ? handleTimelineClick : undefined}>
                           {/* Baseline ghost bar */}
                           {baselineTask && blWidthPx > 0 && (
-                            <div className="absolute top-1/2 -translate-y-1/2 rounded border border-dashed border-gray-300 bg-gray-100/50" style={{ left: blLeftPx, width: blWidthPx, height: 14 }} title={`基线: ${baselineTask.startDate || '?'} ~ ${baselineTask.dueDate || '?'}`} />
+                            <Tooltip><TooltipTrigger asChild><div className="absolute top-1/2 -translate-y-1/2 rounded border border-dashed border-gray-300 bg-gray-100/50" style={{ left: blLeftPx, width: blWidthPx, height: 14 }} /></TooltipTrigger><TooltipContent>{`基线: ${baselineTask.startDate || '?'} ~ ${baselineTask.dueDate || '?'}`}</TooltipContent></Tooltip>
                           )}
                           {/* Dependency lines (bezier) */}
                           {depLines.length > 0 && (
@@ -449,20 +449,20 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
                           {/* Overdue warning bg */}
                           {isOverdue && <div className="absolute inset-x-0 top-0 bottom-0 bg-red-50/40 pointer-events-none" />}
                           {isMilestone ? (
-                            <div className="absolute top-1/2 -translate-y-1/2" style={{ left: leftPx }} title={`${task.title} — ${STATUS_LABELS[task.status]}${isCritical ? ' [关键路径]' : ''}`}>
+                            <Tooltip><TooltipTrigger asChild><div className="absolute top-1/2 -translate-y-1/2" style={{ left: leftPx }}>
                               <div data-gantt-bar={task.id} className={`w-3 h-3 rotate-45 ${dotColor} ${isCritical ? CRITICAL_BAR_CLASS : ''} ${isOverdue ? 'ring-2 ring-red-400' : ''} border border-white shadow-sm cursor-pointer`} onMouseDown={canEditTasks ? e => handleBarMouseDown(e, task, 'move') : undefined} />
-                            </div>
+                            </div></TooltipTrigger><TooltipContent>{`${task.title} — ${STATUS_LABELS[task.status]}${isCritical ? ' [关键路径]' : ''}`}</TooltipContent></Tooltip>
                           ) : (
-                            <div data-gantt-bar={task.id} className={`absolute top-1/2 -translate-y-1/2 rounded border ${barColor} ${isCritical ? CRITICAL_BAR_CLASS : ''} ${isOverdue ? 'ring-2 ring-red-400 shadow-red-200 shadow-sm' : 'shadow-sm'} flex items-center overflow-hidden ${canEditTasks ? 'cursor-move' : 'cursor-default'}`} style={{ left: leftPx, width: widthPx, height: 20 }} title={`${task.title} (${STATUS_LABELS[task.status]})${isCritical ? ` [关键路径 浮动${slackDisplay}]` : ''}${isOverdue ? ' - 已逾期' + overdueDays + '天' : ''}`} onDoubleClick={() => setEditingTaskId(task.id)} onClick={e => e.stopPropagation()}>
+                            <Tooltip><TooltipTrigger asChild><div data-gantt-bar={task.id} className={`absolute top-1/2 -translate-y-1/2 rounded border ${barColor} ${isCritical ? CRITICAL_BAR_CLASS : ''} ${isOverdue ? 'ring-2 ring-red-400 shadow-red-200 shadow-sm' : 'shadow-sm'} flex items-center overflow-hidden ${canEditTasks ? 'cursor-move' : 'cursor-default'}`} style={{ left: leftPx, width: widthPx, height: 20 }} onDoubleClick={() => setEditingTaskId(task.id)} onClick={e => e.stopPropagation()}>
                               {canEditTasks && <div className="w-1.5 h-full bg-black/5 hover:bg-black/15 cursor-ew-resize flex-shrink-0" onMouseDown={e => handleBarMouseDown(e, task, 'resize-start')} />}
                               <div className="flex-1 flex items-center px-1 min-w-0">
-                                <div className={`w-2 h-2 rounded-full ${dotColor} flex-shrink-0 cursor-pointer hover:scale-125 transition-transform`} onClick={canEditTasks ? e => { e.stopPropagation(); handleStatusCycle(task); } : undefined} title="点击切换状态" />
+                                <Tooltip><TooltipTrigger asChild><div className={`w-2 h-2 rounded-full ${dotColor} flex-shrink-0 cursor-pointer hover:scale-125 transition-transform`} onClick={canEditTasks ? e => { e.stopPropagation(); handleStatusCycle(task); } : undefined} /></TooltipTrigger><TooltipContent>点击切换状态</TooltipContent></Tooltip>
                                 {widthPx > 60 && <span className="ml-1 text-[10px] text-muted-foreground truncate">{task.title}</span>}
                               </div>
                               {canEditTasks && <div className="w-1.5 h-full bg-black/5 hover:bg-black/15 cursor-ew-resize flex-shrink-0" onMouseDown={e => handleBarMouseDown(e, task, 'resize-end')} />}
-                            </div>
+                            </div></TooltipTrigger><TooltipContent>{`${task.title} (${STATUS_LABELS[task.status]})${isCritical ? ` [关键路径 浮动${slackDisplay}]` : ''}${isOverdue ? ' - 已逾期' + overdueDays + '天' : ''}`}</TooltipContent></Tooltip>
                           )}
-                          {isOverdue && <div className="absolute text-[8px] text-red-500 font-bold" style={{ left: leftPx + widthPx + 4, top: 8 }} title={`已逾期 ${overdueDays} 天`}>+{overdueDays}d</div>}
+                          {isOverdue && <Tooltip><TooltipTrigger asChild><div className="absolute text-[8px] text-red-500 font-bold" style={{ left: leftPx + widthPx + 4, top: 8 }}>+{overdueDays}d</div></TooltipTrigger><TooltipContent>{`已逾期 ${overdueDays} 天`}</TooltipContent></Tooltip>}
                         </div>
                       );
                     })}
@@ -474,7 +474,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
                         return (
                           <div key={m.id} className="flex border-b border-border/10" style={{ height: 24 }}>
                             {loads && Array.from(loads).map((count, di) => (
-                              <div key={di} className={`border-r border-border/5 ${getLoadColor(count)}`} style={{ width: dayWidth, height: 24 }} title={count > 0 ? `${m.name}: ${count}个活跃任务` : ''} />
+                              count > 0 ? <Tooltip key={di}><TooltipTrigger asChild><div className={`border-r border-border/5 ${getLoadColor(count)}`} style={{ width: dayWidth, height: 24 }} /></TooltipTrigger><TooltipContent>{`${m.name}: ${count}个活跃任务`}</TooltipContent></Tooltip> : <div key={di} className={`border-r border-border/5 ${getLoadColor(count)}`} style={{ width: dayWidth, height: 24 }} />
                             ))}
                           </div>
                         );

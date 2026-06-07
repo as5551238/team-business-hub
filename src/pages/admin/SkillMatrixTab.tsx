@@ -3,6 +3,7 @@ import { useStore } from '@/store/useStore';
 import type { SkillRating, SkillDefinition } from '@/types';
 import { Plus, X, AlertTriangle } from 'lucide-react';
 import { inputCls, primaryBtnCls, btnCls } from './constants';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const DEFAULT_SKILLS: SkillDefinition[] = [
   { id: 'frontend', name: '前端开发', category: '技术', targetLevel: 4 },
@@ -84,10 +85,10 @@ export function SkillMatrixTab() {
             <tr className="bg-muted/50">
               <th className="text-left px-2 py-1.5 font-medium sticky left-0 bg-muted/50 z-10 min-w-[60px]">成员</th>
               {skills.map(sk => (
-                <th key={sk.id} className="text-center px-1 py-1.5 font-medium min-w-[50px]" title={`目标: L${sk.targetLevel}`}>
+                <Tooltip key={sk.id}><TooltipTrigger asChild><th className="text-center px-1 py-1.5 font-medium min-w-[50px]">
                   <div className="truncate">{sk.name}</div>
                   <div className="text-[8px] text-muted-foreground">L{sk.targetLevel}</div>
-                </th>
+                </th></TooltipTrigger><TooltipContent>{`目标: L${sk.targetLevel}`}</TooltipContent></Tooltip>
               ))}
             </tr>
           </thead>
@@ -112,13 +113,12 @@ export function SkillMatrixTab() {
                           {[0,1,2,3,4,5].map(l => <option key={l} value={l}>{l || '-'}</option>)}
                         </select>
                       ) : (
-                        <button
+                        <Tooltip><TooltipTrigger asChild><button
                           onClick={() => setEditingCell({ memberId: m.id, skillId: sk.id })}
                           className={`w-8 h-6 rounded text-[10px] font-medium ${level > 0 ? LEVEL_COLORS[level] : 'bg-gray-50 text-gray-400'} ${isGap ? 'ring-1 ring-amber-400' : ''} hover:opacity-80`}
-                          title={level > 0 ? `${LEVEL_LABELS[level]} (L${level})` : '未评级'}
                         >
                           {level || '-'}
-                        </button>
+                        </button></TooltipTrigger><TooltipContent>{level > 0 ? `${LEVEL_LABELS[level]} (L${level})` : '未评级'}</TooltipContent></Tooltip>
                       )}
                     </td>
                   );

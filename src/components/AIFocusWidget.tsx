@@ -6,6 +6,7 @@ import { buildAIContext, extractFocusItems } from '@/lib/ai/aiContextEngine';
 import type { ItemContext } from '@/lib/ai/aiContextEngine';
 import { useAppNavigate } from '@/lib/routes';
 import type { Page } from '@/components/layout/Layout';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 interface AIFocusWidgetProps {
 }
@@ -82,7 +83,7 @@ function AIFocusWidgetInner(_props: AIFocusWidgetProps) {
                 onClick={() => handleClick(item)}
               >
                 <span className="shrink-0">{typeIcon[item.type]}</span>
-                <span className="text-sm font-medium truncate flex-1" title={item.title}>{item.title}</span>
+                <Tooltip><TooltipTrigger asChild><span className="text-sm font-medium truncate flex-1">{item.title}</span></TooltipTrigger><TooltipContent>{item.title}</TooltipContent></Tooltip>
                 <span className={`text-xs px-1.5 py-0.5 rounded ${priorityBadge[item.priority] ?? 'bg-gray-100 text-gray-600'}`}>{priorityLabel[item.priority] ?? item.priority}</span>
                 <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{statusLabel[item.status] ?? item.status}</span>
                 {overdueDays !== null && (

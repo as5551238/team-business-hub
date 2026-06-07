@@ -105,7 +105,7 @@ export function EffectivenessTab() {
               const x = Math.min(95, Math.max(5, (q.effort > 0 ? (q.impact / q.effort) : 0) * 15));
               const y = Math.min(90, Math.max(10, 100 - q.bv * 10));
               return (
-                <div key={q.id} className="absolute w-2 h-2 rounded-full bg-primary" style={{ left: `${x}%`, bottom: `${100 - y}%` }} title={`${q.name}: 价值${q.bv} 投入${q.effort}h 影响力${q.impact}`} />
+                <Tooltip><TooltipTrigger asChild><div key={q.id} className="absolute w-2 h-2 rounded-full bg-primary" style={{ left: `${x}%`, bottom: `${100 - y}%` }} /></TooltipTrigger><TooltipContent>{`${q.name}: 价值${q.bv} 投入${q.effort}h 影响力${q.impact}`}</TooltipContent></Tooltip>
               );
             })}
           </div>

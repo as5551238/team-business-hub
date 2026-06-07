@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plus, X, Sparkles, ArrowUpRight, ArrowRight, Lightbulb } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 interface SwotData {
   strengths: string[];
@@ -74,14 +75,13 @@ export function SwotMatrix({ value, onChange, onAIFill, isAIFilling }: Props) {
                   <Icon size={12} />
                   {q.label}
                 </div>
-                <button
+                <Tooltip><TooltipTrigger asChild><button
                   onClick={() => onAIFill(q.stepKey)}
                   disabled={isAIFilling}
                   className="p-1 rounded hover:bg-white/50 disabled:opacity-30"
-                  title="AI填充"
                 >
                   <Sparkles size={12} className="text-primary" />
-                </button>
+                </button></TooltipTrigger><TooltipContent>AI填充</TooltipContent></Tooltip>
               </div>
               <div className="flex flex-wrap gap-1 mb-2">
                 {items.map((item, idx) => (

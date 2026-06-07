@@ -4,6 +4,7 @@ import type { Budget, BudgetItem, CostEntry, BudgetCategory } from '@/types';
 import { Plus, X, AlertTriangle, CheckCircle, Clock, DollarSign, TrendingUp, TrendingDown, ChevronDown, ChevronRight } from 'lucide-react';
 import { inputCls, primaryBtnCls, btnCls } from './constants';
 import { SimpleSelect } from '@/components/ui/simple-select';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const CATEGORY_LABELS: Record<BudgetCategory, string> = {
   labor: '人力成本',
@@ -436,12 +437,12 @@ export function BudgetTab() {
                             <span className="font-medium">¥{ce.amount.toLocaleString()}</span>
                             {ce.status === 'pending' && (
                               <div className="flex items-center gap-1">
-                                <button onClick={() => handleApproveCost(ce)} className="p-0.5 text-emerald-600 hover:bg-emerald-50 rounded" title="审批">
+                                <Tooltip><TooltipTrigger asChild><button onClick={() => handleApproveCost(ce)} className="p-0.5 text-emerald-600 hover:bg-emerald-50 rounded">
                                   <CheckCircle size={12} />
-                                </button>
-                                <button onClick={() => handleRejectCost(ce)} className="p-0.5 text-red-500 hover:bg-red-50 rounded" title="驳回">
+                                </button></TooltipTrigger><TooltipContent>审批</TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><button onClick={() => handleRejectCost(ce)} className="p-0.5 text-red-500 hover:bg-red-50 rounded">
                                   <X size={12} />
-                                </button>
+                                </button></TooltipTrigger><TooltipContent>驳回</TooltipContent></Tooltip>
                               </div>
                             )}
                             {ce.status === 'approved' && <CheckCircle size={12} className="text-emerald-500" />}

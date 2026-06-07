@@ -6,6 +6,7 @@
  */
 import React from 'react';
 import { useCollabPresence } from '@/lib/collab';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 interface CollabPresenceBarProps {
   userId: string;
@@ -31,13 +32,11 @@ export const CollabPresenceBar: React.FC<CollabPresenceBarProps> = ({ userId, us
     <div className="flex items-center gap-1.5">
       <div className="flex -space-x-2">
         {visibleUsers.map((user, i) => (
-          <div
-            key={user.id}
+          <Tooltip key={user.id}><TooltipTrigger asChild><div
             className={`w-6 h-6 rounded-full ${PRESENCE_COLORS[i % PRESENCE_COLORS.length]} flex items-center justify-center text-[9px] font-bold text-white ring-2 ring-card`}
-            title={`${user.name}${user.cursor?.entity ? ` - 正在查看${user.cursor.entity}` : ''}`}
           >
             {user.name.charAt(0)}
-          </div>
+          </div></TooltipTrigger><TooltipContent>{`${user.name}${user.cursor?.entity ? ` - 正在查看${user.cursor.entity}` : ''}`}</TooltipContent></Tooltip>
         ))}
       </div>
       {extraCount > 0 && (

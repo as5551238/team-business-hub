@@ -479,31 +479,55 @@ export default function Layout({ children, currentUser }: LayoutProps) {
             const featureMap: Record<string, string> = { dashboard: 'dashboard', goals: 'goals_basic', projects: 'projects', tasks: 'tasks', insight: 'insight', knowledge: 'knowledge', admin: 'dashboard', privacy: 'dashboard' };
             return isFeatureVisible(featureMap[item.page] || item.page);
           }).map((item, idx) => (
-            <button key={item.page} onClick={() => handlePageClick(item.page)}
-              title={sidebarNarrow ? item.label : undefined}
-              aria-label={item.label}
-              aria-current={currentPage === item.page ? 'page' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left relative active:scale-[0.97] ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'} ${sidebarNarrow ? 'justify-center px-0' : ''}`}>
-              {item.icon}
-              {!sidebarNarrow && !sidebarCollapsed && item.label}
-              {!sidebarNarrow && !sidebarCollapsed && item.page === 'tasks' && overdueCount > 0 && (
-                <span className="ml-auto bg-destructive text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{overdueCount}</span>
-              )}
-              {!sidebarNarrow && !sidebarCollapsed && item.page === 'goals' && inProgressGoalsCount > 0 && (
-                <span className="ml-auto bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{inProgressGoalsCount}</span>
-              )}
-              {!sidebarNarrow && !sidebarCollapsed && item.page === 'dashboard' && unreadCount > 0 && (
-                <span className="ml-auto bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{unreadCount}</span>
-              )}
-              {/* Narrow sidebar: show dot indicator instead of badge */}
-              {sidebarNarrow && item.page === 'tasks' && overdueCount > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-              )}
-              {sidebarNarrow && item.page === 'dashboard' && unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
-              )}
-              {!sidebarNarrow && !sidebarCollapsed && <span className="ml-auto text-[10px] text-sidebar-foreground/30 hidden lg:inline">{idx + 1}</span>}
-            </button>
+            sidebarNarrow ? (
+              <Tooltip key={item.page}><TooltipTrigger asChild><button onClick={() => handlePageClick(item.page)}
+                aria-label={item.label}
+                aria-current={currentPage === item.page ? 'page' : undefined}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left relative active:scale-[0.97] ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'} ${sidebarNarrow ? 'justify-center px-0' : ''}`}>
+                {item.icon}
+                {!sidebarNarrow && !sidebarCollapsed && item.label}
+                {!sidebarNarrow && !sidebarCollapsed && item.page === 'tasks' && overdueCount > 0 && (
+                  <span className="ml-auto bg-destructive text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{overdueCount}</span>
+                )}
+                {!sidebarNarrow && !sidebarCollapsed && item.page === 'goals' && inProgressGoalsCount > 0 && (
+                  <span className="ml-auto bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{inProgressGoalsCount}</span>
+                )}
+                {!sidebarNarrow && !sidebarCollapsed && item.page === 'dashboard' && unreadCount > 0 && (
+                  <span className="ml-auto bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{unreadCount}</span>
+                )}
+                {sidebarNarrow && item.page === 'tasks' && overdueCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
+                )}
+                {sidebarNarrow && item.page === 'dashboard' && unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+                )}
+                {!sidebarNarrow && !sidebarCollapsed && <span className="ml-auto text-[10px] text-sidebar-foreground/30 hidden lg:inline">{idx + 1}</span>}
+              </button></TooltipTrigger><TooltipContent>{item.label}</TooltipContent></Tooltip>
+            ) : (
+              <button key={item.page} onClick={() => handlePageClick(item.page)}
+                aria-label={item.label}
+                aria-current={currentPage === item.page ? 'page' : undefined}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left relative active:scale-[0.97] ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'} ${sidebarNarrow ? 'justify-center px-0' : ''}`}>
+                {item.icon}
+                {!sidebarNarrow && !sidebarCollapsed && item.label}
+                {!sidebarNarrow && !sidebarCollapsed && item.page === 'tasks' && overdueCount > 0 && (
+                  <span className="ml-auto bg-destructive text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{overdueCount}</span>
+                )}
+                {!sidebarNarrow && !sidebarCollapsed && item.page === 'goals' && inProgressGoalsCount > 0 && (
+                  <span className="ml-auto bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{inProgressGoalsCount}</span>
+                )}
+                {!sidebarNarrow && !sidebarCollapsed && item.page === 'dashboard' && unreadCount > 0 && (
+                  <span className="ml-auto bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{unreadCount}</span>
+                )}
+                {sidebarNarrow && item.page === 'tasks' && overdueCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
+                )}
+                {sidebarNarrow && item.page === 'dashboard' && unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+                )}
+                {!sidebarNarrow && !sidebarCollapsed && <span className="ml-auto text-[10px] text-sidebar-foreground/30 hidden lg:inline">{idx + 1}</span>}
+              </button>
+            )
           ))}
         </nav>
 
@@ -528,15 +552,15 @@ export default function Layout({ children, currentUser }: LayoutProps) {
                 const level = computeUserLevel();
                 const desc = getLevelDescription(level);
                 return (
-                  <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-sidebar-foreground/50 hover:text-sidebar-foreground/80 transition-colors cursor-pointer rounded hover:bg-sidebar-accent" onClick={() => {
-                    const next: Record<string, string> = { beginner: 'intermediate', intermediate: 'advanced', advanced: 'beginner' };
-                    setUserLevel(next[level]);
-                    window.location.reload();
-                  }} title={`点击切换体验等级（当前: ${desc.title}）`}>
+<Tooltip><TooltipTrigger asChild><button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-sidebar-foreground/50 hover:text-sidebar-foreground/80 transition-colors cursor-pointer rounded hover:bg-sidebar-accent" onClick={() => {
+                     const next: Record<string, string> = { beginner: 'intermediate', intermediate: 'advanced', advanced: 'beginner' };
+                     setUserLevel(next[level]);
+                     window.location.reload();
+                   }}>
                     <span className="text-[10px]">{level === 'beginner' ? '🌱' : level === 'intermediate' ? '🌿' : '🌳'}</span>
                     <span>{desc.title}</span>
                     <span className="ml-auto text-[10px]">切换</span>
-                  </button>
+                  </button></TooltipTrigger><TooltipContent>{`点击切换体验等级（当前: ${desc.title}）`}</TooltipContent></Tooltip>
                 );
               })()}
             </>
@@ -556,7 +580,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
                 <div className="text-xs text-sidebar-foreground/50 truncate">{user?.department}</div>
                 {user?.role && <div className="text-xs text-sidebar-foreground/40 truncate">{user.role === 'admin' ? '管理员' : user.role === 'manager' ? '经理' : user.role === 'leader' ? '负责人' : '成员'}</div>}
               </div>
-            )}
+          )}
           </div>
         </div>
       </aside>
@@ -616,12 +640,12 @@ export default function Layout({ children, currentUser }: LayoutProps) {
           </button>
           {/* Online collaborators indicator with page-awareness */}
           {onlineUsers.length > 1 && (
-            <div className="hidden md:flex items-center gap-1" title={`${onlineUsers.length} 人在线协作`}>
+            <Tooltip><TooltipTrigger asChild><div className="hidden md:flex items-center gap-1">
               <div className="flex -space-x-1.5">
                 {onlineUsers.slice(0, 4).map(u => {
                   const isViewingSamePage = u.cursor?.entity === currentPage;
                   return (
-                    <div key={u.id} className={`w-6 h-6 rounded-full border-2 ${isViewingSamePage ? 'border-primary' : 'border-card'} flex items-center justify-center text-[9px] font-bold text-white transition-all ${isViewingSamePage ? 'ring-1 ring-primary/40' : ''}`} style={{ backgroundColor: u.color }} title={`${u.name}${isViewingSamePage ? ' (正在查看此页面)' : ''}`}>
+                    <div key={u.id} className={`w-6 h-6 rounded-full border-2 ${isViewingSamePage ? 'border-primary' : 'border-card'} flex items-center justify-center text-[9px] font-bold text-white transition-all ${isViewingSamePage ? 'ring-1 ring-primary/40' : ''}`} style={{ backgroundColor: u.color }}>
                       {(u.name || '?')[0]}
                     </div>
                   );
@@ -631,7 +655,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
                 <div className="w-6 h-6 rounded-full border-2 border-card bg-muted flex items-center justify-center text-[9px] text-muted-foreground">+{onlineUsers.length - 4}</div>
               )}
               <span className="text-[10px] text-muted-foreground ml-0.5">在线</span>
-            </div>
+            </div></TooltipTrigger><TooltipContent>{`${onlineUsers.length} 人在线协作`}</TooltipContent></Tooltip>
           )}
            <CollabPresenceBar userId={user?.id || ''} userName={user?.name || ''} currentPage={currentPage} />
            <div className="relative">

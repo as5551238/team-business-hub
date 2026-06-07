@@ -168,11 +168,11 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
             const slackDisplay = Number.isNaN(slack) ? '循环' : `${slack}天`;
             return (
               <div key={task.id} className={`flex items-center px-2 border-b border-border/50 hover:bg-muted/30 group cursor-pointer ${isCritical ? 'bg-red-50/40' : ''}`} style={{ height: rowHeight }} onDoubleClick={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}>
-                <button onClick={() => handleToggleMilestone(task)} className={`mr-1 flex-shrink-0 ${isMilestone ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`} title="里程碑" aria-label="切换里程碑"><Flag size={13} /></button>
+                <Tooltip><TooltipTrigger asChild><button onClick={() => handleToggleMilestone(task)} className={`mr-1 flex-shrink-0 ${isMilestone ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`} aria-label="切换里程碑"><Flag size={13} /></button></TooltipTrigger><TooltipContent>里程碑</TooltipContent></Tooltip>
                 <input value={task.title} onChange={e => handleTitleChange(task.id, e.target.value)} className={`flex-1 text-xs bg-transparent border-none outline-none truncate min-w-0 hover:bg-muted/50 px-1 py-0.5 rounded ${isCritical ? 'font-medium text-red-700' : ''}`} />
                 <span className="w-14 text-[10px] text-muted-foreground truncate text-center flex-shrink-0">{getName(task.leaderId)}</span>
                 <button onClick={() => handleDeleteTask(task.id)} className="ml-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" aria-label="删除任务"><Trash2 size={12} /></button>
-                {isCritical && <span className="ml-1 text-[8px] text-red-400 flex-shrink-0" title={`浮动: ${slackDisplay}`}>CP</span>}
+                {isCritical && <Tooltip><TooltipTrigger asChild><span className="ml-1 text-[8px] text-red-400 flex-shrink-0">CP</span></TooltipTrigger><TooltipContent>{`浮动: ${slackDisplay}`}</TooltipContent></Tooltip>}
               </div>
             );
           })}
@@ -222,18 +222,18 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
                       </svg>
                     )}
                     {isMilestone ? (
-                      <div className="absolute top-1/2 -translate-y-1/2" style={{ left: leftPx }} title={`${task.title} — ${STATUS_LABELS[task.status]}${isCritical ? ' [关键路径]' : ''}`}>
+                      <Tooltip><TooltipTrigger asChild><div className="absolute top-1/2 -translate-y-1/2" style={{ left: leftPx }}>
                         <div className={`w-3 h-3 rotate-45 ${dotColor} ${isCritical ? CRITICAL_BAR_CLASS : ''} border border-white shadow-sm cursor-pointer`} onMouseDown={e => handleBarMouseDown(e, task, 'move')} />
-                      </div>
+                      </div></TooltipTrigger><TooltipContent>{`${task.title} — ${STATUS_LABELS[task.status]}${isCritical ? ' [关键路径]' : ''}`}</TooltipContent></Tooltip>
                     ) : (
-                      <div className={`absolute top-1/2 -translate-y-1/2 rounded border ${barColor} ${isCritical ? CRITICAL_BAR_CLASS : ''} shadow-sm cursor-move flex items-center overflow-hidden`} style={{ left: leftPx, width: widthPx, height: 20 }} title={`${task.title} (${STATUS_LABELS[task.status]})${isCritical ? ` [关键路径 浮动${slackDisplay}]` : ''}`}>
+                      <Tooltip><TooltipTrigger asChild><div className={`absolute top-1/2 -translate-y-1/2 rounded border ${barColor} ${isCritical ? CRITICAL_BAR_CLASS : ''} shadow-sm cursor-move flex items-center overflow-hidden`} style={{ left: leftPx, width: widthPx, height: 20 }}>
                         <div className="w-1.5 h-full bg-black/5 hover:bg-black/15 cursor-ew-resize flex-shrink-0" onMouseDown={e => handleBarMouseDown(e, task, 'resize-start')} />
                         <div className="flex-1 flex items-center px-1 min-w-0">
                           <div className={`w-2 h-2 rounded-full ${dotColor} flex-shrink-0`} />
                           {widthPx > 60 && <span className="ml-1 text-[10px] text-muted-foreground truncate">{task.title}</span>}
                         </div>
                         <div className="w-1.5 h-full bg-black/5 hover:bg-black/15 cursor-ew-resize flex-shrink-0" onMouseDown={e => handleBarMouseDown(e, task, 'resize-end')} />
-                      </div>
+                      </div></TooltipTrigger><TooltipContent>{`${task.title} (${STATUS_LABELS[task.status]})${isCritical ? ` [关键路径 浮动${slackDisplay}]` : ''}`}</TooltipContent></Tooltip>
                     )}
                   </div>
                 );
@@ -247,7 +247,7 @@ export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate 
                     return (
                       <div key={m.id} className="flex border-b border-border/10" style={{ height: 24 }}>
                         {loads && Array.from(loads).map((count, di) => (
-                          <div key={di} className={`border-r border-border/5 ${getLoadColor(count)}`} style={{ width: dayWidth, height: 24 }} title={count > 0 ? `${m.name}: ${count}个活跃任务` : ''} />
+                          count > 0 ? <Tooltip key={di}><TooltipTrigger asChild><div className={`border-r border-border/5 ${getLoadColor(count)}`} style={{ width: dayWidth, height: 24 }} /></TooltipTrigger><TooltipContent>{`${m.name}: ${count}个活跃任务`}</TooltipContent></Tooltip> : <div key={di} className={`border-r border-border/5 ${getLoadColor(count)}`} style={{ width: dayWidth, height: 24 }} />
                         ))}
                       </div>
                     );

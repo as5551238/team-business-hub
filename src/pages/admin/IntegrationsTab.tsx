@@ -8,6 +8,7 @@ import { usePermissions } from '@/store/hooks';
 import { Code, Globe, Webhook, Plus, Trash2, TestTube, CheckCircle2, Copy, ExternalLink, ChevronDown, ChevronRight, Key, Eye, EyeOff, MessageSquare, Send, Bell, Link2, Unlink, Activity, Mail, RefreshCw } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getApiTokens, createApiToken, revokeApiToken, ALL_PERMISSIONS, type ApiToken } from '@/lib/api';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { getPushConfigs, savePushConfigs, pushNotification, formatTaskNotification, type PushConfig, type PushChannel } from '@/lib/pushConnector';
 import { initiateOAuth, loadOAuthStatuses, getOAuthStatus, disconnectOAuth, PROVIDER_LABELS, type OAuthProvider } from '@/lib/oauthIntegration';
 import { IntegrationHealthTab } from './IntegrationHealthTab';
@@ -354,9 +355,9 @@ function WebhookSection() {
                   {!wh.active && <span className="text-[10px] text-muted-foreground">已暂停</span>}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => testWebhook(wh.id)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary" title="测试发送" aria-label="测试发送">
+                  <Tooltip><TooltipTrigger asChild><button onClick={() => testWebhook(wh.id)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary" aria-label="测试发送">
                     {testResult[wh.id] === 'sending' ? <span className="text-xs animate-pulse">...</span> : testResult[wh.id] === 'ok' ? <CheckCircle2 size={14} className="text-green-500" /> : testResult[wh.id] === 'fail' ? <span className="text-xs text-red-500">x</span> : <TestTube size={14} />}
-                  </button>
+                  </button></TooltipTrigger><TooltipContent>测试发送</TooltipContent></Tooltip>
                   {canManage && <button onClick={() => removeWebhook(wh.id)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive" aria-label="删除"><Trash2 size={14} /></button>}
                 </div>
               </div>
@@ -500,9 +501,9 @@ function PushConnectorSection() {
                   {!c.enabled && <span className="text-[10px] text-muted-foreground">已暂停</span>}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => testPush(i)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary" title="测试推送" aria-label="测试推送">
+                  <Tooltip><TooltipTrigger asChild><button onClick={() => testPush(i)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary" aria-label="测试推送">
                     {testResult[String(i)] === 'sending' ? <span className="text-xs animate-pulse">...</span> : testResult[String(i)] === 'ok' ? <CheckCircle2 size={14} className="text-green-500" /> : testResult[String(i)] === 'fail' ? <span className="text-xs text-red-500">x</span> : <Send size={14} />}
-                  </button>
+                  </button></TooltipTrigger><TooltipContent>测试推送</TooltipContent></Tooltip>
                   <button onClick={() => removeConfig(i)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive" aria-label="删除"><Trash2 size={14} /></button>
                 </div>
               </div>
@@ -559,7 +560,7 @@ function OAuthSection() {
               {status.connected ? (
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-green-600 flex items-center gap-0.5"><CheckCircle2 size={10} />已连接</span>
-                  <button onClick={() => handleDisconnect(provider)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive" title="断开连接"><Unlink size={12} /></button>
+                  <Tooltip><TooltipTrigger asChild><button onClick={() => handleDisconnect(provider)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"><Unlink size={12} /></button></TooltipTrigger><TooltipContent>断开连接</TooltipContent></Tooltip>
                 </div>
               ) : (
                 <button

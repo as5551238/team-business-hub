@@ -8,6 +8,7 @@ import { createRuleFromIntent, getWorkflowPatternSummary } from '@/lib/ai/aiWork
 import { getAutomationLog, clearAutomationLog } from '@/store/shared';
 import type { AutomationLogEntry } from '@/store/shared';
 import { gatedAction, checkLimit, getPlanName } from '@/lib/featureGating';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const TRIGGERS: { value: AutomationTrigger; label: string }[] = [
   { value: 'status_change', label: '状态变更' },
@@ -265,11 +266,11 @@ export function AutomationTab() {
               {logs.slice(0, 50).map(log => (
                 <div key={log.id} className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 rounded text-xs">
                   {log.success ? <CheckCircle2 size={12} className="text-success flex-shrink-0" /> : <XCircle size={12} className="text-destructive flex-shrink-0" />}
-                  <span className="font-medium truncate max-w-[120px]" title={log.ruleName}>{log.ruleName}</span>
+                  <Tooltip><TooltipTrigger asChild><span className="font-medium truncate max-w-[120px]">{log.ruleName}</span></TooltipTrigger><TooltipContent>{log.ruleName}</TooltipContent></Tooltip>
                   <span className="text-muted-foreground">{TRIGGERS.find(t => t.value === log.trigger)?.label ?? log.trigger}</span>
-                  <span className="truncate max-w-[100px]" title={log.itemTitle}>{log.itemTitle}</span>
+                  <Tooltip><TooltipTrigger asChild><span className="truncate max-w-[100px]">{log.itemTitle}</span></TooltipTrigger><TooltipContent>{log.itemTitle}</TooltipContent></Tooltip>
                   <span className="text-muted-foreground ml-auto flex items-center gap-1"><Clock size={10} />{new Date(log.timestamp).toLocaleTimeString()}</span>
-                  {!log.success && <span className="text-destructive truncate max-w-[120px]" title={log.error}>{log.error}</span>}
+                  {!log.success && <Tooltip><TooltipTrigger asChild><span className="text-destructive truncate max-w-[120px]">{log.error}</span></TooltipTrigger><TooltipContent>{log.error}</TooltipContent></Tooltip>}
                 </div>
               ))}
             </div>

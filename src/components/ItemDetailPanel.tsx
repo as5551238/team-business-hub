@@ -8,6 +8,7 @@ import { useAutoSave } from '@/hooks/useAutoSave';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Textarea } from '@/components/ui/textarea';
 import { X, Trash2, Clock, Tag, Paperclip, Plus, Edit2, Eye } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -405,7 +406,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                 <Eye className="w-3 h-3 flex-shrink-0" />
                 <div className="flex -space-x-1">
                   {otherViewers.slice(0, 3).map(u => (
-                    <div key={u.id} className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold ring-1 ring-white" style={{ backgroundColor: u.color + '30', color: u.color }} title={u.name}>{u.name.charAt(0)}</div>
+                    <Tooltip key={u.id}><TooltipTrigger asChild><div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold ring-1 ring-white" style={{ backgroundColor: u.color + '30', color: u.color }}>{u.name.charAt(0)}</div></TooltipTrigger><TooltipContent>{u.name}</TooltipContent></Tooltip>
                   ))}
                 </div>
                 <span>{otherViewers.map(u => u.name).slice(0, 2).join('、')}{otherViewers.length > 2 ? `等${otherViewers.length}人` : ''}正在查看</span>

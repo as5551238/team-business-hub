@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import DOMPurify from 'dompurify';
 import { NOTE_COLORS, FOLDERS } from '../admin/constants';
 import { renderMarkdown } from '../admin/MarkdownDocTab';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useAutoSave } from '@/hooks/useAutoSave';
 
@@ -96,7 +97,7 @@ export function NotesView() {
             <>
               <div className="flex items-center gap-2 p-3 border-b border-border flex-shrink-0">
                 <input className="flex-1 text-base font-semibold border-none outline-none bg-transparent" placeholder="笔记标题" value={editingTitle} onChange={e => setEditingTitle(e.target.value)} onBlur={() => flushTitle()} />
-                <button className={`p-1.5 rounded-lg hover:bg-muted ${markdownPreview ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`} onClick={() => setMarkdownPreview(!markdownPreview)} title={markdownPreview ? '编辑模式' : 'Markdown预览'}>{markdownPreview ? <Edit3 size={16} /> : <Eye size={16} />}</button>
+                <Tooltip><TooltipTrigger asChild><button className={`p-1.5 rounded-lg hover:bg-muted ${markdownPreview ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`} onClick={() => setMarkdownPreview(!markdownPreview)}>{markdownPreview ? <Edit3 size={16} /> : <Eye size={16} />}</button></TooltipTrigger><TooltipContent>{markdownPreview ? '编辑模式' : 'Markdown预览'}</TooltipContent></Tooltip>
                 <button className="p-1.5 rounded-lg hover:bg-muted" onClick={() => togglePin(selectedNote.id, selectedNote.isPinned)}>{selectedNote.isPinned ? <PinOff size={16} className="text-primary" /> : <Pin size={16} className="text-muted-foreground" />}</button>
                 <button className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600" onClick={() => handleDeleteNote(selectedNote.id, selectedNote.title)}><Trash2 size={16} /></button>
               </div>

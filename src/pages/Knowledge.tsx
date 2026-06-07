@@ -6,6 +6,7 @@ import { BookOpen, Plus, Trash2, Search, Tag, X, Link2, Eye, Edit3, Palette, Sti
 import { EmptyState } from '@/components/ui/EmptyState';
 import DOMPurify from 'dompurify';
 import { renderMarkdown } from '@/pages/admin/MarkdownDocTab';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { NotesView } from '@/pages/knowledge/NotesView';
 import { NOTE_COLORS } from './admin/constants';
 import { cn } from '@/lib/utils';
@@ -212,7 +213,7 @@ function EntriesView() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm font-medium">正文（支持Markdown）</label>
-                <button className={`p-1 rounded hover:bg-muted ${markdownPreview ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`} onClick={() => setMarkdownPreview(!markdownPreview)} title={markdownPreview ? '编辑模式' : 'Markdown预览'}>{markdownPreview ? <Edit3 size={14} /> : <Eye size={14} />}</button>
+                <Tooltip><TooltipTrigger asChild><button className={`p-1 rounded hover:bg-muted ${markdownPreview ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`} onClick={() => setMarkdownPreview(!markdownPreview)}>{markdownPreview ? <Edit3 size={14} /> : <Eye size={14} />}</button></TooltipTrigger><TooltipContent>{markdownPreview ? '编辑模式' : 'Markdown预览'}</TooltipContent></Tooltip>
               </div>
               {markdownPreview ? (
                 <div className="w-full border border-border rounded-lg px-3 py-2 min-h-[200px] max-h-[400px] overflow-y-auto text-sm prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderMarkdown(editContent)) }} />

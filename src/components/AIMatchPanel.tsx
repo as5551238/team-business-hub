@@ -3,6 +3,7 @@ import { X, Sparkles, Zap, UserPlus, Users, ListChecks, UserCheck } from 'lucide
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useStore } from '@/store/useStore';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { matchTasksLocal, matchTasksDeep, type MatchResult, type TaskMatchResult } from '@/lib/ai/aiMatcher';
 import { loadAIConfig } from '@/lib/ai/types';
 
@@ -117,10 +118,17 @@ export function AIMatchPanel({ onClose }: AIMatchPanelProps) {
             <Sparkles size={14} />
             {loading ? '匹配中...' : '快速匹配'}
           </button>
-          <button onClick={handleDeepMatch} disabled={deepLoading || loading || aiDisabled} title={aiDisabled ? '请先配置 AI' : ''} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            <Zap size={14} />
-            {deepLoading ? '深度分析中...' : '深度匹配'}
-          </button>
+          {aiDisabled ? (
+            <Tooltip><TooltipTrigger asChild><button onClick={handleDeepMatch} disabled={deepLoading || loading || aiDisabled} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              <Zap size={14} />
+              {deepLoading ? '深度分析中...' : '深度匹配'}
+            </button></TooltipTrigger><TooltipContent>请先配置 AI</TooltipContent></Tooltip>
+          ) : (
+            <button onClick={handleDeepMatch} disabled={deepLoading || loading || aiDisabled} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              <Zap size={14} />
+              {deepLoading ? '深度分析中...' : '深度匹配'}
+            </button>
+          )}
           {aiDisabled && <span className="text-[10px] text-muted-foreground">请先配置 AI</span>}
           {result && <span className="ml-auto text-[10px] text-muted-foreground">{result.fromLLM ? 'LLM增强' : '本地匹配'} · 平均{result.qualityMetrics.avgMatchScore}分</span>}
         </div>
@@ -293,7 +301,7 @@ function MemberRecommendCard({ rec, memberMap }: MemberRecommendCardProps) {
                 {PRIORITY_LABEL[task.taskPriority] ?? task.taskPriority}
               </span>
               <span className={`text-xs font-medium flex-shrink-0 ${scoreColor(task.matchScore)}`}>{task.matchScore}分</span>
-              <span className="text-[10px] text-muted-foreground truncate max-w-[140px]" title={task.reason}>{task.reason}</span>
+              <Tooltip><TooltipTrigger asChild><span className="text-[10px] text-muted-foreground truncate max-w-[140px]">{task.reason}</span></TooltipTrigger><TooltipContent>{task.reason}</TooltipContent></Tooltip>
             </div>
           ))}
         </div>

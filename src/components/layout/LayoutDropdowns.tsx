@@ -176,9 +176,9 @@ export const NotificationDropdown = React.memo(function NotificationDropdown({ n
                       <span className="text-[10px] text-muted-foreground/60">{new Date(first.createdAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   </div>
-                  <button className="p-0.5 hover:bg-accent rounded flex-shrink-0 mt-0.5" onClick={(e) => { e.stopPropagation(); toggleGroup(group.key); }} title="展开详情" aria-label="展开通知详情">
+                  <Tooltip><TooltipTrigger asChild><button className="p-0.5 hover:bg-accent rounded flex-shrink-0 mt-0.5" onClick={(e) => { e.stopPropagation(); toggleGroup(group.key); }} aria-label="展开通知详情">
                     <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                  </button>
+                  </button></TooltipTrigger><TooltipContent>展开详情</TooltipContent></Tooltip>
                 </div>
               </div>
             );

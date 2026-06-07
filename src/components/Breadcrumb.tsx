@@ -7,6 +7,7 @@ import { ChevronRight, Home } from 'lucide-react';
 import type { Page } from '@/components/layout/Layout';
 import { useAppNavigate } from '@/lib/routes';
 import { useStore } from '@/store/useStore';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 interface BreadcrumbItem {
   label: string;
@@ -146,17 +147,16 @@ export function Breadcrumb({ currentPage, itemId }: BreadcrumbProps) {
               <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
             )}
             {isLast ? (
-              <span className="font-semibold text-foreground truncate max-w-[200px]" title={item.label}>
+              <Tooltip><TooltipTrigger asChild><span className="font-semibold text-foreground truncate max-w-[200px]">
                 {item.label}
-              </span>
+              </span></TooltipTrigger><TooltipContent>{item.label}</TooltipContent></Tooltip>
             ) : (
-              <button
+              <Tooltip><TooltipTrigger asChild><button
                 onClick={item.onClick}
                 className="text-muted-foreground hover:text-foreground transition-colors truncate max-w-[160px]"
-                title={item.label}
               >
                 {item.label}
-              </button>
+              </button></TooltipTrigger><TooltipContent>{item.label}</TooltipContent></Tooltip>
             )}
           </React.Fragment>
         );
