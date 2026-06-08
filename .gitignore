@@ -32,3 +32,7 @@ index.html''
 .env
 .env.*
 .env.local
+
+# Build output artifacts (should never be committed)
+assets/
+.index.html.dev

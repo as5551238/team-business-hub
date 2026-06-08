@@ -9,7 +9,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postbuild": "bash scripts/restore-index-html.sh",
+    "prebuild": "bash scripts/backup-index-html.sh"
   },
   "dependencies": {
     "@giszhc/xlsx": "^0.20.4",

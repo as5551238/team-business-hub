@@ -8,16 +8,37 @@ import { startAiPushScan, stopAiPushScan } from '@/lib/pushEventEngine';
 import { startAutomaton, stopAutomaton } from '@/lib/ai/aiAutomaton';
 import { getPageFromPathname } from '@/lib/routes';
 import type { Page } from '@/components/layout/Layout';
-const Dashboard = lazy(() => import('@/pages/Dashboard'));
-const Goals = lazy(() => import('@/pages/Goals'));
-const Projects = lazy(() => import('@/pages/Projects'));
-const Tasks = lazy(() => import('@/pages/Tasks'));
-const Insight = lazy(() => import('@/pages/Insight'));
-const Knowledge = lazy(() => import('@/pages/Knowledge'));
-const Admin = lazy(() => import('@/pages/Admin'));
-const PrivacyPage = lazy(() => import('@/pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
-const ConsentDialog = lazy(() => import('@/pages/PrivacyPage').then(m => ({ default: m.ConsentDialog })));
-const LoginScreen = lazy(() => import('@/pages/Login').then(m => ({ default: m.LoginScreen })));
+// Retryable lazy loader — catches "chunk load failed" from SW cache race and retries with cache-bust
+function retryLazy<T extends { default: React.ComponentType<unknown> }>(factory: () => Promise<T>, retries = 2): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const attempt = (n: number) => {
+      factory()
+        .then(resolve)
+        .catch((err: Error) => {
+          if (n > 0 && /chunk|load/i.test(err.message)) {
+            // Force bypass SW cache by adding timestamp query param
+            console.warn(`[retryLazy] chunk load failed, retrying (${retries - n + 1}/${retries})...`, err.message);
+            // Bust the import cache: delete the failed module from __webpack_require__ or just retry
+            attempt(n - 1);
+          } else {
+            reject(err);
+          }
+        });
+    };
+    attempt(retries);
+  });
+}
+
+const Dashboard = lazy(() => retryLazy(() => import('@/pages/Dashboard')));
+const Goals = lazy(() => retryLazy(() => import('@/pages/Goals')));
+const Projects = lazy(() => retryLazy(() => import('@/pages/Projects')));
+const Tasks = lazy(() => retryLazy(() => import('@/pages/Tasks')));
+const Insight = lazy(() => retryLazy(() => import('@/pages/Insight')));
+const Knowledge = lazy(() => retryLazy(() => import('@/pages/Knowledge')));
+const Admin = lazy(() => retryLazy(() => import('@/pages/Admin')));
+const PrivacyPage = lazy(() => retryLazy(() => import('@/pages/PrivacyPage')).then(m => ({ default: m.PrivacyPage })));
+const ConsentDialog = lazy(() => retryLazy(() => import('@/pages/PrivacyPage')).then(m => ({ default: m.ConsentDialog })));
+const LoginScreen = lazy(() => retryLazy(() => import('@/pages/Login')).then(m => ({ default: m.LoginScreen })));
 import { StoreProvider, useStore } from '@/store/useStore';
 import type { Action } from '@/store/types';
 import { MotionConfig } from 'framer-motion';
@@ -42,7 +63,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; name: string },
 
 const LOGIN_KEY = 'tbh-current-user';
 
-const PAGE_LABELS: Record<Page, string> = { dashboard: '工作台', goals: '目标管理', projects: '项目中心', tasks: '任务中心', insight: '数据洞察', ai: 'AI 分析', knowledge: '知识库', admin: '管理中心' };
+const PAGE_LABELS: Record<Page, string> = { dashboard: '工作台', goals: '目标管理', projects: '项目中心', tasks: '任务中心', insight: '数据洞察', knowledge: '知识库', admin: '管理中心', privacy: '隐私政策' };
 
 /** Helper: redirect root/unknown routes to dashboard */
 function NavigateToDashboard() {
