@@ -6,6 +6,7 @@ import { toCamel } from './types';
 import { replayFailedWrites } from './supabase';
 import { notifySelectorListeners } from './selectorSystem';
 import { handleError } from '@/lib/errorHandler';
+import { sendBrowserNotification } from '@/lib/browserNotify';
 
 interface RealtimePayload {
   eventType: string;
@@ -54,6 +55,13 @@ export function setupRealtime() {
     if (eventType === 'INSERT' || eventType === 'UPDATE') {
       if (!newRow || !newRow.id) return;
       const camelRow = toCamel(newRow);
+      // Push browser notification for new mention/urgent notifications received via Realtime
+      if (table === 'notifications' && eventType === 'INSERT') {
+        const notif = camelRow as Record<string, unknown>;
+        if (notif.type === 'mentioned' || notif.type === 'urgent') {
+          sendBrowserNotification(notif.title as string || '新通知', { body: notif.message as string || '' });
+        }
+      }
       dispatch({ type: 'REALTIME_UPSERT', payload: { table, item: camelRow } });
     } else if (eventType === 'DELETE') {
       const id = oldRow?.id;

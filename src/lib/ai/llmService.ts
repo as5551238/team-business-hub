@@ -127,6 +127,7 @@ export async function callLLM(prompt: string, config: AIConfig, complexity?: Tas
     // Non-limit errors — silently continue with local-only check
   }
 
+  if (!config.apiKey) throw new Error('AI API Key 未配置。请前往 管理中心 > 设置 > AI配置 填写API Key后再试.');
   const preset = PROVIDER_PRESETS[config.provider];
   const baseUrl = (config.baseUrl || preset.baseUrl).replace(/\/+$/, '');
 
@@ -271,6 +272,7 @@ export async function callLLMStream(
     if (e instanceof Error && e.message.includes('服务端上限')) throw e;
   }
 
+  if (!config.apiKey) throw new Error('AI API Key 未配置。请前往 管理中心 > 设置 > AI配置 填写API Key后再试.');
   const preset = PROVIDER_PRESETS[config.provider];
   const baseUrl = (config.baseUrl || preset.baseUrl).replace(/\/+$/, '');
   const detectedComplexity = options?.complexity || detectTaskComplexity(messages[messages.length - 1]?.content || '');
