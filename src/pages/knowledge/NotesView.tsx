@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { useNotes } from '@/store/hooks';
 import {
-  Plus, Trash2, Tag, Search, Pin, PinOff, Palette, StickyNote, Eye, Edit3
+  Plus, Trash2, Tag, Search, Pin, PinOff, Palette, StickyNote, Eye, Edit3,
+  Bold, Italic, List, ListOrdered, Heading, Code, Quote, Link2, Minus
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import DOMPurify from 'dompurify';
@@ -11,6 +12,34 @@ import { renderMarkdown } from '../admin/MarkdownDocTab';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useAutoSave } from '@/hooks/useAutoSave';
+
+/** Markdown 格式工具栏 — 在 textarea 光标位置插入格式标记 */
+function MarkdownToolbar({ onInsert }: { onInsert: (before: string, after: string, placeholder: string) => void }) {
+  const tools: Array<{ icon: React.ReactNode; before: string; after: string; placeholder: string; tip: string }> = [
+    { icon: <Heading size={14} />, before: '## ', after: '', placeholder: '标题', tip: '标题' },
+    { icon: <Bold size={14} />, before: '**', after: '**', placeholder: '粗体', tip: '粗体' },
+    { icon: <Italic size={14} />, before: '*', after: '*', placeholder: '斜体', tip: '斜体' },
+    { icon: <Code size={14} />, before: '`', after: '`', placeholder: '代码', tip: '行内代码' },
+    { icon: <Quote size={14} />, before: '> ', after: '', placeholder: '引用', tip: '引用' },
+    { icon: <List size={14} />, before: '- ', after: '', placeholder: '列表项', tip: '无序列表' },
+    { icon: <ListOrdered size={14} />, before: '1. ', after: '', placeholder: '列表项', tip: '有序列表' },
+    { icon: <Link2 size={14} />, before: '[', after: '](url)', placeholder: '链接文字', tip: '链接' },
+    { icon: <Minus size={14} />, before: '
+---
+', after: '', placeholder: '', tip: '分割线' },
+  ];
+  return (
+    <div className="flex items-center gap-0.5">
+      {tools.map((t, i) => (
+        <Tooltip key={i}><TooltipTrigger asChild><button
+          type="button"
+          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => onInsert(t.before, t.after, t.placeholder)}
+        >{t.icon}</button></TooltipTrigger><TooltipContent>{t.tip}</TooltipContent></Tooltip>
+      ))}
+    </div>
+  );
+}
 
 export function NotesView() {
   const { state } = useStore();
@@ -49,6 +78,26 @@ export function NotesView() {
       updateNote(selectedNoteId, { title: val.trim() || '无标题' });
     },
   });
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  /** 在 textarea 光标位置插入 Markdown 格式 */
+  const insertMarkdown = (before: string, after: string, placeholder: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.focus();
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = editingContent.slice(start, end);
+    const insert = selected || placeholder;
+    const newContent = editingContent.slice(0, start) + before + insert + after + editingContent.slice(end);
+    setEditingContent(newContent);
+    // Set cursor position after the inserted text
+    requestAnimationFrame(() => {
+      ta.selectionStart = start + before.length;
+      ta.selectionEnd = start + before.length + insert.length;
+    });
+  };
 
   const noteCategories = useMemo(() => { const cats = new Set<string>(); notes.forEach(n => { if (n.category) cats.add(n.category); }); return Array.from(cats); }, [notes]);
   const filteredNotes = useMemo(() => {
@@ -108,7 +157,7 @@ export function NotesView() {
               {markdownPreview ? (
                 <div className="flex-1 w-full p-4 text-sm overflow-y-auto prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: renderMarkdown(editingContent) }} />
               ) : (
-                <textarea className="flex-1 w-full p-4 text-sm border-none outline-none resize-none bg-transparent" placeholder="开始书写... (支持Markdown)" value={editingContent} onChange={e => setEditingContent(e.target.value)} onBlur={() => flushContent()} />
+                <MarkdownToolbar onInsert={insertMarkdown} /><textarea ref={textareaRef} className="flex-1 w-full p-4 text-sm border-none outline-none resize-none bg-transparent" placeholder="开始书写... (支持Markdown)" value={editingContent} onChange={e => setEditingContent(e.target.value)} onBlur={() => flushContent()} />
               )}
             </>
           ) : <div className="flex-1 flex items-center justify-center text-muted-foreground"><div className="text-center"><StickyNote size={48} className="mx-auto mb-2 opacity-30" /><p className="text-sm">选择或新建一条笔记</p></div></div>}

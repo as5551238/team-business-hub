@@ -1492,21 +1492,52 @@ create policy "PR: paid teams only insert" on performance_reviews for insert wit
 );
 
 -- ==================== call_llm_proxy — LLM代理RPC ====================
+-- pg_net 0.20+: http_post returns bigint, response in net._http_response table
 
 create or replace function call_llm_proxy(p_url text, p_body text, p_api_key text)
 returns text as $$
 declare
-  response text;
+  v_request_id bigint;
+  v_status_code integer;
+  v_content text;
+  v_error_msg text;
+  v_attempt integer := 0;
 begin
-  select http Into response from net.http_post(
+  v_request_id := net.http_post(
     url := p_url,
     body := p_body::jsonb,
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer ' || p_api_key
-    )
+    ),
+    timeout_milliseconds := 30000
   );
-  return response;
+  loop
+    v_attempt := v_attempt + 1;
+    if v_attempt > 6 then
+      return json_build_object('error', 'proxy_timeout', 'hint', 'CORS直连应可用')::text;
+    end if;
+    perform pg_sleep(0.5);
+    select status_code, content, error_msg
+      into v_status_code, v_content, v_error_msg
+      from net._http_response
+      where id = v_request_id;
+    if found then
+      if v_status_code is not null then
+        if v_status_code >= 200 and v_status_code < 300 then
+          return v_content;
+        else
+          return json_build_object(
+            'error', 'api_error',
+            'status_code', v_status_code,
+            'body', left(v_content, 500)
+          )::text;
+        end if;
+      elsif v_error_msg is not null then
+        return json_build_object('error', v_error_msg)::text;
+      end if;
+    end if;
+  end loop;
 end;
 $$ language plpgsql security definer;
 

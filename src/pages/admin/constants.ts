@@ -37,7 +37,16 @@ export const permLabels: Record<string, string> = { goals_view: '查看目标', 
 export const typeLabels: Record<string, string> = { goal: '目标', project: '项目', task: '任务', document: '文档' };
 export const typeColors: Record<string, string> = { goal: 'bg-red-100 text-red-700', project: 'bg-blue-100 text-blue-700', task: 'bg-green-100 text-green-700', document: 'bg-purple-100 text-purple-700' };
 export const PRESET_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'];
-export const NOTE_COLORS = ['#ffffff', '#fef3c7', '#dbeafe', '#dcfce7', '#fce7f3', '#f3e8ff', '#ffedd5', '#e2e8f0'];
+export const NOTE_COLORS = [
+  // 暖色系
+  '#ffffff', '#fef3c7', '#ffedd5', '#fee2e2', '#fce7f3', '#fda4af',
+  // 冷色系
+  '#dbeafe', '#e0f2fe', '#ccfbf1', '#dcfce7', '#d9f99d', '#bae6fd',
+  // 紫色系
+  '#f3e8ff', '#e9d5ff', '#ddd6fe', '#c7d2fe',
+  // 中性色
+  '#e2e8f0', '#f5f5f4', '#fef9c3', '#d1fae5',
+];
 export const repeatLabels: Record<string, string> = { none: '不重复', daily: '每天', weekly: '每周', biweekly: '每两周', monthly: '每月', quarterly: '每季度', yearly: '每年' };
 export const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 export const FOLDERS = ['全部', '工作', '个人', '学习', '其他'];

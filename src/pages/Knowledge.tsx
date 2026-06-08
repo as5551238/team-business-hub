@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef } from 'react';
 import { useStore } from '@/store/useStore';
 import { useKnowledge } from '@/store/hooks';
 import type { Knowledge, ItemType } from '@/types';
-import { BookOpen, Plus, Trash2, Search, Tag, X, Link2, Eye, Edit3, Palette, StickyNote } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Search, Tag, X, Link2, Eye, Edit3, Palette, StickyNote, Bold, Italic, List, ListOrdered, Heading, Code, Quote, Minus } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import DOMPurify from 'dompurify';
 import { renderMarkdown } from '@/pages/admin/MarkdownDocTab';
@@ -218,7 +218,7 @@ function EntriesView() {
               {markdownPreview ? (
                 <div className="w-full border border-border rounded-lg px-3 py-2 min-h-[200px] max-h-[400px] overflow-y-auto text-sm prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderMarkdown(editContent)) }} />
               ) : (
-                <textarea className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[200px] resize-y font-mono" placeholder="输入内容... (支持Markdown)" value={editContent} onChange={e => setEditContent(e.target.value)} />
+                <KMarkdownToolbar onInsert={insertKMarkdown} /><textarea ref={kTextareaRef} className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[200px] resize-y font-mono" placeholder="输入内容... (支持Markdown)" value={editContent} onChange={e => setEditContent(e.target.value)} />
               )}
             </div>
             <div>
