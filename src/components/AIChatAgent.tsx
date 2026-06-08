@@ -8,6 +8,7 @@
  * - 一键执行（AI建议可直接操作store：更新任务状态/优先级/负责人）
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { saveSettingDualWrite } from '@/supabase/teamSettings';
 import { useStore } from '@/store/useStore';
 import type { Action } from '@/store/types';
 import { callLLMStream } from '@/lib/ai/llmService';
@@ -157,6 +158,9 @@ export function AIChatAgent() {
         .filter(m => !m.streaming)
         .slice(-MAX_PERSISTED_MESSAGES);
       localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(toSave));
+      // DR-19: dual-write to DB
+      const teamId = state.currentTeamId || '';
+      if (teamId) saveSettingDualWrite('ai_chat_messages', CHAT_STORAGE_KEY, toSave, teamId);
     } catch { /* quota exceeded */ }
   }
 

@@ -110,15 +110,3 @@ export function UpgradeGate({ feature, children, lockedMessage, variant = 'card'
   );
 }
 
-/** 成员达到上限时的行内提示（不遮挡内容，只提示接近上限） */
-export function NearLimitBadge({ feature }: { feature: PlanLimitKey }) {
-  const gate = useFeatureGate(feature);
-  if (!gate.nearLimit || gate.allowed) return null;
-  const label = FEATURE_LABELS[feature] || feature;
-  const maxLabel = typeof gate.max === 'number' ? `/${gate.max}` : '';
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-amber-50 text-amber-700 border border-amber-200">
-      {label} {gate.current}{maxLabel} (接近上限)
-    </span>
-  );
-}

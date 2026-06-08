@@ -92,11 +92,10 @@ export function resolveToken(token: TokenName, opacity?: number): string {
   return hslToHex(hsl.h, hsl.s, hsl.l);
 }
 
-/**
- * 状态色映射 — 替代散落的硬编码 #94a3b8 / #3b82f6 / #22c55e 等
+/** 状态色映射 — 替代散落的硬编码 #94a3b8 / #3b82f6 / #22c55e 等
  * 返回 hex 色值，自动响应深色模式
  */
-export function statusColor(status: string, opacity?: number): string {
+function statusColor(status: string, opacity?: number): string {
   const map: Record<string, TokenName> = {
     todo: 'muted-foreground',
     in_progress: 'primary',

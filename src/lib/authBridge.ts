@@ -5,11 +5,7 @@ export type AuthState = 'idle' | 'authenticating' | 'callback_processing' | 'aut
 
 let _authState: AuthState = 'idle';
 
-export function getAuthState(): AuthState {
-  return _authState;
-}
-
-export function setAuthState(state: AuthState): void {
+function setAuthState(state: AuthState): void {
   _authState = state;
 }
 

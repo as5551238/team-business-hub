@@ -51,69 +51,6 @@ const ITEM_MAP: Record<string, ItemType> = {
 };
 
 /**
- * Parse natural language workflow description into a structured AutomationRule
- */
-export function parseWorkflowIntent(text: string): ParsedWorkflow | null {
-  let matchedTrigger: AutomationTrigger | null = null;
-  let matchedCondition: Partial<ParsedWorkflow['condition']> = {};
-
-  // Match trigger
-  for (const [pattern, def] of Object.entries(TRIGGER_MAP)) {
-    if (new RegExp(pattern, 'i').test(text)) {
-      matchedTrigger = def.trigger;
-      matchedCondition = def.condition;
-      break;
-    }
-  }
-
-  if (!matchedTrigger) return null;
-
-  // Match actions (can have multiple)
-  const matchedActions: { type: AutomationAction; config: Record<string, string> }[] = [];
-  for (const [pattern, def] of Object.entries(ACTION_MAP)) {
-    if (new RegExp(pattern, 'i').test(text)) {
-      matchedActions.push({ ...def, config: { ...def.config } });
-    }
-  }
-  if (matchedActions.length === 0) {
-    // Default to notify if no action matched
-    matchedActions.push({ type: 'notify', config: { title: '自动通知', message: '' } });
-  }
-
-  // Match item type
-  let itemType: ItemType = 'task'; // default
-  for (const [pattern, type] of Object.entries(ITEM_MAP)) {
-    if (text.includes(pattern)) {
-      itemType = type;
-      break;
-    }
-  }
-
-  // Update notify/escalation config with contextual message
-  for (const action of matchedActions) {
-    if (action.type === 'notify') {
-      action.config.message = `工作流自动触发：${text}`;
-    } else if (action.type === 'escalation') {
-      action.config.message = `需要关注：${text}`;
-    }
-  }
-
-  const condition: ParsedWorkflow['condition'] = {
-    field: matchedCondition.field || 'status',
-    operator: matchedCondition.operator || 'neq',
-    value: matchedCondition.value || '',
-  };
-
-  return {
-    name: text.length > 20 ? text.slice(0, 20) + '...' : text,
-    itemType,
-    trigger: matchedTrigger,
-    condition,
-    actions: matchedActions,
-  };
-}
-
-/**
  * Convert parsed workflow into a full AutomationRule ready for dispatch
  */
 export function createRuleFromIntent(text: string): AutomationRule | null {

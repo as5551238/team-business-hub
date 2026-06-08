@@ -126,7 +126,12 @@ export function GlobalGanttView() {
                     const depIdx = sortedTasks.findIndex(t => t.id === bid);
                     if (depIdx === -1) return null;
                     const depY = 24 + depIdx * ROW_H + ROW_H - 4;
-                    return <line key={bid} x1={LABEL_W + startX * DAY_W} y1={y + ROW_H / 2} x2={LABEL_W + startX * DAY_W - 8} y2={depY} stroke={resolveToken('warning')} strokeWidth={1.5} strokeDasharray="3 3" />;
+                    const depTask = sortedTasks[depIdx];
+                    const depDone = depTask?.status === 'done';
+                    const depBlocked = depTask?.status === 'blocked';
+                    const lineColor = depDone ? resolveToken('muted-foreground') : depBlocked ? resolveToken('destructive') : resolveToken('warning');
+                    const dashStyle = depDone ? '2 3' : depBlocked ? '6 3' : '3 3';
+                    return <line key={bid} x1={LABEL_W + startX * DAY_W} y1={y + ROW_H / 2} x2={LABEL_W + startX * DAY_W - 8} y2={depY} stroke={lineColor} strokeWidth={depDone ? 1 : 1.5} strokeDasharray={dashStyle}><title>{depTask?.title || bid} → {task.title}</title></line>;
                   })}
                 </g>
               );

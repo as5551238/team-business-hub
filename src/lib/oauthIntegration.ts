@@ -93,7 +93,7 @@ export function getOAuthStatus(provider: OAuthProvider): OAuthStatus {
   return loadOAuthStatuses().find(s => s.provider === provider) || { provider, connected: false };
 }
 
-export function setOAuthStatus(status: OAuthStatus) {
+function setOAuthStatus(status: OAuthStatus) {
   const statuses = loadOAuthStatuses().filter(s => s.provider !== status.provider);
   statuses.push(status);
   saveOAuthStatuses(statuses);

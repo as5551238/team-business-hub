@@ -464,7 +464,7 @@ export function applyGoalProgressInfo(goal: Goal, info: GoalProgressInfo): void 
 }
 
 /** Convenience wrapper: compute + apply mutations + return progress number */
-function calcGoalProgress(goals: Goal[], goalId: string, visited?: Set<string>): number {
+export function calcGoalProgress(goals: Goal[], goalId: string, visited?: Set<string>): number {
   const info = computeGoalProgressInfo(goals, goalId, visited);
   const goal = goals.find(g => g.id === goalId);
   if (goal) applyGoalProgressInfo(goal, info);

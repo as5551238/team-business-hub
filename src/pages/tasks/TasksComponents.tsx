@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Task, TaskStatus, TaskPriority, Tag } from '@/types';
 import { cn } from '@/lib/utils';
-import { Calendar, ChevronDown, ChevronRight, CheckCircle2, MessageSquare, GripVertical } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, CheckCircle2, MessageSquare, GripVertical, Link2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
   STATUS_CONFIG, URGENCY_CONFIG, IMPORTANCE_CONFIG,
@@ -37,6 +37,7 @@ export const TaskCard = React.memo(function TaskCard({ task, compact, tags, comm
         <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-bold', bpC.color)}>{bpC.label}</span>
         <PriorityBadge priority={task.priority} />
         <StatusBadge status={task.status} />
+        {(task.blockedBy || []).length > 0 && <span className="text-[10px] text-amber-600 bg-amber-50 px-1 py-0.5 rounded flex items-center gap-0.5"><Link2 className="w-2.5 h-2.5" />{task.blockedBy.length}</span>}
         {task.parentId && <span className="text-[10px] text-purple-600 bg-purple-50 px-1 py-0.5 rounded">子任务</span>}
         {cc > 0 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto"><MessageSquare size={11} />{cc}</span>}
       </div>

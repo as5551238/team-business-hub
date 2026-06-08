@@ -41,6 +41,13 @@
     --chart-green: 142.1 76.2% 36.3%;
     --chart-amber: 38 92% 50%;
     --chart-blue: 221.2 83.2% 53.3%;
+    /* Brand identity tokens */
+    --brand-accent: 238.7 83.5% 66.7%;
+    --brand-accent-foreground: 210 40% 98%;
+    --brand-gradient-start: var(--primary);
+    --brand-gradient-end: var(--brand-accent);
+    --brand-surface: 221.2 83.2% 97%;
+    --brand-surface-foreground: 222.2 84% 4.9%;
   }
   .dark {
     --background: 222.2 84% 4.9%;
@@ -79,6 +86,13 @@
     --chart-green: 142.1 70.6% 45.3%;
     --chart-amber: 38 92% 50%;
     --chart-blue: 217.2 91.2% 59.8%;
+    /* Brand identity tokens — dark */
+    --brand-accent: 238.7 83.5% 76.7%;
+    --brand-accent-foreground: 222.2 47.4% 11.2%;
+    --brand-gradient-start: var(--primary);
+    --brand-gradient-end: var(--brand-accent);
+    --brand-surface: 221.2 83.2% 12%;
+    --brand-surface-foreground: 210 40% 98%;
   }
 }
 

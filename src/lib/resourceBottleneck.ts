@@ -79,12 +79,4 @@ export function generateBottleneckSummary(tasks: Task[], members: Member[]): str
   return parts.length > 0 ? parts.join('；') : '团队负载均衡，无瓶颈';
 }
 
-/** 负载状态UI颜色 */
-export function getLoadStatusColor(status: MemberLoad['status']): string {
-  switch (status) {
-    case 'available': return 'text-green-600 bg-green-50 border-green-200';
-    case 'balanced': return 'text-blue-600 bg-blue-50 border-blue-200';
-    case 'overloaded': return 'text-amber-600 bg-amber-50 border-amber-200';
-    case 'critical': return 'text-red-600 bg-red-50 border-red-200';
-  }
-}
+

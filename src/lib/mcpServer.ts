@@ -61,8 +61,8 @@ export interface MCPToolResult {
 
 // ===== Supabase REST 辅助 =====
 
-const SUPABASE_URL = 'https://atexvoyvnnuaonvrgzhn.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 async function restGet(table: string, query?: Record<string, string>): Promise<unknown[]> {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
@@ -179,70 +179,4 @@ export async function callMCPTool(
   }
 }
 
-/** 获取工具列表（供 MCP 协议注册） */
-export function getMCPToolList(): Array<{ name: string; description: string; inputSchema: Record<string, unknown> }> {
-  return mcpTools.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
-}
 
-/** 生成 OpenAPI 3.1.0 工具清单（供 MCP Discovery 端点使用） */
-export function generateToolManifest(): {
-  openapi: '3.1.0';
-  info: { title: string; version: string };
-  paths: Record<string, Record<string, {
-    operationId: string;
-    summary: string;
-    requestBody?: { content: { 'application/json': { schema: Record<string, unknown> } } };
-    responses: { '200': { description: string } };
-  }>>;
-} {
-  const paths: Record<string, Record<string, {
-    operationId: string;
-    summary: string;
-    requestBody?: { content: { 'application/json': { schema: Record<string, unknown> } } };
-    responses: { '200': { description: string } };
-  }>> = {};
-
-  for (const tool of mcpTools) {
-    const pathKey = `/tools/${tool.name}`;
-    const hasProperties = tool.inputSchema.properties && Object.keys(tool.inputSchema.properties as Record<string, unknown>).length > 0;
-    paths[pathKey] = {
-      post: {
-        operationId: tool.name,
-        summary: tool.description,
-        ...(hasProperties ? {
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: tool.inputSchema as Record<string, unknown>,
-              },
-            },
-          },
-        } : {}),
-        responses: {
-          '200': { description: `Result of ${tool.name}` },
-        },
-      },
-    };
-  }
-
-  return {
-    openapi: '3.1.0',
-    info: { title: 'TBH MCP Server', version: '1.0.0' },
-    paths,
-  };
-}
-
-/** 获取 MCP 工具发现信息（工具名+描述+参数 Schema） */
-export function getDiscoveryInfo(): Array<{
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  required: string[];
-}> {
-  return mcpTools.map(t => ({
-    name: t.name,
-    description: t.description,
-    parameters: (t.inputSchema.properties ?? {}) as Record<string, unknown>,
-    required: (t.inputSchema.required ?? []) as string[],
-  }));
-}

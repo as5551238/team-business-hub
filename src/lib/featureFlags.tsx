@@ -24,15 +24,6 @@ const FeatureFlagContext = createContext<FeatureFlagContextType>({
   loading: true,
 });
 
-export function useFeatureFlag(key: string): boolean {
-  const { isEnabled } = useContext(FeatureFlagContext);
-  return isEnabled(key);
-}
-
-export function useFeatureFlags() {
-  return useContext(FeatureFlagContext);
-}
-
 // Default flags — fallback when Supabase is unavailable
 const DEFAULT_FLAGS: Record<string, FeatureFlag> = {
   'pwa_install_prompt': { key: 'pwa_install_prompt', enabled: true, description: 'PWA安装提示' },

@@ -24,6 +24,7 @@ import { isWeChatEnabled, sendWeChatMessage } from '@/supabase/wechat';
 import { setWeChatNotify, fireAutomationRules } from '@/store/shared';
 import { getPageFromPathname, PAGE_TO_PATH, useAppNavigate, usePageInfo } from '@/lib/routes';
 import { Breadcrumb } from '@/components/Breadcrumb';
+import { AppLogo } from '@/components/AppLogo';
 import { FloatingAIPanel } from '@/components/FloatingAIPanel';
 
 // Detect H5 embedded mode (WeChat/Feishu in-app browser or ?h5=1 param)
@@ -42,7 +43,7 @@ import {
   Settings, Cloud, CloudOff, Loader2, Eye, Users2,
   BookOpen, Building2, Shield, PanelLeftClose, PanelLeft,
   ChevronsLeft, ChevronsRight, Plus, Minus, Maximize2, Edit2, Trash2, Check,
-  Moon, Sun, Monitor
+  CheckCircle2, Moon, Sun, Monitor
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CURRENT_USER_KEY } from '@/store/types';
@@ -168,7 +169,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
     return () => clearInterval(id);
   }, [connectionMode]);
 
-  // Reminder checker: every 60s, check tasks with reminderDate <= today
+  // Reminder checker: every 60s, check tasks with reminderDate <= now
   // P3#32 fix: use refs to avoid recreating interval on every notification change
   const tasksRef = useRef(state.tasks);
   tasksRef.current = state.tasks;
@@ -176,15 +177,19 @@ export default function Layout({ children, currentUser }: LayoutProps) {
   notifsRef.current = state.notifications;
   useEffect(() => {
     const checkReminders = () => {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const nowISO = now.toISOString();
       const existingKeys = new Set(notifsRef.current.map(n => n.relatedId + ':' + n.type));
       for (const t of tasksRef.current) {
         if (!t.reminderDate || t.status === 'done' || t.status === 'cancelled') continue;
         if (t.leaderId !== user?.id && !(t.supporterIds ?? []).includes(user?.id || '')) continue;
-        if (t.reminderDate <= today) {
+        // Support both date-only (YYYY-MM-DD) and datetime (YYYY-MM-DDTHH:mm) formats
+        const reminderTime = t.reminderDate.includes('T') ? new Date(t.reminderDate).toISOString() : t.reminderDate + 'T23:59:59.999Z';
+        if (reminderTime <= nowISO) {
           const key = t.id + ':reminder';
           if (existingKeys.has(key)) continue;
-          dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'nrem_' + t.id + '_' + t.reminderDate, type: 'reminder' as const, title: '任务提醒', message: `"${t.title}" 的提醒时间已到 (${t.reminderDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
+          const displayTime = t.reminderDate.includes('T') ? t.reminderDate.replace('T', ' ') : t.reminderDate;
+          dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'nrem_' + t.id + '_' + t.reminderDate, type: 'reminder' as const, title: '任务提醒', message: `"${t.title}" 的提醒时间已到 (${displayTime})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
           pushTaskEvent('reminder', t, memberLookup.getName);
         }
       }
@@ -332,9 +337,18 @@ export default function Layout({ children, currentUser }: LayoutProps) {
     touchStartRef.current = null;
   }, [sidebarOpen]);
 
+  // Desktop right-click context menu handler on main content area
+  const handleMainContextMenu = useCallback((e: React.MouseEvent) => {
+    const target = (e.target as HTMLElement).closest('[data-item-id]');
+    if (!target) return;
+    e.preventDefault();
+    const itemId = (target as HTMLElement).dataset.itemId || '';
+    const itemType = (target as HTMLElement).dataset.itemType || 'task';
+    setContextMenu({ x: e.clientX, y: e.clientY, targetId: itemId, targetType: itemType });
+  }, []);
+
   // Mobile long-press context menu handler on main content area
   const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
-    if (window.innerWidth >= 768) return; // desktop: no long-press
     const touch = e.touches[0];
     // Find the closest card/row element with a data-item-id
     const target = (touch.target as HTMLElement).closest('[data-item-id]');
@@ -366,12 +380,21 @@ export default function Layout({ children, currentUser }: LayoutProps) {
   }, []);
   const contextMenuItems: ContextMenuItem[] = useMemo(() => {
     if (!contextMenu) return [];
-    return [
+    const { targetType } = contextMenu;
+    const items: ContextMenuItem[] = [
       { label: '打开详情', action: 'open', icon: <Eye size={14} /> },
       { label: '编辑', action: 'edit', icon: <Edit2 size={14} /> },
-      { label: '切换完成', action: 'toggle', icon: <Check size={14} /> },
-      { label: '删除', action: 'delete', icon: <Trash2 size={14} /> },
     ];
+    // Type-specific items
+    if (targetType === 'task') {
+      items.push({ label: '切换完成', action: 'toggle', icon: <Check size={14} /> });
+    } else if (targetType === 'goal') {
+      items.push({ label: '切换状态', action: 'toggle', icon: <Check size={14} /> });
+    } else if (targetType === 'project') {
+      items.push({ label: '标记完成', action: 'toggle', icon: <CheckCircle2 size={14} /> });
+    }
+    items.push({ label: '删除', action: 'delete', icon: <Trash2 size={14} /> });
+    return items;
   }, [contextMenu]);
   const handleContextAction = useCallback((action: string) => {
     if (!contextMenu) return;
@@ -451,10 +474,10 @@ export default function Layout({ children, currentUser }: LayoutProps) {
         // 桌面端: sidebarMode 控制宽度，始终可见（hidden 除外）
         'md:relative md:translate-x-0',
         sidebarMode === 'wide' ? 'md:w-64' : sidebarMode === 'narrow' ? 'md:w-16' : 'md:w-0 md:overflow-hidden md:border-none',
-        sidebarMode === 'hidden' ? '' : 'border-r border-white/10',
+        sidebarMode === 'hidden' ? '' : 'border-r border-border',
       ].join(' ')}>
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-sm flex-shrink-0">TB</div>
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-border">
+          <AppLogo size="md" />
           {!sidebarNarrow && !sidebarCollapsed && (
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-sm">团队业务中台</div>
@@ -490,7 +513,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
                   <span className="ml-auto bg-destructive text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{overdueCount}</span>
                 )}
                 {!sidebarNarrow && !sidebarCollapsed && item.page === 'goals' && inProgressGoalsCount > 0 && (
-                  <span className="ml-auto bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{inProgressGoalsCount}</span>
+                  <span className="ml-auto bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{inProgressGoalsCount}</span>
                 )}
                 {!sidebarNarrow && !sidebarCollapsed && item.page === 'dashboard' && unreadCount > 0 && (
                   <span className="ml-auto bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{unreadCount}</span>
@@ -514,7 +537,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
                   <span className="ml-auto bg-destructive text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{overdueCount}</span>
                 )}
                 {!sidebarNarrow && !sidebarCollapsed && item.page === 'goals' && inProgressGoalsCount > 0 && (
-                  <span className="ml-auto bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{inProgressGoalsCount}</span>
+                  <span className="ml-auto bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{inProgressGoalsCount}</span>
                 )}
                 {!sidebarNarrow && !sidebarCollapsed && item.page === 'dashboard' && unreadCount > 0 && (
                   <span className="ml-auto bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{unreadCount}</span>
@@ -683,7 +706,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
             )}
           </div>
         </header>
-        <main id="main-content" className={`flex-1 overflow-y-auto bg-muted/30 pb-20 md:pb-0 ${density === 'compact' ? 'text-sm' : ''}`} tabIndex={-1} onTouchStart={handleMainTouchStart} onTouchEnd={handleMainTouchEnd} onTouchMove={handleMainTouchMove}><DensityContext.Provider value={density}><PageTransition keyProp={currentPage}>{children}</PageTransition></DensityContext.Provider></main>
+        <main id="main-content" className={`flex-1 overflow-y-auto bg-muted/30 pb-20 md:pb-0 ${density === 'compact' ? 'text-sm' : ''}`} tabIndex={-1} onContextMenu={handleMainContextMenu} onTouchStart={handleMainTouchStart} onTouchEnd={handleMainTouchEnd} onTouchMove={handleMainTouchMove}><DensityContext.Provider value={density}><PageTransition keyProp={currentPage}>{children}</PageTransition></DensityContext.Provider></main>
       </div>
 
       {/* Mobile bottom navigation */}

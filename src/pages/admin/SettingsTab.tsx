@@ -13,7 +13,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
-import { inputCls, loadEmailConfig, saveEmailConfig } from './constants';
+import { inputCls, loadEmailConfig, loadEmailConfigSync, saveEmailConfig } from './constants';
 import type { EmailConfig } from './constants';
 import { sendTestEmail, isEmailEnabled, getLastEmailError, setLastEmailError } from '@/supabase/email';
 import { AISettingsSection } from './AISettingsSection';
@@ -240,9 +240,18 @@ function WeChatSection() {
 }
 
 function EmailSection() {
-  const [config, setConfig] = useState<EmailConfig>(loadEmailConfig());
+  const [config, setConfig] = useState<EmailConfig>(loadEmailConfigSync());
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'idle' | 'success' | 'error'>('idle');
+
+  // DR-19: DB-first — refresh from Supabase on mount
+  useEffect(() => {
+    let cancelled = false;
+    loadEmailConfig().then(dbConfig => {
+      if (!cancelled) setConfig(dbConfig);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   function update(partial: Partial<EmailConfig>) { const c = { ...config, ...partial }; setConfig(c); saveEmailConfig(c); }
 

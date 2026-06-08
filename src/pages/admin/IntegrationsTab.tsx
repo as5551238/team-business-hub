@@ -2,7 +2,7 @@
  * 集成管理 Tab — 开放 API 文档 + Webhook 出站管理
  * Phase 3: Cross-platform protocol
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { usePermissions } from '@/store/hooks';
 import { Code, Globe, Webhook, Plus, Trash2, TestTube, CheckCircle2, Copy, ExternalLink, ChevronDown, ChevronRight, Key, Eye, EyeOff, MessageSquare, Send, Bell, Link2, Unlink, Activity, Mail, RefreshCw } from 'lucide-react';
@@ -13,6 +13,7 @@ import { getPushConfigs, savePushConfigs, pushNotification, formatTaskNotificati
 import { initiateOAuth, loadOAuthStatuses, getOAuthStatus, disconnectOAuth, PROVIDER_LABELS, type OAuthProvider } from '@/lib/oauthIntegration';
 import { IntegrationHealthTab } from './IntegrationHealthTab';
 import { handleError } from '@/lib/errorHandler';
+import { loadSettingDBFirst, saveSettingDualWrite } from '@/supabase/teamSettings';
 import { connectManualToken, clearToken, getConnectionStatus, type ManualTokenInput } from '@/lib/outlook/tokenManager';
 import { fetchCalendarEvents } from '@/lib/outlook/calendarSync';
 import { fetchMailSummary } from '@/lib/outlook/mailSync';
@@ -39,12 +40,15 @@ const WEBHOOK_EVENTS = [
 ];
 
 const WEBHOOK_STORAGE_KEY = 'tbh-webhook-endpoints';
+const WEBHOOK_SETTING_KEY = 'webhook_endpoints';
 
-function loadWebhooks(): WebhookEndpoint[] {
+/** Load webhooks from localStorage (sync, for useState init). DB refresh happens via useEffect. */
+function loadWebhooksSync(): WebhookEndpoint[] {
   try { const s = localStorage.getItem(WEBHOOK_STORAGE_KEY); return s ? JSON.parse(s) : []; } catch (e) { handleError(e, { module: 'IntegrationsTab', operation: 'LOAD_WEBHOOKS', severity: 'debug' }); return []; }
 }
-function saveWebhooks(ws: WebhookEndpoint[]) {
-  try { localStorage.setItem(WEBHOOK_STORAGE_KEY, JSON.stringify(ws)); } catch (e) { handleError(e, { module: 'IntegrationsTab', operation: 'SAVE_WEBHOOKS', severity: 'debug' }); }
+/** Save webhooks to both DB and localStorage (DR-19 dual-write). */
+function saveWebhooks(ws: WebhookEndpoint[], teamId: string) {
+  saveSettingDualWrite(WEBHOOK_SETTING_KEY, WEBHOOK_STORAGE_KEY, ws, teamId);
 }
 
 // ===== Open API Reference =====
@@ -52,8 +56,8 @@ function OpenAPISection() {
   const { state } = useStore();
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
 
-  const supabaseUrl = 'https://atexvoyvnnuaonvrgzhn.supabase.co';
-  const publishableKey = 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie';
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const publishableKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
   const tables = [
     { name: 'goals', label: '目标', fields: ['id', 'title', 'description', 'type', 'status', 'priority', 'start_date', 'end_date', 'leader_id', 'progress', 'key_results'] },
@@ -242,7 +246,19 @@ function ApiTokenSection() {
 function WebhookSection() {
   const { can } = usePermissions();
   const canManage = can('settings_manage');
-  const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>(loadWebhooks);
+  const { state } = useStore();
+  const teamId = state.currentTeamId || '';
+  const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>(loadWebhooksSync);
+
+  // DR-19: Refresh from DB on mount
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    loadSettingDBFirst<WebhookEndpoint[]>(WEBHOOK_SETTING_KEY, WEBHOOK_STORAGE_KEY, teamId).then(v => {
+      if (!cancelled && v && v.length > 0) setWebhooks(v);
+    });
+    return () => { cancelled = true; };
+  }, [teamId]);
   const [showForm, setShowForm] = useState(false);
   const [formUrl, setFormUrl] = useState('');
   const [formEvents, setFormEvents] = useState<Set<string>>(new Set(['task.created', 'task.status_changed']));
@@ -259,7 +275,7 @@ function WebhookSection() {
     };
     const next = [...webhooks, w];
     setWebhooks(next);
-    saveWebhooks(next);
+    saveWebhooks(next, teamId);
     setFormUrl('');
     setFormEvents(new Set(['task.created', 'task.status_changed']));
     setShowForm(false);
@@ -268,14 +284,14 @@ function WebhookSection() {
   const removeWebhook = useCallback((id: string) => {
     const next = webhooks.filter(w => w.id !== id);
     setWebhooks(next);
-    saveWebhooks(next);
-  }, [webhooks]);
+    saveWebhooks(next, teamId);
+  }, [webhooks, teamId]);
 
   const toggleWebhook = useCallback((id: string) => {
     const next = webhooks.map(w => w.id === id ? { ...w, active: !w.active } : w);
     setWebhooks(next);
-    saveWebhooks(next);
-  }, [webhooks]);
+    saveWebhooks(next, teamId);
+  }, [webhooks, teamId]);
 
   const testWebhook = useCallback(async (id: string) => {
     const wh = webhooks.find(w => w.id === id);

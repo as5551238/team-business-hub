@@ -218,6 +218,7 @@ export interface Task {
   repeatCycle: RepeatCycle;
   blockedBy: string[]; // IDs of prerequisite tasks that must be completed first
   sprintId: string | null; // ID of the associated sprint
+  storyPoints: number; // 故事点估算（0=未估算）
   krId?: string; // 关联的关键结果ID（任务完成时自动更新该KR的currentValue）
   teamId: string;
   canvasX?: number;
@@ -788,6 +789,14 @@ export interface Subscription {
   updatedAt: string;
 }
 
+export interface InstalledAgent {
+  id: string;
+  agentId: string;
+  teamId: string;
+  memberId: string;
+  installedAt: string;
+}
+
 export interface ApprovalAudit {
   id: string;
   goalId: string;
@@ -887,6 +896,7 @@ export interface AppState {
   teams: Team[];
   teamMembers: TeamMember[];
   subscriptions: Subscription[];
+  installedAgents: InstalledAgent[];
   approvalAudits: ApprovalAudit[];
   outlookCalendarEvents: OutlookCalendarEvent[];
   outlookMailSummary: OutlookMailSummary[];

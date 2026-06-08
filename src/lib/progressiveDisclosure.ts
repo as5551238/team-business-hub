@@ -26,7 +26,7 @@ const LEVEL_THRESHOLDS = {
 } as const;
 
 /** 获取首次使用日期（不存在则设为今天） */
-export function getFirstSeenDate(): string {
+function getFirstSeenDate(): string {
   try {
     const stored = localStorage.getItem(FIRST_SEEN_KEY);
     if (stored) return stored;

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { UserPlus, LogIn, Phone, MessageCircle, Mail, ArrowRight, Search, RefreshCw, Users, Key, Building2 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
+import { AppLogo, APP_NAME_CN, APP_NAME_EN } from '@/components/AppLogo';
 import { setCurrentTeamId } from '@/store/supabase';
 import { setRLSContext, getSupabaseClient } from '@/supabase/client';
 import { wechatOAuthLogin, phoneOtpLogin, emailMagicLink } from '@/lib/authBridge';
@@ -287,10 +288,10 @@ export function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) 
     const userTeams = state.teamMembers.filter(tm => tm.memberId === verifiedUserId);
     const teamsForUser = state.teams.filter(t => userTeams.some(tm => tm.teamId === t.id));
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-brand-surface via-background to-brand-surface flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-primary-foreground text-2xl font-bold mb-4 shadow-lg">TB</div>
+            <div className="flex justify-center mb-4"><AppLogo size="xl" variant="gradient" /></div>
             <h1 className="text-2xl font-bold text-foreground">选择团队</h1>
             <p className="text-sm text-muted-foreground mt-1">选择一个团队加入，或创建/加入新团队</p>
           </div>
@@ -342,12 +343,12 @@ export function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) 
 
   // Auth step (login/register)
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-brand-surface via-background to-brand-surface flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-primary-foreground text-2xl font-bold mb-4 shadow-lg">TB</div>
-          <h1 className="text-2xl font-bold text-foreground">团队业务中台</h1>
-          <p className="text-sm text-muted-foreground mt-1">Team Business Hub</p>
+          <div className="flex justify-center mb-4"><AppLogo size="xl" variant="gradient" /></div>
+          <h1 className="text-2xl font-bold text-foreground">{APP_NAME_CN}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{APP_NAME_EN}</p>
         </div>
         <div className="bg-card rounded-2xl shadow-xl border border-border p-6 space-y-5">
           <div className="flex bg-muted rounded-lg p-0.5">

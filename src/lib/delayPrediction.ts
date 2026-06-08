@@ -168,72 +168,12 @@ export function predictDelayRisk(task: Task, allTasks: Task[]): {
   return { risk, ratio, predictedDaysOverdue, historicalSampleSize: sampleSize };
 }
 
-/** 批量预测任务的延期风险 */
-export function predictDelayRisks(tasks: Task[]): Map<string, {
-  risk: DelayRisk;
-  ratio: number;
-  predictedDaysOverdue: number;
-}> {
-  const result = new Map<string, { risk: DelayRisk; ratio: number; predictedDaysOverdue: number }>();
-  const activeTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled' && t.startDate && t.dueDate);
-  const records = collectHistory(tasks);
-
-  for (const task of activeTasks) {
-    const rawRatio = getGroupRatio(records, task.leaderId, task.priority);
-    const ratio = Number.isFinite(rawRatio) ? rawRatio : 1;
-    const startTs = new Date(task.startDate!).getTime();
-    const dueTs = new Date(task.dueDate!).getTime();
-    const plannedDays = Math.max(1, Math.round((dueTs - startTs) / DAY_MS) || 1);
-    const predictedActualDays = Math.round(plannedDays * ratio);
-    const predictedDaysOverdue = Math.max(0, predictedActualDays - plannedDays) || 0;
-
-    let risk: DelayRisk;
-    if (predictedDaysOverdue === 0) risk = 'none';
-    else if (predictedDaysOverdue <= 3) risk = 'low';
-    else if (predictedDaysOverdue <= 7) risk = 'medium';
-    else risk = 'high';
-
-    result.set(task.id, { risk, ratio, predictedDaysOverdue });
-  }
-  return result;
-}
-
 /** 获取延期风险的UI颜色 */
-export function getDelayRiskColor(risk: DelayRisk): string {
+function getDelayRiskColor(risk: DelayRisk): string {
   switch (risk) {
     case 'high': return 'text-red-600 bg-red-50 border-red-200';
     case 'medium': return 'text-amber-600 bg-amber-50 border-amber-200';
     case 'low': return 'text-blue-600 bg-blue-50 border-blue-200';
     case 'none': return '';
   }
-}
-
-/** 获取延期风险的中文标签 */
-export function getDelayRiskLabel(risk: DelayRisk): string {
-  switch (risk) {
-    case 'high': return '高延期风险';
-    case 'medium': return '中延期风险';
-    case 'low': return '低延期风险';
-    case 'none': return '';
-  }
-}
-
-/** 获取偏差率库统计（供 KPI Dashboard / 管理面板使用） */
-export function getDelayLibraryStats(): { totalRecords: number; avgRatio: number; topDelayedLeaders: Array<{ leaderId: string; avgRatio: number }> } {
-  const library = loadLibrary();
-  if (library.length === 0) return { totalRecords: 0, avgRatio: 1, topDelayedLeaders: [] };
-  const validRecords = library.filter(r => Number.isFinite(r.ratio));
-  const avgRatio = validRecords.length > 0 ? Math.round(validRecords.reduce((s, r) => s + r.ratio, 0) / validRecords.length * 100) / 100 : 1;
-  const byLeader = new Map<string, number[]>();
-  for (const r of validRecords) {
-    const arr = byLeader.get(r.leaderId) ?? [];
-    arr.push(r.ratio);
-    byLeader.set(r.leaderId, arr);
-  }
-  const leaders = Array.from(byLeader.entries())
-    .map(([leaderId, ratios]) => { const valid = ratios.filter(v => Number.isFinite(v)); return { leaderId, avgRatio: valid.length > 0 ? Math.round(valid.reduce((s, v) => s + v, 0) / valid.length * 100) / 100 : 1 }; })
-    .filter(l => l.avgRatio > 1.1)
-    .sort((a, b) => b.avgRatio - a.avgRatio)
-    .slice(0, 5);
-  return { totalRecords: library.length, avgRatio, topDelayedLeaders: leaders };
 }

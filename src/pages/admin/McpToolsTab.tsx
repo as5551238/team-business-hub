@@ -5,8 +5,8 @@
 import { useState, useMemo } from 'react';
 import { handleError } from '@/lib/errorHandler';
 import { useStore } from '@/store/useStore';
-import { mcpTools, type MCPTool } from '@/lib/mcpServer';
-import { Bot, Play, CheckCircle2, XCircle, Loader2, Terminal, Globe, Route, Zap, Server, Radio } from 'lucide-react';
+import { mcpTools, callMCPTool, type MCPTool } from '@/lib/mcpServer';
+import { Bot, Play, CheckCircle2, XCircle, Loader2, Terminal, Globe, Route, Zap, Server, Radio, AlertTriangle } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 type McpSubTab = 'tools' | 'agents' | 'routes';
@@ -41,14 +41,33 @@ export function McpToolsTab() {
   }, []);
 
   const handleExecute = async (toolName: string) => {
+    const tool = tools.find(t => t.name === toolName);
+    if (!tool) return;
     setExecuting(toolName);
     try {
-      await new Promise(r => setTimeout(r, 500));
+      // Parse param values from strings to correct types based on inputSchema
+      const parsedArgs: Record<string, unknown> = {};
+      const props = (tool.inputSchema?.properties || {}) as Record<string, Record<string, unknown>>;
+      for (const [key, raw] of Object.entries(paramValues)) {
+        if (!raw) continue;
+        const schemaType = props[key]?.type;
+        if (schemaType === 'number') {
+          const num = Number(raw);
+          parsedArgs[key] = isNaN(num) ? raw : num;
+        } else if (schemaType === 'array') {
+          parsedArgs[key] = raw.split(',').map(s => s.trim()).filter(Boolean);
+        } else if (schemaType === 'boolean') {
+          parsedArgs[key] = raw === 'true';
+        } else {
+          parsedArgs[key] = raw;
+        }
+      }
+      const result = await callMCPTool(toolName, parsedArgs);
       setResults(prev => ({
         ...prev,
         [toolName]: {
-          success: true,
-          data: { message: `工具 ${toolName} 执行成功`, params: paramValues, itemCount: Math.floor(Math.random() * 20) + 1 },
+          success: result.success,
+          data: result.success ? result.data : { error: result.error || 'Unknown error' },
           timestamp: new Date().toISOString(),
         },
       }));
@@ -108,6 +127,7 @@ export function McpToolsTab() {
                     <button key={tool.name} type="button" onClick={() => { setSelectedTool(tool.name); setParamValues({}); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/30 transition-colors border-b last:border-0 ${selectedTool === tool.name ? 'bg-primary/5 ring-1 ring-primary/30' : ''}`}>
                       {results[tool.name]?.success ? <CheckCircle2 size={12} className="text-green-500" /> : results[tool.name]?.success === false ? <XCircle size={12} className="text-red-500" /> : <div className="w-3 h-3 rounded-full border border-gray-300" />}
                       <span className="text-xs font-mono flex-1">{tool.name}</span>
+                      {(tool.name.startsWith('create_') || tool.name.startsWith('update_') || tool.name.startsWith('delete_')) && <AlertTriangle size={10} className="text-amber-500 shrink-0" title="写操作" />}
                     </button>
                   ))}
                 </div>
@@ -138,7 +158,11 @@ export function McpToolsTab() {
                           ))}
                         </div>
                       )}
-                      <button onClick={() => handleExecute(selectedTool)} disabled={executing === selectedTool} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-primary text-white hover:bg-primary/90 disabled:opacity-50">
+                      <button onClick={() => {
+                        const isWrite = selectedTool.startsWith('create_') || selectedTool.startsWith('update_') || selectedTool.startsWith('delete_');
+                        if (isWrite && !confirm(`确认执行 ${selectedTool}？此操作将直接修改数据库。`)) return;
+                        handleExecute(selectedTool);
+                      }} disabled={executing === selectedTool} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-primary text-white hover:bg-primary/90 disabled:opacity-50">
                         {executing === selectedTool ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
                         {executing === selectedTool ? '执行中...' : '执行'}
                       </button>

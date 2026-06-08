@@ -25,7 +25,7 @@ const ProjectCard = React.memo(function ProjectCard({ project, members, expanded
   const uniqueTags = [...new Set((project.tags || []))];
 
   return (
-    <div className="bg-card rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md border-border">
+    <div data-item-id={project.id} data-item-type="project" className="bg-card rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md border-border">
       <div className="p-5">
         <div className="flex items-start gap-3 mb-3">
           {batchMode && <div onClick={e => e.stopPropagation()}><input type="checkbox" checked={isSelected} readOnly className="mt-1 rounded cursor-pointer" onClick={() => onToggleSelect(project.id)} /></div>}
@@ -141,7 +141,7 @@ export function ProjectListView({ projects, members, setDetailItem, commentCount
   const listItem = (project: Project) => {
     const leader = (members || []).find(m => m.id === project.leaderId);
     return (
-      <div key={project.id} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover:bg-muted/30 transition-colors group cursor-pointer border-b border-border/50" onClick={() => setDetailItem({ type: 'project', id: project.id })}>
+      <div key={project.id} data-item-id={project.id} data-item-type="project" className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover:bg-muted/30 transition-colors group cursor-pointer border-b border-border/50" onClick={() => setDetailItem({ type: 'project', id: project.id })}>
         {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(project.id)} className="rounded flex-shrink-0" onChange={() => batchProps.onToggleSelect(project.id)} /></span>}
         <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0 bg-orange-100 text-orange-700"><FolderKanban size={12} /></div>
         <span className={`text-[11px] px-1.5 py-0.5 rounded flex-shrink-0 ${statusColors[project.status]}`}>{statusLabels[project.status]}</span>
@@ -274,7 +274,7 @@ export function ProjectTableView({ projects, members, setDetailItem, commentCoun
 const KanbanMiniCard = React.memo(function KanbanMiniCard({ p, members, setDetailItem, commentCounts, batchProps, enableDrag }: { p: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; enableDrag?: boolean }) {
   const leader = (members || []).find(m => m.id === p.leaderId);
   return (
-    <div className="bg-card rounded-lg border border-border p-3 hover:shadow-sm transition-shadow cursor-pointer" draggable={enableDrag} onDragStart={(e: React.DragEvent) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => setDetailItem({ type: 'project', id: p.id })}>
+    <div data-item-id={p.id} data-item-type="project" className="bg-card rounded-lg border border-border p-3 hover:shadow-sm transition-shadow cursor-pointer" draggable={enableDrag} onDragStart={(e: React.DragEvent) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'move'; }} onClick={() => setDetailItem({ type: 'project', id: p.id })}>
       {batchProps.batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(p.id)} className="rounded" onChange={() => batchProps.onToggleSelect(p.id)} /></div>}
       <div className="font-medium text-sm mb-1.5 truncate">{p.title}</div>
       <div className="flex items-center gap-2 mb-2">
@@ -511,6 +511,8 @@ const MatrixQuadrantCard = React.memo(function MatrixQuadrantCard({ project, mem
   }
   return (
     <div
+      data-item-id={project.id}
+      data-item-type="project"
       data-project-id={project.id}
       tabIndex={0}
       role="option"
@@ -693,7 +695,7 @@ export function ProjectTimelineView({ projects, members, setDetailItem, commentC
             {items.map(p => {
               const leader = (members || []).find(m => m.id === p.leaderId);
               return (
-                <div key={p.id} className="bg-card rounded-lg border border-border p-3 hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setDetailItem({ type: 'project', id: p.id })}>
+                <div key={p.id} data-item-id={p.id} data-item-type="project" className="bg-card rounded-lg border border-border p-3 hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setDetailItem({ type: 'project', id: p.id })}>
                   {batchProps.batchMode && <div className="mb-2" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(p.id)} className="rounded" onChange={() => batchProps.onToggleSelect(p.id)} /></div>}
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusColors[p.status]}`}>{statusLabels[p.status]}</span>
@@ -812,7 +814,7 @@ export function ProjectCanvasView({ projects, members, setDetailItem, batchProps
           const y = project.canvasY ?? (Math.floor(index * 220 / 800) * 160) + 40;
           const leader = members.find(m => m.id === project.leaderId);
           return (
-            <div key={project.id} className={`absolute w-48 bg-card rounded-lg border-2 ${statusBorderColors[project.status] || 'border-gray-300'} shadow-md p-3 cursor-move hover:shadow-lg transition-shadow`} style={{ left: x, top: y }} onMouseDown={e => startItemDrag(e, project.id)} onTouchStart={e => startItemDrag(e, project.id)} onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); }}>
+            <div key={project.id} data-item-id={project.id} data-item-type="project" className={`absolute w-48 bg-card rounded-lg border-2 ${statusBorderColors[project.status] || 'border-gray-300'} shadow-md p-3 cursor-move hover:shadow-lg transition-shadow`} style={{ left: x, top: y }} onMouseDown={e => startItemDrag(e, project.id)} onTouchStart={e => startItemDrag(e, project.id)} onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); }}>
               {batchProps.batchMode && <div className="mb-1" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(project.id)} className="rounded" onChange={e => { e.stopPropagation(); batchProps.onToggleSelect(project.id); }} /></div>}
               <div className="flex items-center justify-between mt-1">
                 <span className="text-[10px] text-muted-foreground">{project.progress}%</span>

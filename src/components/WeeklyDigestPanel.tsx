@@ -4,8 +4,8 @@
  */
 import { useState, useMemo, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
-import { generateLocalSummary, generateDeepSummary, type ProgressSummary } from '@/lib/ai/aiSummaryGenerator';
-import { Sparkles, TrendingUp, AlertTriangle, Target, Users, ChevronDown, ChevronUp, RefreshCw, CheckCircle2, Clock, BarChart3 } from 'lucide-react';
+import { generateLocalSummary, generateDeepSummary } from '@/lib/ai/aiSummaryGenerator';
+import { Sparkles, TrendingUp, AlertTriangle, Target, Users, ChevronDown, ChevronUp, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function WeeklyDigestPanel() {
@@ -14,7 +14,7 @@ export function WeeklyDigestPanel() {
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(true);
 
-  const summary = useMemo(() => generateLocalSummary(state, 'weekly'), [state]);
+  const rawSummary = useMemo(() => generateLocalSummary(state, 'weekly'), [state]);
 
   const handleDeepSummary = useCallback(async () => {
     if (loading) return;
@@ -26,6 +26,19 @@ export function WeeklyDigestPanel() {
       setLoading(false);
     }
   }, [state, loading]);
+
+  // 防御性处理：确保所有渲染字段为字符串，避免 React Error #130
+  const summary = useMemo(() => ({
+    headline: rawSummary.headline ?? '',
+    keyChanges: (rawSummary.keyChanges ?? []).map(c => c ?? ''),
+    focusItems: (rawSummary.focusItems ?? []).map(f => ({
+      title: f.title ?? '',
+      type: (f.type === 'goal' || f.type === 'project' || f.type === 'task') ? f.type : 'task' as const,
+      reason: f.reason ?? '',
+    })),
+    riskAlerts: (rawSummary.riskAlerts ?? []).map(r => r ?? ''),
+    memberHighlights: (rawSummary.memberHighlights ?? []).map(m => m ?? ''),
+  }), [rawSummary]);
 
   const completedCount = summary.keyChanges.find(c => c.includes('完成'))?.match(/(\d+)/)?.[1] || '0';
   const hasRisk = summary.riskAlerts.length > 0;

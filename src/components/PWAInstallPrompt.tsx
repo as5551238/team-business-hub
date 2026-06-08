@@ -132,24 +132,5 @@ export function PWAInstallPrompt() {
       </div>
     </div>
   );
-}
 
-/** PWA Update Prompt — shown when new service worker is available */
-export function PWAUpdatePrompt({ onUpdate }: { onUpdate: () => void }) {
-  return (
-    <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
-      <div className="bg-card border border-primary/20 rounded-xl shadow-lg p-4 flex items-center gap-3 max-w-xs">
-        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-          <Download size={16} className="text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium">新版本可用</p>
-          <p className="text-xs text-muted-foreground">刷新以获取最新功能</p>
-        </div>
-        <button onClick={onUpdate} className="px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
-          更新
-        </button>
-      </div>
-    </div>
-  );
 }

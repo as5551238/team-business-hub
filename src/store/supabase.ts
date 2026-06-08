@@ -2,7 +2,7 @@ import { handleError } from '@/lib/errorHandler';
 import type { AppState, Goal, Project, Task, Member, SubTask } from '@/types';
 import { getSupabaseClient } from '@/supabase/client';
 import { STORAGE_KEY, CURRENT_USER_KEY, ensureAppStateDefaults, toCamel, toSnake } from './types';
-import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge, NotificationPreference, OKRSeason, Budget, CostEntry, PerformanceReview, EffectivenessMetric, AISuggestion, Subscription } from '@/types';
+import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge, NotificationPreference, OKRSeason, Budget, CostEntry, PerformanceReview, EffectivenessMetric, AISuggestion, Subscription, InstalledAgent } from '@/types';
 import { initFactoryRulesIfNeeded } from './shared';
 
 export function saveLocalStateImmediate(state: AppState) {
@@ -74,7 +74,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
   if (!sb) return null;
   const tid = teamId || _currentTeamId || '__default__';
   try {
-    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes, notifPrefsRes, seasonsRes, budgetsRes, costEntriesRes, perfReviewsRes, effMetricsRes, aiSuggRes, subscriptionsRes] = await Promise.allSettled([
+    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes, notifPrefsRes, seasonsRes, budgetsRes, costEntriesRes, perfReviewsRes, effMetricsRes, aiSuggRes, subscriptionsRes, installedAgentsRes] = await Promise.allSettled([
       sb.from('members').select('*').eq('status', 'active').order('join_date'),
       sb.from('goals').select('*').eq('team_id', tid).order('level'),
       sb.from('projects').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
@@ -105,6 +105,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       sb.from('effectiveness_metrics').select('*').eq('team_id', tid).order('measured_at', { ascending: false }),
       sb.from('ai_suggestions').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
       sb.from('subscriptions').select('*').order('created_at', { ascending: false }),
+      sb.from('installed_agents').select('*').eq('team_id', tid).order('installed_at', { ascending: false }),
     ]);
     const val = (r: PromiseSettledResult<unknown>) => r.status === 'fulfilled' ? r.value : null;
     const data = (r: { data?: unknown } | null) => Array.isArray(r?.data) ? r.data : [];
@@ -159,6 +160,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       effectivenessMetrics: data(val(effMetricsRes)).map(toCamel) as EffectivenessMetric[],
       aiSuggestions: data(val(aiSuggRes)).map(toCamel) as AISuggestion[],
       subscriptions: data(val(subscriptionsRes)).map(toCamel) as Subscription[],
+      installedAgents: data(val(installedAgentsRes)).map(toCamel) as InstalledAgent[],
       teams: data(val(teamsRes)).map(toCamel),
       teamMembers: teamMemberLinks,
       currentTeamId: tid,
@@ -310,7 +312,7 @@ export async function replayFailedWrites(): Promise<void> {
 const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   goals: new Set(['id','title','description','type','status','parent_id','level','start_date','end_date','owner_id','key_results','progress','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','selected_kr_ids','team_id','deleted_at','season_id','strategy_level','approval_status']),
   projects: new Set(['id','title','description','goal_id','status','start_date','end_date','owner_id','member_ids','task_count','progress','created_at','updated_at','leader_id','supporter_ids','parent_id','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','team_id','deleted_at']),
-  tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','start_date','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','blocked_by','sprint_id','team_id','deleted_at']),
+  tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','start_date','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','blocked_by','sprint_id','story_points','team_id','deleted_at']),
   members: new Set(['id','name','role','department','avatar','email','status','join_date','created_at','updated_at','nickname','phone','wechat_id','permissions','team_id']),
   notifications: new Set(['id','type','title','message','related_id','related_type','member_id','read','created_at','team_id','level']),
   notification_preferences: new Set(['id','member_id','item_id','item_type','muted','created_at','team_id']),
@@ -343,6 +345,7 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   dste_phases: new Set(['id','season_id','phase','status','ai_auto_progress','completed_at','checklist','team_id']),
   business_values: new Set(['id','goal_id','input_cost','output_value','roi','value_stream','measured_at','team_id']),
   subscriptions: new Set(['id','team_id','tier','status','stripe_customer_id','stripe_subscription_id','current_period_start','current_period_end','trial_ends_at','created_at','updated_at']),
+  installed_agents: new Set(['id','agent_id','team_id','member_id','installed_at']),
 };
 
 /** Columns that reference other tables via FK — empty strings must become null */

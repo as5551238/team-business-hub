@@ -171,56 +171,6 @@ export function predictOKRAchievement(goal: Goal): PredictionResult {
   };
 }
 
-// ===== 风险前置预警 — 综合所有维度 =====
-
-export function generateRiskRadar(
-  allTasks: Task[],
-  members: Member[],
-  goals: Goal[],
-  projectId?: string,
-): RiskRadar {
-  const predictions: PredictionResult[] = [];
-
-  // 延期维度：取所有 in_progress 任务中风险最高的5个
-  const activeTasks = allTasks.filter(t => t.status === 'in_progress' && (!projectId || t.projectId === projectId));
-  const delayPredictions = activeTasks.slice(0, 10).map(t => predictDelayEnhanced(t, allTasks));
-  predictions.push(...delayPredictions);
-
-  // 资源维度
-  predictions.push(predictResourceBottleneck(allTasks, members));
-
-  // OKR维度
-  const activeGoals = goals.filter(g => g.status === 'in_progress' || g.status === 'todo');
-  for (const g of activeGoals.slice(0, 5)) {
-    predictions.push(predictOKRAchievement(g));
-  }
-
-  // 计算各维度分数
-  const delayScores = delayPredictions.map(p => p.score);
-  const resourceScore = predictions.find(p => p.type === 'resource')?.score || 0;
-  const okrScores = predictions.filter(p => p.type === 'okr').map(p => p.score);
-
-  const validDelayScores = delayScores.filter(s => Number.isFinite(s));
-  const validOkrScores = okrScores.filter(s => Number.isFinite(s));
-
-  const delayDim = validDelayScores.length > 0 ? Math.round(validDelayScores.reduce((a, b) => a + b, 0) / validDelayScores.length) || 0 : 0;
-  const safeResourceScore = Number.isFinite(resourceScore) ? resourceScore : 0;
-  const okrDim = validOkrScores.length > 0 ? Math.round(validOkrScores.reduce((a, b) => a + b, 0) / validOkrScores.length) || 0 : 0;
-
-  // 综合风险：加权平均（延期40% + 资源30% + OKR30%）
-  const riskDim = Math.round(delayDim * 0.4 + safeResourceScore * 0.3 + okrDim * 0.3) || 0;
-  const overall = Math.round(delayDim * 0.35 + safeResourceScore * 0.25 + okrDim * 0.2 + riskDim * 0.2) || 0;
-
-  // 生成告警
-  const alerts: Array<{ level: string; message: string; action: string }> = [];
-  if (delayDim >= 50) alerts.push({ level: 'high', message: `${delayPredictions.filter(p => p.level === 'high' || p.level === 'critical').length}个任务延期风险高`, action: '查看延期预测详情，调整截止日或分配' });
-  if (safeResourceScore >= 50) alerts.push({ level: 'medium', message: '团队资源紧张', action: '重新分配任务或增派人手' });
-  if (okrDim >= 40) alerts.push({ level: 'medium', message: `${validOkrScores.filter(s => s >= 40).length}个目标达成风险`, action: '审视KR进度，加速滞后项' });
-  if (riskDim >= 60) alerts.push({ level: 'critical', message: '项目整体风险较高', action: '立即执行风险缓解计划' });
-
-  return { overall, dimensions: { delay: delayDim, resource: resourceScore, okr: okrDim, risk: riskDim }, alerts, predictions };
-}
-
 // ===== V2 增强功能 =====
 
 /** 进度感知延期预测 — 综合当前进度%">

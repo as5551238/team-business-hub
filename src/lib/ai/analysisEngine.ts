@@ -221,20 +221,6 @@ export function detectRisks(snap: PeriodSnapshot): RiskItem[] {
 
 // ===== 效率指标 =====
 
-export function computeEfficiency(snap: PeriodSnapshot): EfficiencyMetrics {
-  const t = snap.tasks;
-  const total = t.active + t.done;
-  const completionRate = total > 0 ? Math.round(t.done / total * 100) : 0;
-  const overloadedMembers = snap.members.filter(m => m.overdueTasks > 0);
-  const trend: EfficiencyMetrics['trend'] = t.completedInPeriod >= t.newInPeriod ? (t.completedInPeriod > t.newInPeriod ? 'up' : 'stable') : 'down';
-  return {
-    completionRate, onTimeRate: t.onTimeRate,
-    avgCompletionDays: t.avgCompletionDays ?? 0,
-    activeGoals: snap.goals.active, activeProjects: snap.projects.active, activeTasks: t.active,
-    completedTasksInPeriod: t.completedInPeriod, newTasksInPeriod: t.newInPeriod,
-    blockedTasks: t.blockedByCount, overdueTasks: t.overdue, trend,
-  };
-}
 
 // ===== 成员级分析 =====
 
@@ -288,14 +274,6 @@ function computeMemberEfficiency(m: PeriodSnapshot['members'][0]): EfficiencyMet
   };
 }
 
-export function computeMemberAnalysis(snap: PeriodSnapshot): MemberAnalysis[] {
-  return snap.members.map(m => ({
-    memberId: m.id, memberName: m.name, role: m.role,
-    health: computeMemberHealth(m),
-    risks: computeMemberRisks(m, snap),
-    efficiency: computeMemberEfficiency(m),
-  }));
-}
 
 // ===== 团队完整分析 =====
 

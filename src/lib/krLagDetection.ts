@@ -72,15 +72,4 @@ export function detectKrLags(goals: Goal[]): KrLagAlert[] {
   return alerts.sort((a, b) => b.lagPercent - a.lagPercent);
 }
 
-/**
- * Get lag summary for dashboard display
- */
-export function getLagSummary(goals: Goal[]): { total: number; critical: number; warning: number; topAlerts: KrLagAlert[] } {
-  const alerts = detectKrLags(goals);
-  return {
-    total: alerts.length,
-    critical: alerts.filter(a => a.severity === 'critical').length,
-    warning: alerts.filter(a => a.severity === 'warning').length,
-    topAlerts: alerts.slice(0, 5),
-  };
-}
+

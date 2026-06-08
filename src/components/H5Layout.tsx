@@ -256,13 +256,21 @@ function H5DetailSheet({ item, state, dispatch, onClose }: {
   dispatch: React.Dispatch<any>;
   onClose: () => void;
 }) {
-  const statusFlow: Record<string, string[]> = {
-    todo: ['in_progress'],
-    in_progress: ['done', 'blocked'],
-    blocked: ['in_progress'],
-    done: ['todo'],
-  };
-  const statusLabels: Record<string, string> = { todo: '待处理', in_progress: '进行中', done: '已完成', blocked: '阻塞' };
+  // Dynamic status flow from statusFlowRules
+  const statusFlow: Record<string, string[]> = {};
+  const statusLabels: Record<string, string> = { todo: '待处理', in_progress: '进行中', done: '已完成', blocked: '阻塞', cancelled: '已取消' };
+  for (const rule of (state.statusFlowRules || [])) {
+    if (rule.itemType !== item.type || rule.enabled === false) continue;
+    if (!statusFlow[rule.fromStatus]) statusFlow[rule.fromStatus] = [];
+    if (!statusFlow[rule.fromStatus].includes(rule.toStatus)) statusFlow[rule.fromStatus].push(rule.toStatus);
+  }
+  // Fallback if no rules defined
+  if (Object.keys(statusFlow).length === 0) {
+    statusFlow.todo = ['in_progress'];
+    statusFlow.in_progress = ['done', 'blocked'];
+    statusFlow.blocked = ['in_progress'];
+    statusFlow.done = ['todo'];
+  }
 
   if (item.type === 'task') {
     const task = state.tasks.find((t: TaskType) => t.id === item.id);

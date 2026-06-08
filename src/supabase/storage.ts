@@ -27,6 +27,7 @@ export async function uploadFile(
   bucket: string,
   path: string,
   file: File,
+  onProgress?: (percent: number) => void,
 ): Promise<string | null> {
   const supabase = getSupabaseClient();
   if (!supabase) {
@@ -42,17 +43,37 @@ export async function uploadFile(
     return null;
   }
   const safePath = path.split('/').map((segment, i) => i === path.split('/').length - 1 ? sanitizeFilename(segment) : segment).join('/');
+
+  // Simulated progress: ramp 0→90% over expected duration, then jump to 100% on completion
+  let progressTimer: ReturnType<typeof setInterval> | null = null;
+  let currentProgress = 0;
+  if (onProgress) {
+    const estimatedMs = Math.max(2000, file.size / 50000); // rough: 50KB/s
+    const stepMs = 200;
+    const increment = 90 / (estimatedMs / stepMs);
+    progressTimer = setInterval(() => {
+      currentProgress = Math.min(90, currentProgress + increment);
+      onProgress(Math.round(currentProgress));
+    }, stepMs);
+    onProgress(0);
+  }
+
   try {
     const { error } = await supabase.storage
       .from(bucket)
       .upload(safePath, file, { cacheControl: '3600', upsert: true });
+    if (progressTimer) clearInterval(progressTimer);
     if (error) {
       console.error('Upload failed:', error.message);
+      onProgress?.(0);
       return null;
     }
+    onProgress?.(100);
     const { data } = supabase.storage.from(bucket).getPublicUrl(safePath);
     return data.publicUrl;
   } catch (e: unknown) {
+    if (progressTimer) clearInterval(progressTimer);
+    onProgress?.(0);
     console.error('Upload error:', e);
     return null;
   }

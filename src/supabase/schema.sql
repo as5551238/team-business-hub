@@ -202,6 +202,7 @@ create table if not exists tasks (
   attachments jsonb default '[]'::jsonb,
   blocked_by jsonb default '[]'::jsonb,
   sprint_id text,
+  story_points integer default 0,
   team_id text not null,
   deleted_at timestamptz
 );
@@ -1440,6 +1441,24 @@ create trigger trg_subscriptions_updated_at
   before update on subscriptions
   for each row execute function subscriptions_updated_at();
 
+-- ==================== installed_agents — Agent安装记录 ====================
+
+create table if not exists installed_agents (
+  id text primary key default gen_random_uuid()::text,
+  agent_id text not null,
+  team_id text not null,
+  member_id text not null,
+  installed_at timestamptz default now(),
+  unique(agent_id, team_id, member_id)
+);
+
+create index idx_installed_agents_team on installed_agents(team_id);
+
+alter table installed_agents enable row level security;
+create policy "IA: team members can read own" on installed_agents for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "IA: team members can insert" on installed_agents for insert with check (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "IA: admin can delete" on installed_agents for delete using (team_id = app_current_team_id() and is_team_admin(team_id));
+
 -- ==================== get_team_tier() — 供 RLS 和 RPC 使用 ====================
 
 create or replace function get_team_tier(p_team_id text)
@@ -1532,3 +1551,66 @@ begin
   return jsonb_build_object('allowed', v_allowed, 'count', v_count + case when v_allowed then 1 else 0 end, 'limit', p_limit);
 end;
 $$ language plpgsql security definer;
+
+-- ==================== team_settings — 团队级配置KV存储 ====================
+
+create table if not exists team_settings (
+  id text primary key default gen_random_uuid()::text,
+  team_id text not null,
+  key text not null,
+  value jsonb not null default '{}',
+  updated_at timestamptz default now(),
+  unique(team_id, key)
+);
+
+create index idx_team_settings_team on team_settings(team_id);
+
+alter table team_settings enable row level security;
+create policy "TS: team members can read" on team_settings for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "TS: admin can manage" on team_settings for all using (team_id = app_current_team_id() and is_team_admin(team_id));
+
+-- ==================== oauth_tokens — OAuth令牌安全存储 ====================
+
+create table if not exists oauth_tokens (
+  id text primary key default gen_random_uuid()::text,
+  team_id text not null,
+  member_id text not null,
+  provider text not null,
+  access_token text not null,
+  refresh_token text,
+  expires_at timestamptz,
+  scope text,
+  connected_email text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(team_id, member_id, provider)
+);
+
+create index idx_oauth_tokens_team_member on oauth_tokens(team_id, member_id);
+
+alter table oauth_tokens enable row level security;
+create policy "OT: owner can read" on oauth_tokens for select using (team_id = app_current_team_id() and member_id = app_current_user_id());
+create policy "OT: owner can insert" on oauth_tokens for insert with check (team_id = app_current_team_id() and member_id = app_current_user_id());
+create policy "OT: owner can update" on oauth_tokens for update using (team_id = app_current_team_id() and member_id = app_current_user_id());
+create policy "OT: owner can delete" on oauth_tokens for delete using (team_id = app_current_team_id() and member_id = app_current_user_id());
+
+-- ==================== api_tokens — REST API令牌安全存储 ====================
+
+create table if not exists api_tokens (
+  id text primary key default gen_random_uuid()::text,
+  team_id text not null,
+  name text not null,
+  token_hash text not null,
+  token_prefix text not null,
+  permissions jsonb not null default '[]',
+  created_at timestamptz default now(),
+  created_by text,
+  last_used_at timestamptz
+);
+
+create index idx_api_tokens_team on api_tokens(team_id);
+create index idx_api_tokens_hash on api_tokens(token_hash);
+
+alter table api_tokens enable row level security;
+create policy "AT: team members can read" on api_tokens for select using (team_id = app_current_team_id() and is_team_member(team_id));
+create policy "AT: admin can manage" on api_tokens for all using (team_id = app_current_team_id() and is_team_admin(team_id));

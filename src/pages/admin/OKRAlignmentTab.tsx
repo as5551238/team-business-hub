@@ -1,19 +1,21 @@
 /**
  * OKR 对齐视图 — 增强版
  *
- * Round 7 — 目标管理深度 +1
  * - 贝塞尔曲线连线（替代直线）
  * - 点击节点可跳转详情
  * - 子目标级联进度穿透
  * - KR 详情展示
  * - 缩放控制
  * - V2-1 对齐健康度可视化（连线着色 + 健康徽章 + 告警推送）
+ * - V2-2 赛季/战略层级过滤（OKRSeasonSelector集成）
+ * - V2-3 统计面板：总目标数/完成率/对齐健康度分布
  */
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useStore } from '@/store/useStore';
-import type { Goal, KeyResult } from '@/types';
-import { ZoomIn, ZoomOut, Maximize2, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
+import type { Goal, KeyResult, SeasonType } from '@/types';
+import { ZoomIn, ZoomOut, Maximize2, ChevronRight, ChevronDown, AlertTriangle, Filter, BarChart3 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SimpleSelect } from '@/components/ui/simple-select';
 import { dispatchAiPushEvent } from '@/lib/pushEventEngine';
 import { useAppNavigate } from '@/lib/routes';
 import { resolveToken } from '@/lib/resolveToken';
@@ -57,31 +59,75 @@ export function OKRAlignmentView() {
   const { goToItem } = useAppNavigate();
   const [zoom, setZoom] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [seasonFilter, setSeasonFilter] = useState<string>('__ALL__');
+  const [levelFilter, setLevelFilter] = useState<string>('__ALL__');
+
+  // Season filter: only show goals matching selected season
+  const filteredGoals = useMemo(() => {
+    let goals = state.goals;
+    if (seasonFilter !== '__ALL__') {
+      goals = goals.filter(g => g.seasonId === seasonFilter);
+    }
+    if (levelFilter !== '__ALL__') {
+      goals = goals.filter(g => g.strategyLevel === levelFilter);
+    }
+    return goals;
+  }, [state.goals, seasonFilter, levelFilter]);
+
+  // Season options from store
+  const seasonOptions = useMemo(() => {
+    const seasons = state.seasons || [];
+    return [
+      { value: '__ALL__', label: '全部赛季' },
+      ...seasons.filter(s => s.status !== 'closed').map(s => ({ value: s.id, label: s.name })),
+    ];
+  }, [state.seasons]);
+
+  const levelOptions = useMemo(() => [
+    { value: '__ALL__', label: '全部层级' },
+    { value: 'vision', label: '愿景' },
+    { value: 'annual', label: '年度' },
+    { value: 'quarter', label: '季度' },
+  ], []);
+
+  // Alignment stats summary
+  const alignmentStats = useMemo(() => {
+    const total = filteredGoals.length;
+    const done = filteredGoals.filter(g => g.status === 'done').length;
+    const completionRate = total > 0 ? Math.round(done / total * 100) : 0;
+    const healthCounts = { green: 0, yellow: 0, red: 0 };
+    for (const g of filteredGoals) {
+      const children = filteredGoals.filter(c => c.parentId === g.id);
+      if (children.length > 0) {
+        const h = calcAlignmentHealth(g, children);
+        if (h) healthCounts[h.color]++;
+      }
+    }
+    return { total, done, completionRate, healthCounts };
+  }, [filteredGoals]);
 
   const tree = useMemo(() => {
-    const goals = state.goals;
-    const roots = goals.filter(g => !g.parentId);
+    const roots = filteredGoals.filter(g => !g.parentId);
     function build(g: Goal, visited = new Set<string>()): TreeNode {
       if (visited.has(g.id)) return { goal: g, children: [], x: 0, y: 0 };
       visited.add(g.id);
-      const children = goals.filter(c => c.parentId === g.id).map(c => build(c, new Set(visited)));
+      const children = filteredGoals.filter(c => c.parentId === g.id).map(c => build(c, new Set(visited)));
       return { goal: g, children, x: 0, y: 0 };
     }
     return roots.map(r => build(r));
-  }, [state.goals]);
+  }, [filteredGoals]);
 
   const healthMap = useMemo(() => {
     const map = new Map<string, HealthInfo>();
-    const goals = state.goals;
-    for (const g of goals) {
-      const children = goals.filter(c => c.parentId === g.id);
+    for (const g of filteredGoals) {
+      const children = filteredGoals.filter(c => c.parentId === g.id);
       if (children.length > 0) {
         const h = calcAlignmentHealth(g, children);
         if (h) map.set(g.id, h);
       }
     }
     return map;
-  }, [state.goals]);
+  }, [filteredGoals]);
 
   const layoutNodes = useMemo(() => {
     const nodes: { id: string; title: string; status: string; progress: number; leaderId: string; x: number; y: number; width: number; height: number; krCount: number; type: string; health: HealthInfo | null }[] = [];
@@ -131,7 +177,7 @@ export function OKRAlignmentView() {
       startX += calcWidth(root) + H_GAP * 2;
     }
     return { nodes, edges };
-  }, [tree, state.members]);
+  }, [tree]);
 
   const handleNodeClick = useCallback((id: string) => {
     setSelectedId(prev => prev === id ? null : id);
@@ -162,6 +208,15 @@ export function OKRAlignmentView() {
     return <div className="p-8 text-center text-muted-foreground text-sm">暂无目标数据，创建第一个目标后即可查看对齐关系</div>;
   }
 
+  if (filteredGoals.length === 0) {
+    return (
+      <div className="space-y-4">
+        <OKRFilterBar seasonFilter={seasonFilter} setSeasonFilter={setSeasonFilter} seasonOptions={seasonOptions} levelFilter={levelFilter} setLevelFilter={setLevelFilter} levelOptions={levelOptions} />
+        <div className="p-8 text-center text-muted-foreground text-sm">当前筛选条件下无目标数据，请调整筛选条件</div>
+      </div>
+    );
+  }
+
   const maxX = Math.max(...layoutNodes.nodes.map(n => n.x + n.width), 400);
   const maxY = Math.max(...layoutNodes.nodes.map(n => n.y + n.height), 300);
 
@@ -170,10 +225,11 @@ export function OKRAlignmentView() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      {/* Filter bar + zoom */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
           <h3 className="font-semibold text-sm">OKR 对齐视图</h3>
-          <EmptyState title="展示目标层级对齐关系与级联进度穿透，点击节点跳转详情" compact />
+          <OKRFilterBar seasonFilter={seasonFilter} setSeasonFilter={setSeasonFilter} seasonOptions={seasonOptions} levelFilter={levelFilter} setLevelFilter={setLevelFilter} levelOptions={levelOptions} />
         </div>
         <div className="flex items-center gap-1">
           <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} className="p-1.5 hover:bg-muted rounded" aria-label="缩小"><ZoomOut size={14} /></button>
@@ -181,6 +237,15 @@ export function OKRAlignmentView() {
           <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="p-1.5 hover:bg-muted rounded" aria-label="放大"><ZoomIn size={14} /></button>
           <button onClick={() => setZoom(1)} className="p-1.5 hover:bg-muted rounded" aria-label="重置缩放"><Maximize2 size={14} /></button>
         </div>
+      </div>
+
+      {/* Stats summary */}
+      <div className="flex items-center gap-4 text-xs">
+        <div className="flex items-center gap-1"><BarChart3 size={12} className="text-primary" /><span className="text-muted-foreground">目标</span><span className="font-semibold">{alignmentStats.total}</span></div>
+        <div className="flex items-center gap-1"><span className="text-muted-foreground">完成率</span><span className="font-semibold text-green-600">{alignmentStats.completionRate}%</span></div>
+        {alignmentStats.healthCounts.green > 0 && <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /><span className="text-muted-foreground">健康</span><span className="font-semibold">{alignmentStats.healthCounts.green}</span></div>}
+        {alignmentStats.healthCounts.yellow > 0 && <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /><span className="text-muted-foreground">注意</span><span className="font-semibold">{alignmentStats.healthCounts.yellow}</span></div>}
+        {alignmentStats.healthCounts.red > 0 && <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /><span className="text-muted-foreground">告警</span><span className="font-semibold text-red-600">{alignmentStats.healthCounts.red}</span></div>}
       </div>
 
       <div className="flex gap-4">
@@ -286,10 +351,10 @@ export function OKRAlignmentView() {
               </div>
             )}
             {/* 子目标 */}
-            {state.goals.filter(g => g.parentId === selectedGoal.id).length > 0 && (
+            {filteredGoals.filter(g => g.parentId === selectedGoal.id).length > 0 && (
               <div className="space-y-1">
                 <div className="text-[10px] font-semibold text-muted-foreground">子目标</div>
-                {state.goals.filter(g => g.parentId === selectedGoal.id).map(g => (
+                {filteredGoals.filter(g => g.parentId === selectedGoal.id).map(g => (
                   <button key={g.id} className="w-full flex items-center gap-1.5 text-[11px] px-2 py-1 rounded hover:bg-muted text-left" onClick={() => handleNodeClick(g.id)}>
                     <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[g.status] }} />
                     <span className="truncate flex-1">{g.title}</span>
@@ -301,6 +366,27 @@ export function OKRAlignmentView() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── OKR Filter Bar ─────────────────────────
+
+interface OKRFilterBarProps {
+  seasonFilter: string;
+  setSeasonFilter: (v: string) => void;
+  seasonOptions: { value: string; label: string }[];
+  levelFilter: string;
+  setLevelFilter: (v: string) => void;
+  levelOptions: { value: string; label: string }[];
+}
+
+function OKRFilterBar({ seasonFilter, setSeasonFilter, seasonOptions, levelFilter, setLevelFilter, levelOptions }: OKRFilterBarProps) {
+  return (
+    <div className="flex items-center gap-2">
+      <Filter size={12} className="text-muted-foreground" />
+      <SimpleSelect value={seasonFilter} onValueChange={setSeasonFilter} options={seasonOptions} className="h-7 text-xs w-28" />
+      <SimpleSelect value={levelFilter} onValueChange={setLevelFilter} options={levelOptions} className="h-7 text-xs w-24" />
     </div>
   );
 }

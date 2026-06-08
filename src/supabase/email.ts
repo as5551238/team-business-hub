@@ -4,7 +4,7 @@
 // 前端仅存储配置 + 格式化邮件内容
 
 import { getSupabaseClient } from './client';
-import { loadEmailConfig, type EmailConfig } from '@/pages/admin/constants';
+import { loadEmailConfig, loadEmailConfigSync, type EmailConfig } from '@/pages/admin/constants';
 import { handleError } from '@/lib/errorHandler';
 
 function escapeHtml(s: string): string {
@@ -14,13 +14,13 @@ function escapeHtml(s: string): string {
 const EMAIL_LAST_ERROR_KEY = 'tbh-email-last-error';
 
 export function isEmailEnabled(): boolean {
-  const config = loadEmailConfig();
+  const config = loadEmailConfigSync();
   return config.enabled && !!config.resendApiKey && !!config.fromEmail;
 }
 
 // 通过 Supabase RPC send_email 发送邮件（数据库端调用 Resend API）
 async function sendEmailRpc(to: string, subject: string, htmlBody: string): Promise<boolean> {
-  const config = loadEmailConfig();
+  const config = await loadEmailConfig();
   if (!config.enabled || !config.resendApiKey || !config.fromEmail) {
     throw new Error('邮件未启用或配置不完整');
   }

@@ -9,6 +9,7 @@
 
 import { getSupabaseClient } from '@/supabase/client';
 import { handleError } from '@/lib/errorHandler';
+import { saveSettingDualWrite } from '@/supabase/teamSettings';
 
 // ===== 类型定义 =====
 
@@ -48,7 +49,7 @@ export function getPushConfigs(): PushConfig[] {
 }
 
 export function savePushConfigs(configs: PushConfig[]) {
-  localStorage.setItem(PUSH_CONFIG_KEY, JSON.stringify(configs));
+  localStorage.setItem(PUSH_CONFIG_KEY, JSON.stringify(configs)); { const _tid = localStorage.getItem('tbh-current-team') || ''; if (_tid) saveSettingDualWrite('push_configs', PUSH_CONFIG_KEY, configs, _tid); }
 }
 
 export function getPushConfig(channel: PushChannel): PushConfig | undefined {
@@ -175,13 +176,6 @@ export async function pushNotification(msg: PushMessage, channels?: PushChannel[
 }
 
 // ===== Zapier/n8n 连接器 Webhook =====
-
-/** 生成 Zapier/n8n 兼容的 Webhook 端点 URL */
-export function getZapierWebhookUrl(baseUrl: string): string {
-  return `${baseUrl}/api/webhooks/zapier`;
-}
-
-/** Zapier/n8n 触发器 — 当事项变更时推送 */
 export async function triggerZapierWebhook(event: {
   type: 'task.created' | 'task.updated' | 'task.completed' | 'goal.created' | 'goal.updated' | 'goal.completed';
   data: Record<string, any>;

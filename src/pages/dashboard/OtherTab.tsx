@@ -14,14 +14,6 @@ import type { DashboardTabProps } from './shared';
 
 // ── 书签本地常量 ──
 const DEFAULT_CATEGORIES = ['全部', '工作', '学习', '工具', '参考'];
-const BOOKMARK_LS_KEY = 'tbh-bookmarks-list';
-
-function loadBookmarksFromLS(): BookmarkType[] {
-  try { const r = localStorage.getItem(BOOKMARK_LS_KEY); return r ? JSON.parse(r) : []; } catch (e) { handleError(e, { module: 'OtherTab', operation: 'LOAD_BOOKMARKS', severity: 'debug' }); return []; }
-}
-function saveBookmarksToLS(bms: BookmarkType[]) {
-  try { localStorage.setItem(BOOKMARK_LS_KEY, JSON.stringify(bms)); } catch (e) { handleError(e, { module: 'OtherTab', operation: 'SAVE_BOOKMARKS', severity: 'debug' }); }
-}
 
 // ── 书签 Widget ──
 function BookmarksWidget() {
@@ -48,18 +40,7 @@ function BookmarksWidget() {
     return list;
   }, [bookmarks, activeCat, searchText]);
 
-  const [synced, setSynced] = useState(false);
-  useEffect(() => {
-    if (synced) return;
-    if (bookmarks.length === 0) {
-      const ls = loadBookmarksFromLS();
-      if (ls.length > 0) { reorderBookmarks(ls); setSynced(true); }
-      else { setSynced(true); }
-    } else {
-      saveBookmarksToLS(bookmarks);
-      setSynced(true);
-    }
-  }, [bookmarks, reorderBookmarks, synced]);
+  // Bookmarks now fully managed by Store + Supabase; localStorage split-brain removed (DR-19)
 
   function handleSave() {
     if (!formTitle.trim() || !formUrl.trim()) return;

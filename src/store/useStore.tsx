@@ -191,9 +191,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const config: SupabaseConfig = JSON.parse(configStr);
         if (config.url && config.anonKey) doConnect(config.url, config.anonKey);
       } else {
-        const defaultUrl = 'https://atexvoyvnnuaonvrgzhn.supabase.co';
-        const defaultKey = 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie';
-        doConnect(defaultUrl, defaultKey);
+        const defaultUrl = import.meta.env.VITE_SUPABASE_URL || '';
+        const defaultKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+        if (defaultUrl && defaultKey) doConnect(defaultUrl, defaultKey);
       }
     } catch (e) {
       handleError(e, { module: 'store', operation: 'LOAD_SUPABASE_CONFIG', severity: 'debug' });

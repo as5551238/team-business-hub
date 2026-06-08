@@ -255,8 +255,8 @@ export function useCPM(tasks: Array<{ id: string; startDate: string | null; dueD
 }
 
 export function renderDependencyLines(opts: {
-  task: { id: string; startDate: string | null; dueDate: string | null; blockedBy: string[] };
-  allTasks: Array<{ id: string; startDate: string | null; dueDate: string | null; blockedBy: string[] }>;
+  task: { id: string; startDate: string | null; dueDate: string | null; blockedBy: string[]; status?: string; title?: string };
+  allTasks: Array<{ id: string; startDate: string | null; dueDate: string | null; blockedBy: string[]; status?: string; title?: string }>;
   taskIndexMap: Map<string, number>;
   timeRange: { start: number };
   dayWidth: number;
@@ -274,19 +274,56 @@ export function renderDependencyLines(opts: {
     if (depIdx === undefined) continue;
     const depTask = allTasks[depIdx];
     const depEndTs = parseDate(depTask.dueDate) || parseDate(depTask.startDate) || timeRange.start;
-    const depStartTs = parseDate(depTask.startDate) || parseDate(depTask.dueDate) || timeRange.start;
     const lineEndX = ((depEndTs - timeRange.start) / DAY_MS) * dayWidth + dayWidth;
     const fromX = lineEndX;
     const toX = lineStartX;
     const fromY = depIdx < currentIdx ? rowHeight : 0;
     const toY = rowHeight / 2;
     const isBothCritical = cpmResult && cpmResult.criticalTaskIds.has(bid) && cpmResult.criticalTaskIds.has(task.id);
-    const strokeColor = isBothCritical ? resolveToken('destructive') : resolveToken('warning');
-    const strokeWidth = isBothCritical ? 2 : 1.5;
+    // Status-aware coloring: blocker done = green, blocker blocked = amber-red, else default
+    const blockerDone = depTask.status === 'done';
+    const blockerBlocked = depTask.status === 'blocked';
+    let strokeColor: string;
+    let strokeWidth: number;
+    let strokeDasharray: string;
+    if (blockerDone) {
+      strokeColor = resolveToken('muted-foreground');
+      strokeWidth = 1;
+      strokeDasharray = '2 3';
+    } else if (blockerBlocked) {
+      strokeColor = resolveToken('destructive');
+      strokeWidth = 2;
+      strokeDasharray = '6 3';
+    } else if (isBothCritical) {
+      strokeColor = resolveToken('destructive');
+      strokeWidth = 2;
+      strokeDasharray = '6 3';
+    } else {
+      strokeColor = resolveToken('warning');
+      strokeWidth = 1.5;
+      strokeDasharray = '4 4';
+    }
+    const markerRef = (isBothCritical || blockerBlocked) ? 'url(#criticalArrow)' : blockerDone ? 'url(#doneArrow)' : 'url(#depArrow)';
     const midX = (fromX + toX) / 2;
     const pathD = `M${fromX},${fromY} C${fromX + (midX - fromX) * 0.5},${fromY} ${toX - (toX - midX) * 0.5},${toY} ${toX},${toY}`;
+    const depTitle = depTask.title || bid;
+    const taskTitle = task.title || task.id;
+    const statusLabel = blockerDone ? '已完成' : blockerBlocked ? '已阻塞' : isBothCritical ? '关键路径' : '进行中';
     results.push(
-      <path key={bid} d={pathD} fill="none" stroke={strokeColor} strokeWidth={strokeWidth} strokeDasharray={isBothCritical ? '6 3' : '4 4'} markerEnd={isBothCritical ? 'url(#criticalArrow)' : 'url(#depArrow)'} />
+      <g key={bid} className="dep-line-group" style={{ cursor: 'pointer' }}>
+        <path d={pathD} fill="none" stroke="transparent" strokeWidth={8} />
+        <path
+          d={pathD}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeDasharray={strokeDasharray}
+          markerEnd={markerRef}
+          className="dep-line-path transition-[stroke-width] duration-150"
+        >
+          <title>{depTitle} → {taskTitle} ({statusLabel})</title>
+        </path>
+      </g>
     );
   }
   return results;
@@ -300,6 +337,9 @@ export function renderDependencySVGDefs(): React.ReactNode {
       </marker>
       <marker id="criticalArrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
         <path d="M0,0 L8,3 L0,6 Z" fill={resolveToken('destructive')} />
+      </marker>
+      <marker id="doneArrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill={resolveToken('muted-foreground')} />
       </marker>
     </defs>
   );

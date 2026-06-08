@@ -36,7 +36,7 @@ function quarterBounds(today: Date): TimeBounds {
  * Supported keys: 'today', 'this_week', 'this_month', 'this_quarter', 'week', 'month', 'quarter'
  * Both `this_week` and `week` return Monday-based week bounds (normalized).
  */
-export function getTimeRangeBounds(range: string, now?: Date): TimeBounds | null {
+function getTimeRangeBounds(range: string, now?: Date): TimeBounds | null {
   const today = now || new Date();
   const todayStr = toISO(today);
 
@@ -73,7 +73,7 @@ export function isDateRangeInTimeRange(startDate: string | null | undefined, end
  * Check if a single date falls within a time range.
  * Used by Tasks page which filters by dueDate (single date point).
  */
-export function isDateInTimeRange(dateStr: string | null | undefined, range: string): boolean {
+function isDateInTimeRange(dateStr: string | null | undefined, range: string): boolean {
   if (!dateStr) return false;
   const bounds = getTimeRangeBounds(range);
   if (!bounds) return true;

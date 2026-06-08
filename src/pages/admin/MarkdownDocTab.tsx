@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
-import { Plus, Trash2, Edit2, FileText, Link2, Eye, Code } from 'lucide-react';
+import { Plus, Trash2, FileText, Link2, Eye, Code, Columns3, Save, CheckCircle2 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
@@ -70,20 +70,46 @@ export function renderMarkdown(md: string): string {
   }
 }
 
+type ViewMode = 'split' | 'edit' | 'preview';
+
+const AUTOSAVE_DELAY = 2000;
+
 export function MarkdownDocTab() {
   const { state } = useStore();
-  // Store docs in notes with category='markdown_doc'
   const docs = useMemo(() => (state.notes || []).filter(n => n.category === 'markdown_doc'), [state.notes]);
   const { dispatch } = useStore();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mode, setMode] = useState<'edit' | 'preview'>('edit');
+  const [viewMode, setViewMode] = useState<ViewMode>('split');
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editLinkedItem, setEditLinkedItem] = useState<{ id: string; type: 'goal' | 'project' | 'task' } | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
   const newDocCreated = useRef(false);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedDoc = docs.find(d => d.id === selectedId);
+
+  const handleSave = useCallback(() => {
+    if (!selectedId) return;
+    setSaveStatus('saving');
+    dispatch({ type: 'UPDATE_NOTE', payload: { id: selectedId, updates: { title: editTitle, content: editContent, linkedItemId: editLinkedItem?.id ?? null, linkedItemType: editLinkedItem?.type ?? null, updatedBy: state.currentUser?.id ?? '' } } });
+    setSaveStatus('saved');
+  }, [selectedId, editTitle, editContent, editLinkedItem, dispatch, state.currentUser?.id]);
+
+  // Auto-save with debounce
+  const scheduleAutoSave = useCallback(() => {
+    setSaveStatus('unsaved');
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      handleSave();
+    }, AUTOSAVE_DELAY);
+  }, [handleSave]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  }, []);
 
   // Auto-select newly created doc
   useEffect(() => {
@@ -100,19 +126,16 @@ export function MarkdownDocTab() {
   }
 
   function handleSelect(id: string) {
+    // Save current doc before switching
+    if (selectedId && saveStatus === 'unsaved') handleSave();
     const doc = docs.find(d => d.id === id);
     if (doc) {
       setSelectedId(id);
       setEditTitle(doc.title);
       setEditContent(doc.content);
       setEditLinkedItem(doc.linkedItemId ? { id: doc.linkedItemId, type: doc.linkedItemType ?? 'task' } : null);
-      setMode('edit');
+      setSaveStatus('saved');
     }
-  }
-
-  function handleSave() {
-    if (!selectedId) return;
-    dispatch({ type: 'UPDATE_NOTE', payload: { id: selectedId, updates: { title: editTitle, content: editContent, linkedItemId: editLinkedItem?.id ?? null, linkedItemType: editLinkedItem?.type ?? null, updatedBy: state.currentUser?.id ?? '' } } });
   }
 
   function handleDelete(id: string) {
@@ -120,17 +143,20 @@ export function MarkdownDocTab() {
     if (selectedId === id) setSelectedId(null);
   }
 
+  const renderedPreview = useMemo(() => renderMarkdown(editContent), [editContent]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-sm flex items-center gap-2"><FileText size={16} /> Markdown 文档</h3>
-        <button onClick={handleNew} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"><Plus size={14} /> 新建文档</button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleNew} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"><Plus size={14} /> 新建</button>
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground">使用 Markdown 语法编写文档，支持与事项关联</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Doc list */}
-        <div className="space-y-1 max-h-[400px] overflow-y-auto">
+        <div className="space-y-1 max-h-[500px] overflow-y-auto">
           {docs.length === 0 && <EmptyState title="暂无文档" compact />}
           {docs.map(doc => (
             <div key={doc.id} onClick={() => handleSelect(doc.id)} className={`p-2 rounded-lg cursor-pointer text-sm transition-colors ${selectedId === doc.id ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/50'}`}>
@@ -140,15 +166,23 @@ export function MarkdownDocTab() {
           ))}
         </div>
 
-        {/* Editor/Preview */}
-        <div className="md:col-span-2">
+        {/* Editor + Preview */}
+        <div className="md:col-span-3">
           {selectedDoc ? (
             <div className="space-y-3">
+              {/* Title + view mode + save status */}
               <div className="flex items-center gap-2">
-                <input className="flex-1 border border-input rounded px-2 py-1 text-sm font-medium" value={editTitle} onChange={e => setEditTitle(e.target.value)} onBlur={handleSave} />
-                <button onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')} className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-border rounded hover:bg-muted cursor-pointer">
-                  {mode === 'edit' ? <><Eye size={12} /> 预览</> : <><Code size={12} /> 编辑</>}
-                </button>
+                <input className="flex-1 border border-input rounded px-2 py-1 text-sm font-medium" value={editTitle} onChange={e => { setEditTitle(e.target.value); scheduleAutoSave(); }} />
+                <div className="flex items-center gap-1 border border-border rounded overflow-hidden">
+                  {([['split', Columns3], ['edit', Code], ['preview', Eye]] as const).map(([m, Icon]) => (
+                    <button key={m} onClick={() => setViewMode(m)} className={`px-2 py-1 text-xs transition-colors ${viewMode === m ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+                      <Icon size={12} />
+                    </button>
+                  ))}
+                </div>
+                {saveStatus === 'saved' && <CheckCircle2 size={14} className="text-green-500" title="已保存" />}
+                {saveStatus === 'unsaved' && <span className="text-[10px] text-amber-600">未保存</span>}
+                {saveStatus === 'saving' && <span className="text-[10px] text-muted-foreground">保存中...</span>}
               </div>
 
               {/* Linked item */}
@@ -157,11 +191,12 @@ export function MarkdownDocTab() {
                 <span className="text-xs text-muted-foreground">关联事项：</span>
                 <select className="text-xs border border-input rounded px-1.5 py-0.5" value={editLinkedItem?.id ?? ''} onChange={e => {
                   const val = e.target.value;
-                  if (!val) { setEditLinkedItem(null); return; }
+                  if (!val) { setEditLinkedItem(null); scheduleAutoSave(); return; }
                   const goal = state.goals.find(g => g.id === val);
                   const project = state.projects.find(p => p.id === val);
                   const type = goal ? 'goal' : project ? 'project' : 'task';
                   setEditLinkedItem({ id: val, type });
+                  scheduleAutoSave();
                 }}>
                   <option value="">无</option>
                   <optgroup label="目标">
@@ -176,19 +211,27 @@ export function MarkdownDocTab() {
                 </select>
               </div>
 
-              {mode === 'edit' ? (
-                <textarea className="w-full h-[300px] border border-input rounded-lg px-3 py-2 text-sm font-mono resize-y" value={editContent} onChange={e => setEditContent(e.target.value)} onBlur={handleSave} placeholder="输入 Markdown 内容..." />
-              ) : (
-                <div className="w-full min-h-[300px] border border-input rounded-lg px-3 py-2 text-sm overflow-y-auto" dangerouslySetInnerHTML={{ __html: renderMarkdown(editContent) }} />
+              {/* Split / Edit / Preview view */}
+              {viewMode === 'split' && (
+                <div className="grid grid-cols-2 gap-0 border border-border rounded-lg overflow-hidden" style={{ height: 400 }}>
+                  <textarea className="w-full h-full px-3 py-2 text-sm font-mono resize-none border-r border-border focus:outline-none" value={editContent} onChange={e => { setEditContent(e.target.value); scheduleAutoSave(); }} placeholder="输入 Markdown..." />
+                  <div className="w-full h-full px-3 py-2 text-sm overflow-y-auto prose-sm" dangerouslySetInnerHTML={{ __html: renderedPreview }} />
+                </div>
+              )}
+              {viewMode === 'edit' && (
+                <textarea className="w-full border border-input rounded-lg px-3 py-2 text-sm font-mono resize-y" style={{ height: 400 }} value={editContent} onChange={e => { setEditContent(e.target.value); scheduleAutoSave(); }} placeholder="输入 Markdown 内容..." />
+              )}
+              {viewMode === 'preview' && (
+                <div className="w-full border border-input rounded-lg px-3 py-2 text-sm overflow-y-auto prose-sm" style={{ minHeight: 400 }} dangerouslySetInnerHTML={{ __html: renderedPreview }} />
               )}
 
               <div className="flex gap-2">
-                <button onClick={handleSave} className="px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">保存</button>
+                <button onClick={handleSave} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"><Save size={12} /> 保存</button>
                 <button onClick={() => handleDelete(selectedId!)} className="px-3 py-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg hover:bg-red-50">删除</button>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-[300px] text-muted-foreground text-sm">选择或新建文档开始编辑</div>
+            <div className="flex items-center justify-center h-[400px] text-muted-foreground text-sm">选择或新建文档开始编辑</div>
           )}
         </div>
       </div>

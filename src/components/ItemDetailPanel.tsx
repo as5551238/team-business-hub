@@ -18,6 +18,7 @@ import { DetailKRs } from './DetailKRs';
 import { DetailComments } from './DetailComments';
 import { DetailLinks } from './DetailLinks';
 import { DetailRelationships } from './DetailRelationships';
+import { DetailDependencies } from './DetailDependencies';
 import { DetailProjectSections } from './DetailProjectSections';
 import { DetailChildItems } from './DetailChildItems';
 import { DetailPeople } from './DetailPeople';
@@ -131,6 +132,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
   const [statusOpen, setStatusOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [newTrackingDate, setNewTrackingDate] = useState(new Date().toISOString().split('T')[0]);
   const [newTrackingContent, setNewTrackingContent] = useState('');
   const [newTrackingResult, setNewTrackingResult] = useState('');
@@ -291,8 +293,9 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
       const file = files[0];
       if (file.size > 50 * 1024 * 1024) { setUploadStatus('error'); return; }
       setUploadStatus('uploading');
+      setUploadProgress(0);
       const path = `${itemType}/${itemId}/${Date.now()}_${file.name}`;
-      const url = await uploadFile(BUCKET_NAMES.attachments, path, file);
+      const url = await uploadFile(BUCKET_NAMES.attachments, path, file, (pct) => setUploadProgress(pct));
       if (url) {
         const attachment = { id: genId('att'), name: file.name, type: file.type, size: file.size, url, uploadedBy: state.currentUser?.id || '', uploadedAt: new Date().toISOString() };
         updateItem({ attachments: [...attachments, attachment] });
@@ -307,7 +310,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (uploadTimerRef.current) clearTimeout(uploadTimerRef.current);
-    uploadTimerRef.current = setTimeout(() => setUploadStatus('idle'), 3000);
+    uploadTimerRef.current = setTimeout(() => { setUploadStatus('idle'); setUploadProgress(0); }, 3000);
   }
 
   async function handleDeleteAttachment(attId: string, attUrl: string) {
@@ -478,6 +481,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                   <Textarea className="w-full min-h-[80px] text-sm" maxLength={5000} placeholder="输入描述信息，支持直接粘贴图片..." value={localDescription} onChange={e => setLocalDescription(e.target.value)} onPaste={handlePasteImage} />
                 </Section>
                 <DetailRelationships itemType={itemType} itemId={itemId} goal={goal} project={project} task={task} canEdit={canEdit} updateItem={updateItem} />
+                {itemType === 'task' && task && <DetailDependencies taskId={itemId} task={task} canEdit={canEdit} updateItem={updateItem} />}
                 <Section title="四象限归属">
                   <div className={cn('px-3 py-2 rounded border text-sm', QUADRANT_COLORS[getQuadrant(priority, dueDate, endDate)])}>{getQuadrant(priority, dueDate, endDate)}</div>
                 </Section>
@@ -543,8 +547,8 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                           <input type="date" className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1" value={dueDate || ''} onChange={e => handleDateChange('dueDate', e.target.value)} />
                         </div>
                         <div className="col-span-2">
-                          <label className="text-xs text-muted-foreground">提醒日期</label>
-                          <input type="date" className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1" value={reminderDate || ''} onChange={e => handleDateChange('reminderDate', e.target.value)} />
+                          <label className="text-xs text-muted-foreground">提醒时间</label>
+                          <input type="datetime-local" className="w-full text-sm border border-input rounded px-2 py-1.5 mt-1" value={reminderDate || ''} onChange={e => handleDateChange('reminderDate', e.target.value)} />
                         </div>
                       </div>
                     )}
@@ -568,7 +572,11 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                   <div className="space-y-2">
                     {attachments.map(att => (
                       <div key={att.id} className="flex items-center gap-2 text-sm p-1.5 border rounded hover:bg-accent/50">
-                        <Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
+                        {att.type?.startsWith('image/') && att.url ? (
+                          <img src={att.url} alt={att.name} className="w-10 h-10 rounded object-cover shrink-0 border" loading="lazy" />
+                        ) : (
+                          <Paperclip className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        )}
                         <a href={att.url && (att.url.startsWith('http://') || att.url.startsWith('https://')) ? att.url : '#'} target="_blank" rel="noopener noreferrer" className="flex-1 truncate hover:text-primary hover:underline">{att.name}</a>
                         <span className="text-[10px] text-muted-foreground">{formatFileSize(att.size)}</span>
                         <button className="p-0.5 hover:bg-destructive/10 rounded cursor-pointer" aria-label="删除附件" onClick={() => handleDeleteAttachment(att.id, att.url)}><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
@@ -576,6 +584,11 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                     ))}
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()} disabled={uploadStatus === 'uploading'}>{uploadStatus === 'uploading' ? '上传中...' : <><Plus className="w-3.5 h-3.5" />上传文件</>}</Button>
+                      {uploadStatus === 'uploading' && (
+                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-primary rounded-full transition-all duration-200" style={{ width: `${uploadProgress}%` }} />
+                        </div>
+                      )}
                       {uploadStatus === 'success' && <span className="text-xs text-green-600">上传成功</span>}
                       {uploadStatus === 'error' && <span className="text-xs text-destructive">上传失败，请重试</span>}
                       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} />

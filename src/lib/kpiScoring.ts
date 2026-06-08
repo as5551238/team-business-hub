@@ -65,13 +65,13 @@ export function calcKpiGoalScore(krs: KeyResult[]): {
 }
 
 /** 计算冲高率：(targetValue - kpiTarget) / kpiTarget × 100 */
-export function calcStretchRate(kr: KeyResult): number | null {
+function calcStretchRate(kr: KeyResult): number | null {
   if (kr.track !== 'both' || kr.kpiTarget == null || kr.kpiTarget === 0) return null;
   return Math.round(((kr.targetValue - kr.kpiTarget) / kr.kpiTarget) * 1000) / 10;
 }
 
 /** 计算目标的 OKR 均值信心度 */
-export function calcAvgConfidence(krs: KeyResult[]): number {
+function calcAvgConfidence(krs: KeyResult[]): number {
   const withConf = krs.filter(kr => kr.confidence != null);
   if (withConf.length === 0) return 0;
   return Math.round((withConf.reduce((s, kr) => s + (kr.confidence ?? 0), 0) / withConf.length) * 10) / 10;

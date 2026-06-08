@@ -1,8 +1,12 @@
 /**
  * Agent Marketplace — 可发现、安装、卸载、浏览能力型Agent
  * Phase 3-2: Agent 市场
+ * R26: Supabase 持久化（替换 localStorage）
  */
 import { useState, useMemo, useCallback } from 'react';
+import { useStore } from '@/store/useStore';
+import { supabaseInsert, supabaseDelete } from '@/store/supabase';
+import { genId } from '@/store/utils';
 import { handleError } from '@/lib/errorHandler';
 import {
   Bot,
@@ -243,24 +247,9 @@ const STATUS_LABELS: Record<string, string> = {
   experimental: '实验版',
 };
 
-// ===== 已安装Agent持久化 =====
+// ===== 已安装Agent — 从 Store 读取 =====
 
-const STORAGE_KEY = 'tbh-installed-agents';
-
-function loadInstalled(): Set<string> {
-  try {
-    const s = localStorage.getItem(STORAGE_KEY);
-    if (s) return new Set(JSON.parse(s));
-  } catch (e) { handleError(e, { module: 'AgentMarketplaceTab', operation: 'LOAD_INSTALLED', severity: 'debug' }); }
-  // Default: core agents are installed
-  return new Set(['tbh-core', 'tbh-risk', 'tbh-ai-review']);
-}
-
-function saveInstalled(ids: Set<string>) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
-  } catch (e) { handleError(e, { module: 'AgentMarketplaceTab', operation: 'SAVE_INSTALLED', severity: 'debug' }); }
-}
+const DEFAULT_INSTALLED = new Set(['tbh-core', 'tbh-risk', 'tbh-ai-review']);
 
 // ===== 子组件 =====
 
@@ -414,34 +403,44 @@ function AgentCard({
 // ===== 主组件 =====
 
 export function AgentMarketplaceTab() {
-  const [installed, setInstalled] = useState<Set<string>>(loadInstalled);
+  const { state, dispatch } = useStore();
+  const installedAgentIds = useMemo(() => {
+    const ids = new Set(state.installedAgents.map(a => a.agentId));
+    // Fallback: if no records yet, use defaults
+    return ids.size > 0 ? ids : DEFAULT_INSTALLED;
+  }, [state.installedAgents]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<AgentCategory | 'all'>('all');
   const [viewMode, setViewMode] = useState<'market' | 'installed'>('market');
 
-  const handleInstall = useCallback((id: string) => {
-    setInstalled(prev => {
-      const next = new Set(prev);
-      next.add(id);
-      saveInstalled(next);
-      return next;
-    });
-  }, []);
+  const handleInstall = useCallback((agentId: string) => {
+    const record = {
+      id: genId(),
+      agentId,
+      teamId: state.currentTeamId || '__default__',
+      memberId: state.currentUser?.id || '__anonymous__',
+      installedAt: new Date().toISOString(),
+    };
+    dispatch({ type: 'ADD_INSTALLED_AGENT', payload: record });
+    supabaseInsert('installed_agents', record).catch(e =>
+      handleError(e, { module: 'AgentMarketplaceTab', operation: 'INSTALL_AGENT', severity: 'warning' })
+    );
+  }, [dispatch, state.currentTeamId, state.currentUser?.id]);
 
-  const handleUninstall = useCallback((id: string) => {
-    if (id === 'tbh-core') return; // 核心Agent不可卸载
-    setInstalled(prev => {
-      const next = new Set(prev);
-      next.delete(id);
-      saveInstalled(next);
-      return next;
-    });
-  }, []);
+  const handleUninstall = useCallback((agentId: string) => {
+    if (agentId === 'tbh-core') return; // 核心Agent不可卸载
+    const record = state.installedAgents.find(a => a.agentId === agentId);
+    if (!record) return;
+    dispatch({ type: 'REMOVE_INSTALLED_AGENT', payload: agentId });
+    supabaseDelete('installed_agents', record.id).catch(e =>
+      handleError(e, { module: 'AgentMarketplaceTab', operation: 'UNINSTALL_AGENT', severity: 'warning' })
+    );
+  }, [dispatch, state.installedAgents]);
 
   const filteredAgents = useMemo(() => {
     let list = viewMode === 'installed'
-      ? MARKETPLACE_CATALOG.filter(a => installed.has(a.id))
+      ? MARKETPLACE_CATALOG.filter(a => installedAgentIds.has(a.id))
       : MARKETPLACE_CATALOG;
 
     if (categoryFilter !== 'all') {
@@ -457,14 +456,14 @@ export function AgentMarketplaceTab() {
       );
     }
     return list;
-  }, [viewMode, categoryFilter, searchQuery, installed]);
+  }, [viewMode, categoryFilter, searchQuery, installedAgentIds]);
 
   const stats = useMemo(() => ({
     total: MARKETPLACE_CATALOG.length,
-    installed: installed.size,
+    installed: installedAgentIds.size,
     stable: MARKETPLACE_CATALOG.filter(a => a.status === 'stable').length,
     categories: [...new Set(MARKETPLACE_CATALOG.map(a => a.category))].length,
-  }), [installed]);
+  }), [installedAgentIds]);
 
   return (
     <div className="space-y-4">
@@ -537,7 +536,7 @@ export function AgentMarketplaceTab() {
             <AgentCard
               key={agent.id}
               agent={agent}
-              isInstalled={installed.has(agent.id)}
+              isInstalled={installedAgentIds.has(agent.id)}
               onInstall={handleInstall}
               onUninstall={handleUninstall}
               isExpanded={expandedId === agent.id}

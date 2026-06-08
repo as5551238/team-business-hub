@@ -29,6 +29,29 @@ export function loadToken(): OutlookTokenData | null {
   }
 }
 
+/** DB-first async load: query oauth_tokens, fallback to localStorage cache */
+export async function loadTokenFromDB(teamId: string, memberId: string): Promise<OutlookTokenData | null> {
+  try {
+    const { getSupabaseClient } = await import('@/supabase/client');
+    const sb = getSupabaseClient();
+    if (!sb) return loadToken();
+    const { data, error } = await sb.from('oauth_tokens').select('*').eq('team_id', teamId).eq('member_id', memberId).eq('provider', 'outlook').single();
+    if (!error && data) {
+      const tokenData: OutlookTokenData = {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token || undefined,
+        expiresAt: data.expires_at || '',
+        connectedEmail: data.connected_email || undefined,
+        connectionMethod: 'oauth',
+      };
+      // Cache to localStorage for sync reads
+      try { localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokenData)); } catch (e) { /* ignore */ }
+      return tokenData;
+    }
+  } catch (e) { handleError(e, { module: 'outlook/tokenManager', operation: 'LOAD_DB', severity: 'debug' }); }
+  return loadToken();
+}
+
 // ===== 保存 =====
 
 export function saveToken(token: OutlookTokenData): void {
@@ -37,6 +60,30 @@ export function saveToken(token: OutlookTokenData): void {
   } catch (e) {
     handleError(e, { module: 'outlook/tokenManager', operation: 'SAVE', severity: 'warning' });
   }
+  // Async write to DB
+  saveTokenToDB(token);
+}
+
+async function saveTokenToDB(token: OutlookTokenData): Promise<void> {
+  try {
+    const { getSupabaseClient } = await import('@/supabase/client');
+    const { getCurrentTeamId } = await import('@/store/supabase');
+    const sb = getSupabaseClient();
+    if (!sb) return;
+    const teamId = getCurrentTeamId();
+    const userId = localStorage.getItem('tbh-current-user');
+    if (!teamId || !userId) return;
+    await sb.from('oauth_tokens').upsert({
+      team_id: teamId,
+      member_id: userId,
+      provider: 'outlook',
+      access_token: token.accessToken,
+      refresh_token: token.refreshToken || null,
+      expires_at: token.expiresAt || null,
+      connected_email: token.connectedEmail || null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'team_id,member_id,provider' });
+  } catch (e) { handleError(e, { module: 'outlook/tokenManager', operation: 'SAVE_DB', severity: 'debug' }); }
 }
 
 // ===== 删除 =====
@@ -47,12 +94,27 @@ export function clearToken(): void {
   } catch (e) {
     handleError(e, { module: 'outlook/tokenManager', operation: 'CLEAR', severity: 'debug' });
   }
+  // Async delete from DB
+  clearTokenFromDB();
+}
+
+async function clearTokenFromDB(): Promise<void> {
+  try {
+    const { getSupabaseClient } = await import('@/supabase/client');
+    const { getCurrentTeamId } = await import('@/store/supabase');
+    const sb = getSupabaseClient();
+    if (!sb) return;
+    const teamId = getCurrentTeamId();
+    const userId = localStorage.getItem('tbh-current-user');
+    if (!teamId || !userId) return;
+    await sb.from('oauth_tokens').delete().eq('team_id', teamId).eq('member_id', userId).eq('provider', 'outlook');
+  } catch (e) { handleError(e, { module: 'outlook/tokenManager', operation: 'CLEAR_DB', severity: 'debug' }); }
 }
 
 // ===== 过期检测 =====
 
 /** 提前 5 分钟视为过期，给刷新留出时间 */
-export function isTokenExpired(token: OutlookTokenData | null): boolean {
+function isTokenExpired(token: OutlookTokenData | null): boolean {
   if (!token) return true;
   const expiresAt = new Date(token.expiresAt).getTime();
   const buffer = 5 * 60 * 1000; // 5 min

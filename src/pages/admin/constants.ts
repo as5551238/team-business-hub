@@ -95,8 +95,24 @@ export function getCalendarDays(year: number, month: number): CalendarDay[] {
 }
 
 export interface EmailConfig { enabled: boolean; resendApiKey: string; fromEmail: string; }
-export function loadEmailConfig(): EmailConfig {
-  try { const s = localStorage.getItem('tbh-email-config'); if (s) { const c = JSON.parse(s); return { enabled: c.enabled || false, resendApiKey: c.resendApiKey || c.smtpUser || '', fromEmail: c.fromEmail || '' }; } } catch (e) { handleError(e, { module: 'constants', operation: 'LOAD_EMAIL_CONFIG', severity: 'debug' }); }
+export async function loadEmailConfig(): Promise<EmailConfig> {
+  // DB-first: try Supabase, then fall back to localStorage
+  try {
+    const { getSupabaseClient } = await import('@/supabase/client');
+    const sb = getSupabaseClient();
+    if (sb) {
+      const { data } = await sb.from('email_settings').select('*').eq('id', 1).maybeSingle();
+      if (data) return { enabled: data.enabled || false, resendApiKey: data.resend_api_key || '', fromEmail: data.from_email || '' };
+    }
+  } catch (e) { handleError(e, { module: 'constants', operation: 'LOAD_EMAIL_CONFIG_DB', severity: 'debug' }); }
+  // Fallback: localStorage
+  try { const s = localStorage.getItem('tbh-email-config'); if (s) { const c = JSON.parse(s); return { enabled: c.enabled || false, resendApiKey: c.resendApiKey || c.smtpUser || '', fromEmail: c.fromEmail || '' }; } } catch (e) { handleError(e, { module: 'constants', operation: 'LOAD_EMAIL_CONFIG_LS', severity: 'debug' }); }
+  return { enabled: false, resendApiKey: '', fromEmail: '' };
+}
+
+/** Synchronous version for contexts that cannot await */
+export function loadEmailConfigSync(): EmailConfig {
+  try { const s = localStorage.getItem('tbh-email-config'); if (s) { const c = JSON.parse(s); return { enabled: c.enabled || false, resendApiKey: c.resendApiKey || c.smtpUser || '', fromEmail: c.fromEmail || '' }; } } catch (e) { handleError(e, { module: 'constants', operation: 'LOAD_EMAIL_CONFIG_SYNC', severity: 'debug' }); }
   return { enabled: false, resendApiKey: '', fromEmail: '' };
 }
 export function saveEmailConfig(c: EmailConfig) {

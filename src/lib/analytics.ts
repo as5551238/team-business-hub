@@ -1,59 +1,60 @@
-import { handleError } from '@/lib/errorHandler';
+/**
+ * Funnel analytics — lightweight session tracking
+ * Used by BusinessTab for funnel metrics display
+ */
 
-const STORAGE_KEY = 'tbh-funnel-analytics';
-
-interface FunnelEvent {
-  step: string;
+interface FunnelStep {
+  name: string;
   timestamp: number;
-  sessionId: string;
-  metadata?: Record<string, string>;
 }
 
 interface FunnelSession {
   id: string;
+  steps: FunnelStep[];
   startTime: number;
-  events: FunnelEvent[];
+  endTime?: number;
 }
+
+const STORAGE_KEY = 'tbh-funnel-sessions';
 
 function getSessions(): FunnelSession[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) { handleError(e, { module: 'analytics', operation: 'LOAD_SESSIONS', severity: 'debug' }); return []; }
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  } catch { return []; }
 }
 
-function saveSessions(sessions: FunnelSession[]) {
-  try {
-    if (sessions.length > 50) sessions = sessions.slice(-50);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-  } catch (e) { handleError(e, { module: 'analytics', operation: 'SAVE_SESSIONS', severity: 'debug' }); }
+export interface FunnelMetrics {
+  totalSessions: number;
+  completedSessions: number;
+  completionRate: number;
+  avgDuration: number;
+  stepDropoff: Record<string, number>;
 }
 
-let currentSession: FunnelSession | null = null;
-
-export function startFunnelSession(): string {
-  currentSession = { id: `funnel_${Date.now()}`, startTime: Date.now(), events: [] };
-  return currentSession.id;
-}
-
-export function trackFunnelStep(step: string, metadata?: Record<string, string>) {
-  if (!currentSession) startFunnelSession();
-  currentSession!.events.push({ step, timestamp: Date.now(), sessionId: currentSession!.id, metadata });
-}
-
-export function endFunnelSession() {
-  if (!currentSession) return;
+export function getFunnelMetrics(): FunnelMetrics {
   const sessions = getSessions();
-  sessions.push(currentSession);
-  saveSessions(sessions);
-  currentSession = null;
-}
+  const completed = sessions.filter(s => s.endTime);
+  const avgDuration = completed.length > 0
+    ? completed.reduce((sum, s) => sum + (s.endTime! - s.startTime), 0) / completed.length / 1000
+    : 0;
 
-export function getFunnelMetrics(): { avgSteps: number; avgDurationMs: number; completionRate: number; totalSessions: number } {
-  const sessions = getSessions();
-  if (sessions.length === 0) return { avgSteps: 0, avgDurationMs: 0, completionRate: 0, totalSessions: 0 };
-  const completed = sessions.filter(s => s.events.some(e => e.step === 'start_review'));
-  const totalSteps = sessions.reduce((sum, s) => sum + s.events.length, 0);
-  const totalDuration = sessions.reduce((sum, s) => sum + (s.events[s.events.length - 1]?.timestamp ?? s.startTime) - s.startTime, 0);
-  return { avgSteps: totalSteps / sessions.length, avgDurationMs: totalDuration / sessions.length, completionRate: completed.length / sessions.length, totalSessions: sessions.length };
+  const stepDropoff: Record<string, number> = {};
+  for (const s of sessions) {
+    for (let i = 0; i < s.steps.length; i++) {
+      const name = s.steps[i].name;
+      if (!stepDropoff[name]) stepDropoff[name] = 0;
+      // Count dropoff: users who reached this step but not the next
+      if (i < s.steps.length - 1 || !s.endTime) {
+        stepDropoff[name]++;
+      }
+    }
+  }
+
+  return {
+    totalSessions: sessions.length,
+    completedSessions: completed.length,
+    completionRate: sessions.length > 0 ? Math.round(completed.length / sessions.length * 100) : 0,
+    avgDuration: Math.round(avgDuration * 10) / 10,
+    stepDropoff,
+  };
 }

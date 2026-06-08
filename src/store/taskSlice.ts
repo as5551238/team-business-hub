@@ -45,6 +45,7 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
         discussionThreadId: payload.discussionThreadId ?? null,
         summary: payload.summary ?? '',
         sprintId: payload.sprintId ?? null,
+        storyPoints: payload.storyPoints ?? 0,
         teamId: payload.teamId || s.currentTeamId || '__default__',
         subtasks: (payload.subtasks ?? []).map((st: Partial<SubTask> & { title: string; completed: boolean }) => ({
           ...st,

@@ -84,6 +84,16 @@ export default {
           foreground: "hsl(var(--sidebar-foreground))",
           accent: "hsl(var(--sidebar-accent))",
         },
+        brand: {
+          accent: {
+            DEFAULT: "hsl(var(--brand-accent))",
+            foreground: "hsl(var(--brand-accent-foreground))",
+          },
+          surface: {
+            DEFAULT: "hsl(var(--brand-surface))",
+            foreground: "hsl(var(--brand-surface-foreground))",
+          },
+        },
       },
       spacing: {
         '1': '4px',

@@ -94,13 +94,6 @@ function saveAiMemory(memory: AiMemory) {
   try { localStorage.setItem(AI_MEMORY_KEY, JSON.stringify(memory)); } catch (e) { handleError(e, { module: 'aiAgentSystem', operation: 'SAVE_MEMORY', severity: 'debug' }); }
 }
 
-/** Record that an AI action was executed, updating user preference profile */
-export function recordAiAction(actionId: string) {
-  const memory = loadAiMemory();
-  memory.frequentActions[actionId] = (memory.frequentActions[actionId] || 0) + 1;
-  memory.lastInteraction = new Date().toISOString();
-  saveAiMemory(memory);
-}
 
 /** Get the user's preferred agent based on their action history */
 export function getPreferredAgent(): AiAgentPersona {
@@ -117,24 +110,8 @@ export function getPreferredAgent(): AiAgentPersona {
   return AI_AGENTS[0];
 }
 
-/** Get AI memory for display */
-export function getAiMemory(): AiMemory {
-  return loadAiMemory();
-}
 
-/** Set user's preferred agent */
-export function setPreferredAgent(agentId: string) {
-  const memory = loadAiMemory();
-  memory.preferredAgent = agentId;
-  saveAiMemory(memory);
-}
 
-/** Set custom instructions for AI */
-export function setAiCustomInstructions(instructions: string) {
-  const memory = loadAiMemory();
-  memory.customInstructions = instructions;
-  saveAiMemory(memory);
-}
 
 // ===== Intent Parsing → Action Execution =====
 
@@ -213,7 +190,6 @@ export function executeAiAction(
   if (!aiAction) return { action: null, description: `未知操作: ${actionId}` };
 
   const result = aiAction.execute(state, params);
-  recordAiAction(actionId);
 
   if (result && 'error' in result) {
     return { action: result, description: `操作失败: ${result.error}` };

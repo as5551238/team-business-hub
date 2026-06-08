@@ -6,6 +6,7 @@
 
 import type { AppState, TaskStatus, TaskPriority, GoalStatus, ItemType } from '@/types';
 import type { Action } from '@/store/types';
+import { routeTask, type RoutingStrategy } from './aiRoutingEngine';
 
 export interface AiAnalysisAction {
   type: '__AI_ANALYSIS__';
@@ -283,17 +284,19 @@ const getRiskItems: AiActionDef = {
 const smartAssign: AiActionDef = {
   id: 'smart_assign',
   name: '智能指派',
-  description: 'Auto-assign task to member with lowest workload',
+  description: 'Auto-assign task using multi-strategy routing engine',
   category: 'workflow',
   params: [
     { key: 'taskId', type: 'string', required: true, description: 'Task ID to assign' },
+    { key: 'strategy', type: 'enum', required: false, enum: ['auto', 'load-balance', 'best-fit', 'growth', 'urgency'], description: 'Routing strategy (default: auto)' },
   ],
   execute: (state, p) => {
-    const active = state.members.filter(m => !m.deletedAt);
-    if (active.length === 0) return { error: '团队无活跃成员' };
-    const loads = active.map(m => ({ id: m.id, count: state.tasks.filter(t => !t.deletedAt && t.leaderId === m.id && t.status !== 'done').length }));
-    loads.sort((a, b) => a.count - b.count);
-    return { type: 'UPDATE_TASK', payload: { id: p.taskId, updates: { leaderId: loads[0].id } } };
+    const task = state.tasks.find(t => t.id === p.taskId);
+    if (!task) return { error: '任务不存在' };
+    const strategy = (p.strategy ?? 'auto') as RoutingStrategy;
+    const result = routeTask(p.taskId ?? '', state, strategy);
+    if (!result.memberId) return { error: result.reason || '无法找到合适的成员' };
+    return { type: 'UPDATE_TASK', payload: { id: p.taskId, updates: { leaderId: result.memberId } } };
   },
 };
 
@@ -327,7 +330,3 @@ export const AI_ACTIONS: AiActionDef[] = [
 
 export const AI_ACTION_MAP = new Map(AI_ACTIONS.map(a => [a.id, a]));
 
-/** Get action summary for AI prompt injection */
-export function getAiActionSummary(): string {
-  return AI_ACTIONS.map(a => `${a.id}: ${a.name}(${a.params.filter(p => p.required).map(p => p.key).join(', ')})`).join('\n');
-}

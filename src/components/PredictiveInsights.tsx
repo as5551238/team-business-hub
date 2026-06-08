@@ -135,7 +135,7 @@ export default function PredictiveInsights() {
               ) : data.burnout.members.slice(0, 5).map(m => (
                 <div key={m.userId} className="flex items-start gap-2 p-2 rounded-lg bg-muted/30">
                   <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold bg-purple-100 text-purple-700 flex-shrink-0">
-                    {m.userName[0]}
+                    {(m.userName || '?')[0]}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">

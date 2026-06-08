@@ -63,35 +63,4 @@ export function handleError(error: unknown, ctx: ErrorContext): void {
   }
 }
 
-/**
- * 安全执行 — catch {} 的函数式替代
- *
- * const result = safeExec(() => JSON.parse(str), { module: 'store', operation: 'parseData' });
- * // result = parsed value or undefined
- */
-export function safeExec<T>(
-  fn: () => T,
-  ctx: ErrorContext,
-): T | undefined {
-  try {
-    return fn();
-  } catch (e) {
-    handleError(e, ctx);
-    return undefined;
-  }
-}
 
-/**
- * 安全异步执行
- */
-export async function safeAsync<T>(
-  fn: () => Promise<T>,
-  ctx: ErrorContext,
-): Promise<T | undefined> {
-  try {
-    return await fn();
-  } catch (e) {
-    handleError(e, ctx);
-    return undefined;
-  }
-}

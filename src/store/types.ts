@@ -1,4 +1,4 @@
-import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark, StatusFlowRule, AutomationRule, Sprint, Knowledge, Team, TeamMember, Subscription, ApprovalAudit, OKRSeason, ReviewSession, Budget, CostEntry, PerformanceReview, SkillRating, EffectivenessMetric, AISuggestion, ReviewKnowledge, OKRScore, CapacityPlan, DSTEPhase, BusinessValueEntry } from '@/types';
+import type { AppState, Goal, Project, Task, Notification, Activity, Member, SubTask, ItemLink, BackupData, Tag, Permission, SavedView, ReviewEntry, Category, Template, ScheduleEvent, Note, ItemType, Comment, Bookmark, StatusFlowRule, AutomationRule, Sprint, Knowledge, Team, TeamMember, Subscription, InstalledAgent, ApprovalAudit, OKRSeason, ReviewSession, Budget, CostEntry, PerformanceReview, SkillRating, EffectivenessMetric, AISuggestion, ReviewKnowledge, OKRScore, CapacityPlan, DSTEPhase, BusinessValueEntry } from '@/types';
 
 export const STORAGE_KEY = 'tbh-data';
 const LEGACY_STORAGE_KEY = 'team-business-hub-data';
@@ -133,6 +133,8 @@ export type Action =
   | { type: 'ADD_BUSINESS_VALUE'; payload: Omit<BusinessValueEntry, 'id'> }
   | { type: 'DELETE_BUSINESS_VALUE'; payload: string }
   | { type: 'CLEAR_OUTLOOK_DATA' }
+  | { type: 'ADD_INSTALLED_AGENT'; payload: InstalledAgent }
+  | { type: 'REMOVE_INSTALLED_AGENT'; payload: string }
   | { type: 'UPDATE_GOAL'; payload: { id: string; updates: Partial<Goal> }; _skipUndo?: boolean }
   | { type: 'UPDATE_PROJECT'; payload: { id: string; updates: Partial<Project> }; _skipUndo?: boolean }
   | { type: 'UPDATE_TASK'; payload: { id: string; updates: Partial<Task> }; _skipUndo?: boolean };
@@ -188,6 +190,7 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: Memb
     teams: arr(data.teams),
     teamMembers: arr(data.teamMembers),
     subscriptions: arr(data.subscriptions),
+    installedAgents: arr(data.installedAgents),
     approvalAudits: arr(data.approvalAudits),
     outlookCalendarEvents: arr(data.outlookCalendarEvents),
     outlookMailSummary: arr(data.outlookMailSummary),
@@ -242,6 +245,7 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: Memb
     goalId: t.goalId ?? null, projectId: t.projectId ?? null,
     blockedBy: t.blockedBy ?? [],
     sprintId: t.sprintId ?? null,
+    storyPoints: t.storyPoints ?? 0,
     description: t.description ?? '',
   }));
   result.members = result.members.map((m: Member) => ({

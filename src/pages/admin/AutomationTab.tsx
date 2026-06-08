@@ -99,7 +99,7 @@ export function AutomationTab() {
     else if (type === 'assign') actions.push({ type, config: { memberId: '' } });
     else if (type === 'escalation') actions.push({ type, config: { message: '' } });
     else if (type === 'create_subtask') actions.push({ type, config: { title: '' } });
-    else if (type === 'ai_action') actions.push({ type, config: { actionId: 'smart_assign' } });
+    else if (type === 'ai_action') actions.push({ type, config: { actionId: 'smart_assign', strategy: 'auto' } });
     setForm({ ...form, actions });
   }
 
@@ -234,7 +234,7 @@ export function AutomationTab() {
                   {act.type === 'set_field' && <><input className="w-16 border border-input rounded px-1.5 py-0.5" placeholder="字段" value={act.config.field ?? ''} onChange={e => updateAction(i, { ...act.config, field: e.target.value })} /><input className="w-16 border border-input rounded px-1.5 py-0.5" placeholder="值" value={act.config.value ?? ''} onChange={e => updateAction(i, { ...act.config, value: e.target.value })} /></>}
                   {act.type === 'assign' && <SimpleSelect value={act.config.memberId ?? ''} onValueChange={(v) => updateAction(i, { ...act.config, memberId: v })} options={state.members.filter(m => m.status === 'active').map(m => ({ value: m.id, label: m.name }))} placeholder="选择成员" className="h-7 text-xs" />}
                   {act.type === 'create_subtask' && <input className="flex-1 border border-input rounded px-1.5 py-0.5" placeholder="子任务标题" value={act.config.title ?? ''} onChange={e => updateAction(i, { ...act.config, title: e.target.value })} />}
-                  {act.type === 'ai_action' && <SimpleSelect value={act.config.actionId ?? 'smart_assign'} onValueChange={(v) => updateAction(i, { ...act.config, actionId: v })} options={[{ value: 'smart_assign', label: '智能分配' }, { value: 'auto_complete_goal', label: '自动完成目标' }, { value: 'get_risk_items', label: '风险检测' }, { value: 'get_team_load', label: '团队负载' }, { value: 'get_overdue_tasks', label: '逾期查询' }, { value: 'get_goal_progress', label: '目标进度' }]} className="h-7 text-xs" />}
+                  {act.type === 'ai_action' && <><SimpleSelect value={act.config.actionId ?? 'smart_assign'} onValueChange={(v) => updateAction(i, { ...act.config, actionId: v })} options={[{ value: 'smart_assign', label: '智能分配' }, { value: 'auto_complete_goal', label: '自动完成目标' }, { value: 'get_risk_items', label: '风险检测' }, { value: 'get_team_load', label: '团队负载' }, { value: 'get_overdue_tasks', label: '逾期查询' }, { value: 'get_goal_progress', label: '目标进度' }]} className="h-7 text-xs" />{act.config.actionId === 'smart_assign' && <SimpleSelect value={act.config.strategy ?? 'auto'} onValueChange={(v) => updateAction(i, { ...act.config, strategy: v })} options={[{ value: 'auto', label: '智能选择' }, { value: 'load-balance', label: '负荷均衡' }, { value: 'best-fit', label: '能力匹配' }, { value: 'growth', label: '成长导向' }, { value: 'urgency', label: '紧急优先' }]} className="h-7 text-xs" />}</>}
                   <button onClick={() => removeAction(i)} className="text-muted-foreground hover:text-destructive cursor-pointer" aria-label="移除动作"><Trash2 size={12} /></button>
                 </div>
               ))}

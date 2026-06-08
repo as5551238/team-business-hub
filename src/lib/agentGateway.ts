@@ -8,6 +8,7 @@
  */
 
 import { handleError } from '@/lib/errorHandler';
+import { saveSettingDualWrite } from '@/supabase/teamSettings';
 
 // ===== A2A Agent Card (Google A2A 规范) =====
 
@@ -118,12 +119,12 @@ const MCP_TO_REST: Record<string, { method: string; path: string }> = {
 };
 
 /** 将 A2A action 翻译为 MCP tool name */
-export function translateA2AToMCP(a2aAction: string): string | null {
+function translateA2AToMCP(a2aAction: string): string | null {
   return A2A_TO_MCP[a2aAction] || null;
 }
 
 /** 将 MCP tool name 翻译为 REST endpoint */
-export function translateMCPToREST(mcpTool: string): { method: string; path: string } | null {
+function translateMCPToREST(mcpTool: string): { method: string; path: string } | null {
   return MCP_TO_REST[mcpTool] || null;
 }
 
@@ -164,7 +165,7 @@ const AUDIT_LOG_KEY = 'tbh-agent-audit-log';
 const MAX_AUDIT_ENTRIES = 2000;
 
 /** 写入审计日志 */
-export function writeAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): string {
+function writeAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): string {
   const id = `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const full: AuditLogEntry = { ...entry, id, timestamp: new Date().toISOString() };
 
@@ -174,6 +175,9 @@ export function writeAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): s
     // 保持最大条目限制
     while (logs.length > MAX_AUDIT_ENTRIES) logs.shift();
     localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(logs));
+    // DR-19: dual-write to DB
+    const teamId = localStorage.getItem('tbh-current-team') || '';
+    if (teamId) saveSettingDualWrite('agent_audit_log', AUDIT_LOG_KEY, logs, teamId);
   } catch (e) {
     handleError(e, { module: 'agentGateway', operation: 'WRITE_AUDIT', severity: 'debug' });
   }

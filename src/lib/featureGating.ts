@@ -23,10 +23,6 @@ export function getTeamPlan(teamId: string, subscriptions: SubscriptionEntry[]):
   return sub?.tier ?? 'free';
 }
 
-export function isFreeTier(teamId: string, subscriptions: SubscriptionEntry[]): boolean {
-  return getTeamPlan(teamId, subscriptions) === 'free';
-}
-
 export function checkLimit(
   limit: keyof PlanLimit,
   teamId: string,

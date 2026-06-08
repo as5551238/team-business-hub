@@ -136,12 +136,12 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   return (
     <Dialog open={true} onOpenChange={(v) => { if (!v) handleSkip(); }}>
       <DialogContent className="sm:max-w-lg p-0 gap-0 [&>button]:hidden" onInteractOutside={e => e.preventDefault()}>
-        <DialogHeader className="bg-gradient-to-r from-primary to-blue-600 px-6 pt-5 pb-4 sr-only">
+        <DialogHeader className="brand-gradient px-6 pt-5 pb-4 sr-only">
           <DialogTitle className="text-white">新手引导</DialogTitle>
           <DialogDescription className="text-white/80">配置您的团队业务中台</DialogDescription>
         </DialogHeader>
         {/* 品牌头部 — 视觉可见的渐变头部，与sr-only DialogHeader共存以满足a11y */}
-        <div className="bg-gradient-to-r from-primary to-blue-600 px-6 pt-5 pb-4">
+        <div className="brand-gradient px-6 pt-5 pb-4">
           <div className="flex items-center gap-2 text-white/80 text-xs mb-2">
             <Building2 size={12} />
             <span>团队业务中台</span>
@@ -320,7 +320,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                 <button
                   type="button"
                   onClick={handleApply}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-primary to-blue-600 text-white hover:opacity-90 transition-opacity"
+                  className="px-4 py-2 rounded-lg text-sm font-medium brand-gradient text-white hover:opacity-90 transition-opacity"
                 >
                   <Check size={14} className="inline mr-1" />
                   应用配置

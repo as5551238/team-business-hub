@@ -51,7 +51,7 @@ export function getFactoryRules(): AutomationRule[] {
       trigger: 'item_created',
       condition: { field: 'leaderId', operator: 'empty', value: '' },
       actions: [
-        { type: 'ai_action', config: { actionId: 'smart_assign' } },
+        { type: 'ai_action', config: { actionId: 'smart_assign', strategy: 'auto' } },
       ],
       createdAt: now,
       updatedAt: now,

@@ -3,26 +3,12 @@
  * S2-1: 将自建 hash 路由迁移至 react-router-dom HashRouter
  */
 import { useCallback, useMemo } from 'react';
-import { useNavigate, useLocation, useParams, useSearchParams, Navigate } from 'react-router-dom';
+import { useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import type { Page } from '@/components/layout/Layout';
 
-// ─── 路由路径常量 ───────────────────────────────────────────
-export const ROUTES = {
-  DASHBOARD: '/dashboard',
-  GOALS: '/goals',
-  GOALS_ITEM: '/goals/:itemId',
-  PROJECTS: '/projects',
-  PROJECTS_ITEM: '/projects/:itemId',
-  TASKS: '/tasks',
-  TASKS_ITEM: '/tasks/:itemId',
-  INSIGHT: '/insight',
-  KNOWLEDGE: '/knowledge',
-  ADMIN: '/admin',
-  PRIVACY: '/privacy',
-} as const;
+// ─── 导航 Hook
 
-/** 路径 → Page 映射 */
-export const PATH_TO_PAGE: Record<string, Page> = {
+const PATH_TO_PAGE: Record<string, Page> = {
   '/dashboard': 'dashboard',
   '/goals': 'goals',
   '/projects': 'projects',
@@ -33,7 +19,6 @@ export const PATH_TO_PAGE: Record<string, Page> = {
   '/privacy': 'privacy',
 };
 
-/** Page → 路径映射 */
 export const PAGE_TO_PATH: Record<Page, string> = {
   dashboard: '/dashboard',
   goals: '/goals',
@@ -135,7 +120,4 @@ export function usePageInfo() {
   return { currentPage, itemId, filters, searchParams, pathname: location.pathname };
 }
 
-// ─── 重定向到 Dashboard ─────────────────────────────────────
-export function RedirectToDashboard() {
-  return <Navigate to={ROUTES.DASHBOARD} replace />;
-}
+

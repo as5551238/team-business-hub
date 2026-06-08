@@ -17,6 +17,7 @@ import { buildAIContext, type AIProjectContext } from './aiContextEngine';
 import { buildTeamCapabilityLocal } from './aiTeamCapability';
 import type { MethodologyId } from './aiMethodology';
 import { handleError } from '@/lib/errorHandler';
+import { saveSettingDualWrite } from '@/supabase/teamSettings';
 
 // ===== 类型 =====
 
@@ -70,7 +71,7 @@ function loadEffectRecords(): MethodologyEffectRecord[] {
 }
 
 function saveEffectRecords(records: MethodologyEffectRecord[]) {
-  try { localStorage.setItem(EFFECT_STORAGE_KEY, JSON.stringify(records.slice(-50))); } catch (e) { handleError(e, { module: 'aiMethodologyEvolution', operation: 'SAVE_EFFECTS', severity: 'debug' }); }
+  try { localStorage.setItem(EFFECT_STORAGE_KEY, JSON.stringify(records.slice(-50))); { const _tid = localStorage.getItem('tbh-current-team') || ''; if (_tid) saveSettingDualWrite('methodology_effects', EFFECT_STORAGE_KEY, records.slice(-50), _tid); } } catch (e) { handleError(e, { module: 'aiMethodologyEvolution', operation: 'SAVE_EFFECTS', severity: 'debug' }); }
 }
 
 function loadEvolutionLog(): EvolutionEntry[] {
@@ -81,7 +82,7 @@ function loadEvolutionLog(): EvolutionEntry[] {
 }
 
 function saveEvolutionLog(log: EvolutionEntry[]) {
-  try { localStorage.setItem(EVOLUTION_STORAGE_KEY, JSON.stringify(log.slice(-100))); } catch (e) { handleError(e, { module: 'aiMethodologyEvolution', operation: 'SAVE_EVOLUTION', severity: 'debug' }); }
+  try { localStorage.setItem(EVOLUTION_STORAGE_KEY, JSON.stringify(log.slice(-100))); { const _tid = localStorage.getItem('tbh-current-team') || ''; if (_tid) saveSettingDualWrite('methodology_evolution', EVOLUTION_STORAGE_KEY, log.slice(-100), _tid); } } catch (e) { handleError(e, { module: 'aiMethodologyEvolution', operation: 'SAVE_EVOLUTION', severity: 'debug' }); }
 }
 
 // ===== 确定性进化 =====

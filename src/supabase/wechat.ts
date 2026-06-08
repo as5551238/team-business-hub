@@ -28,6 +28,8 @@ export const defaultWeChatConfig: WeChatConfig = {
 };
 
 export function loadWeChatConfig(): WeChatConfig {
+  // DB-first: try Supabase team_settings, fallback to localStorage
+  // Async version is preferred; sync version uses localStorage cache for initial render
   try {
     const saved = localStorage.getItem(WECHAT_CONFIG_KEY);
     if (saved) {
@@ -43,8 +45,42 @@ export function loadWeChatConfig(): WeChatConfig {
   return defaultWeChatConfig;
 }
 
+export async function loadWeChatConfigFromDB(teamId: string): Promise<WeChatConfig> {
+  const sb = getSupabaseClient();
+  if (!sb) return loadWeChatConfig();
+  try {
+    const { data, error } = await sb.from('team_settings').select('value').eq('team_id', teamId).eq('key', 'wechat_config').single();
+    if (!error && data?.value) {
+      const config = { ...defaultWeChatConfig, ...data.value as Partial<WeChatConfig> };
+      // Cache to localStorage for sync reads
+      try { localStorage.setItem(WECHAT_CONFIG_KEY, JSON.stringify(config)); } catch (e) { /* ignore */ }
+      return config;
+    }
+  } catch (e) { handleError(e, { module: 'wechat', operation: 'LOAD_CONFIG_DB', severity: 'debug' }); }
+  return loadWeChatConfig();
+}
+
 export function saveWeChatConfig(config: WeChatConfig): void {
+  // Write to localStorage (sync, immediate UI)
   try { localStorage.setItem(WECHAT_CONFIG_KEY, JSON.stringify(config)); } catch (e) { handleError(e, { module: 'wechat', operation: 'SAVE_CONFIG', severity: 'warn' }); }
+  // Async write to DB
+  saveWeChatConfigToDB(config);
+}
+
+async function saveWeChatConfigToDB(config: WeChatConfig): Promise<void> {
+  const sb = getSupabaseClient();
+  if (!sb) return;
+  try {
+    const { getCurrentTeamId } = await import('@/store/supabase');
+    const teamId = getCurrentTeamId();
+    if (!teamId) return;
+    await sb.from('team_settings').upsert({
+      team_id: teamId,
+      key: 'wechat_config',
+      value: config as unknown as Record<string, unknown>,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'team_id,key' });
+  } catch (e) { handleError(e, { module: 'wechat', operation: 'SAVE_CONFIG_DB', severity: 'warn' }); }
 }
 
 export function isWeChatEnabled(): boolean {

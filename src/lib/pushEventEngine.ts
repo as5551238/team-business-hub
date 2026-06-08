@@ -8,6 +8,7 @@
  */
 import { pushNotification, triggerZapierWebhook, getPushConfigs, formatTaskNotification } from './pushConnector';
 import { handleError } from '@/lib/errorHandler';
+import { saveSettingDualWrite } from '@/supabase/teamSettings';
 import type { PushMessage } from './pushConnector';
 import type { Task, Goal } from '@/store/types';
 
@@ -66,18 +67,12 @@ const DEFAULT_EVENT_CONFIG: Record<PushEventType, PushEventConfig> = {
   'member.mentioned': { enabled: true, channels: [], minLevel: 'none' },
 };
 
-export function loadPushEventConfigs(): Record<PushEventType, PushEventConfig> {
+function loadPushEventConfigs(): Record<PushEventType, PushEventConfig> {
   try {
     const stored = localStorage.getItem(PUSH_CONFIG_KEY);
     if (stored) return { ...DEFAULT_EVENT_CONFIG, ...JSON.parse(stored) };
   } catch (e) { handleError(e, { module: 'pushEventEngine', operation: 'LOAD_CONFIG', severity: 'debug' }); }
   return { ...DEFAULT_EVENT_CONFIG };
-}
-
-export function savePushEventConfigs(configs: Record<PushEventType, PushEventConfig>) {
-  try {
-    localStorage.setItem(PUSH_CONFIG_KEY, JSON.stringify(configs));
-  } catch (e) { handleError(e, { module: 'pushEventEngine', operation: 'SAVE_CONFIG', severity: 'debug' }); }
 }
 
 // ===== 去重机制 =====
@@ -169,37 +164,6 @@ export function pushTaskEvent(
     title: titleMap[type] || '任务通知',
     content: `${task.title}\n状态: ${statusMap[task.status] || task.status}\n负责人: ${getName(task.leaderId)}${task.dueDate ? `\n截止日: ${task.dueDate}` : ''}`,
     data: { id: task.id, title: task.title, status: task.status, leaderId: task.leaderId },
-  });
-}
-
-export function pushGoalEvent(
-  type: 'created' | 'updated' | 'completed',
-  goal: { id: string; title: string; status: string },
-) {
-  const titleMap: Record<string, string> = {
-    created: '新目标创建',
-    updated: '目标状态更新',
-    completed: '目标已达成',
-  };
-  dispatchPushEvent({
-    type: `goal.${type}` as PushEventType,
-    title: titleMap[type] || '目标通知',
-    content: `${goal.title}\n状态: ${goal.status}`,
-    data: { id: goal.id, title: goal.title, status: goal.status },
-  });
-}
-
-export function pushRiskAlert(
-  level: string,
-  message: string,
-  action: string,
-  data?: Record<string, unknown>,
-) {
-  dispatchPushEvent({
-    type: 'risk.alert',
-    title: `风险预警 [${level}]`,
-    content: `${message}\n建议: ${action}`,
-    data,
   });
 }
 

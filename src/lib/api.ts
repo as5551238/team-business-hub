@@ -26,8 +26,30 @@ export function getApiTokens(): ApiToken[] {
   } catch (e) { handleError(e, { module: 'api', operation: 'LOAD_TOKENS', severity: 'debug' }); return []; }
 }
 
-export function saveApiTokens(tokens: ApiToken[]) {
-  localStorage.setItem(API_TOKEN_KEY, JSON.stringify(tokens));
+/** DB-first async load: query api_tokens, cache to localStorage */
+export async function getApiTokensFromDB(teamId: string): Promise<ApiToken[]> {
+  try {
+    const { getSupabaseClient } = await import('@/supabase/client');
+    const sb = getSupabaseClient();
+    if (!sb) return getApiTokens();
+    const { data, error } = await sb.from('api_tokens').select('*').eq('team_id', teamId).order('created_at', { ascending: false });
+    if (!error && data) {
+      const tokens: ApiToken[] = data.map((r: Record<string, unknown>) => ({
+        id: r.id as string,
+        name: r.name as string,
+        token: r.token_prefix as string + '...', // DB stores hash, show prefix only
+        createdAt: r.created_at as string,
+        permissions: (r.permissions as string[]) || [],
+      }));
+      try { localStorage.setItem(API_TOKEN_KEY, JSON.stringify(tokens)); } catch (e) { /* ignore */ }
+      return tokens;
+    }
+  } catch (e) { handleError(e, { module: 'api', operation: 'LOAD_TOKENS_DB', severity: 'debug' }); }
+  return getApiTokens();
+}
+
+function saveApiTokens(tokens: ApiToken[]) {
+  try { localStorage.setItem(API_TOKEN_KEY, JSON.stringify(tokens)); } catch (e) { handleError(e, { module: 'api', operation: 'SAVE_TOKENS', severity: 'debug' }); }
 }
 
 export function createApiToken(name: string, permissions: string[]): ApiToken {
@@ -41,12 +63,55 @@ export function createApiToken(name: string, permissions: string[]): ApiToken {
   const tokens = getApiTokens();
   tokens.push(token);
   saveApiTokens(tokens);
+  // Async write to DB (store hash + prefix, NOT the raw token)
+  saveApiTokenToDB(token);
   return token;
+}
+
+async function saveApiTokenToDB(token: ApiToken): Promise<void> {
+  try {
+    const { getSupabaseClient } = await import('@/supabase/client');
+    const { getCurrentTeamId } = await import('@/store/supabase');
+    const sb = getSupabaseClient();
+    if (!sb) return;
+    const teamId = getCurrentTeamId();
+    if (!teamId) return;
+    const userId = localStorage.getItem('tbh-current-user');
+    // Store token_hash (simple hash for demo — production should use bcrypt)
+    const tokenHash = await simpleHash(token.token);
+    await sb.from('api_tokens').insert({
+      id: token.id,
+      team_id: teamId,
+      name: token.name,
+      token_hash: tokenHash,
+      token_prefix: token.token.slice(0, 8),
+      permissions: token.permissions,
+      created_by: userId || null,
+    });
+  } catch (e) { handleError(e, { module: 'api', operation: 'SAVE_TOKEN_DB', severity: 'debug' }); }
+}
+
+async function simpleHash(str: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 export function revokeApiToken(tokenId: string) {
   const tokens = getApiTokens().filter(t => t.id !== tokenId);
   saveApiTokens(tokens);
+  // Async delete from DB
+  revokeApiTokenFromDB(tokenId);
+}
+
+async function revokeApiTokenFromDB(tokenId: string): Promise<void> {
+  try {
+    const { getSupabaseClient } = await import('@/supabase/client');
+    const sb = getSupabaseClient();
+    if (!sb) return;
+    await sb.from('api_tokens').delete().eq('id', tokenId);
+  } catch (e) { handleError(e, { module: 'api', operation: 'REVOKE_TOKEN_DB', severity: 'debug' }); }
 }
 
 // ===== API 响应格式 =====
@@ -58,20 +123,6 @@ export interface ApiResponse<T = unknown> {
 }
 
 // ===== CRUD 操作 =====
-
-/** 通用查询 — 通过 Supabase REST API 直接查询 */
-export function getApiBaseUrl(): string {
-  return 'https://atexvoyvnnuaonvrgzhn.supabase.co/rest/v1';
-}
-
-export function getApiHeaders(): Record<string, string> {
-  return {
-    'apikey': 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie',
-    'Authorization': 'Bearer sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie',
-    'Content-Type': 'application/json',
-    'Prefer': 'return=representation',
-  };
-}
 
 /** 通用创建 */
 export async function apiCreate(table: string, record: Record<string, unknown>): Promise<ApiResponse> {
@@ -155,7 +206,7 @@ export const ALL_PERMISSIONS: Array<{ value: string; label: string; group: strin
  * @param requiredPermissions 需要的权限列表
  * @returns 校验结果
  */
-export function validateApiRequest(
+function validateApiRequest(
   tokenValue: string,
   requiredPermissions: string[],
 ): { valid: boolean; token?: ApiToken; missing: string[] } {
@@ -183,56 +234,5 @@ export function validateToolAccess(
   return validateApiRequest(tokenValue, required);
 }
 
-// ===== 业务 API =====
 
-/** Goals API */
-export const goalsApi = {
-  create: (record: Record<string, unknown>) => apiCreate('goals', record),
-  update: (id: string, updates: Record<string, unknown>) => apiUpdate('goals', id, updates),
-  delete: (id: string) => apiDelete('goals', id),
-};
 
-/** Projects API */
-export const projectsApi = {
-  create: (record: Record<string, unknown>) => apiCreate('projects', record),
-  update: (id: string, updates: Record<string, unknown>) => apiUpdate('projects', id, updates),
-  delete: (id: string) => apiDelete('projects', id),
-};
-
-/** Tasks API */
-export const tasksApi = {
-  create: (record: Record<string, unknown>) => apiCreate('tasks', record),
-  update: (id: string, updates: Record<string, unknown>) => apiUpdate('tasks', id, updates),
-  delete: (id: string) => apiDelete('tasks', id),
-};
-
-// ===== API 文档端点 =====
-
-export interface ApiEndpoint {
-  method: string;
-  path: string;
-  description: string;
-  params?: string[];
-}
-
-export function getApiEndpoints(): ApiEndpoint[] {
-  return [
-    { method: 'GET', path: '/api/goals', description: '获取目标列表', params: ['status', 'category', 'leader_id'] },
-    { method: 'GET', path: '/api/goals/:id', description: '获取单个目标' },
-    { method: 'POST', path: '/api/goals', description: '创建目标', params: ['title', 'type', 'priority', 'start_date', 'end_date'] },
-    { method: 'PATCH', path: '/api/goals/:id', description: '更新目标' },
-    { method: 'DELETE', path: '/api/goals/:id', description: '删除目标' },
-    { method: 'GET', path: '/api/projects', description: '获取项目列表', params: ['status', 'goal_id'] },
-    { method: 'GET', path: '/api/projects/:id', description: '获取单个项目' },
-    { method: 'POST', path: '/api/projects', description: '创建项目' },
-    { method: 'PATCH', path: '/api/projects/:id', description: '更新项目' },
-    { method: 'DELETE', path: '/api/projects/:id', description: '删除项目' },
-    { method: 'GET', path: '/api/tasks', description: '获取任务列表', params: ['status', 'project_id', 'leader_id'] },
-    { method: 'GET', path: '/api/tasks/:id', description: '获取单个任务' },
-    { method: 'POST', path: '/api/tasks', description: '创建任务' },
-    { method: 'PATCH', path: '/api/tasks/:id', description: '更新任务' },
-    { method: 'DELETE', path: '/api/tasks/:id', description: '删除任务' },
-    { method: 'GET', path: '/api/members', description: '获取成员列表' },
-    { method: 'GET', path: '/api/members/:id', description: '获取单个成员' },
-  ];
-}

@@ -79,7 +79,7 @@ function ContributionBar({ memberId }: { memberId: string }) {
     <div className="bg-card rounded-lg border border-border">
       <div className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/20 transition-colors" onClick={() => setDetailOpen(!detailOpen)}>
         <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold bg-primary/10 text-primary flex-shrink-0">
-          {member.avatar || member.name[0]}
+          {member.avatar || (member.name || '?')[0]}
         </div>
         <span className="text-sm font-medium flex-1 truncate">{member.name}</span>
         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${LEVEL_STYLES[level] || 'bg-gray-50 text-gray-500 border-gray-200'}`}>

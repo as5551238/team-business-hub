@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import type { Goal, Project, Task, ItemType } from '@/types';
-import { Target, FolderKanban, CheckSquare } from 'lucide-react';
+import { Target, FolderKanban, CheckSquare, Zap, Calendar, Layers, Type } from 'lucide-react';
 import { Section } from './detail-shared';
 import { collectDescendantIds } from './detail-shared';
 import { SimpleSelect } from '@/components/ui/simple-select';
+import { SprintSelector } from '@/components/SprintSelector';
 
 interface DetailRelationshipsProps {
   itemType: ItemType;
@@ -46,8 +47,35 @@ export function DetailRelationships({ itemType, itemId, goal, project, task, can
     <Section title="归属关系">
       {itemType === 'goal' && (
         <div className="space-y-2">
-          <label className="text-xs text-muted-foreground">父目标</label>
-          <SimpleSelect value={(goal as Goal)?.parentId || '__EMPTY__'} onValueChange={(v) => handleParentChange('parentId', v === '__EMPTY__' ? null : v)} options={[{ value: '__EMPTY__', label: '无' }, ...availableParentGoals.map(g => ({ value: g.id, label: g.title }))]} className="w-full h-9 text-sm" />
+          <div>
+            <label className="text-xs text-muted-foreground flex items-center gap-1"><Type className="w-3 h-3" />目标类型</label>
+            <SimpleSelect value={(goal as Goal)?.type || 'okr'} onValueChange={(v) => updateItem({ type: v as 'okr' | 'kpi' | 'milestone' })} options={[{ value: 'okr', label: 'OKR' }, { value: 'kpi', label: 'KPI' }, { value: 'milestone', label: '里程碑' }]} className="w-full h-9 text-sm mt-1" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">父目标</label>
+            <SimpleSelect value={(goal as Goal)?.parentId || '__EMPTY__'} onValueChange={(v) => handleParentChange('parentId', v === '__EMPTY__' ? null : v)} options={[{ value: '__EMPTY__', label: '无' }, ...availableParentGoals.map(g => ({ value: g.id, label: g.title }))]} className="w-full h-9 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />所属赛季</label>
+            <SimpleSelect value={(goal as Goal)?.seasonId || '__EMPTY__'} onValueChange={(v) => updateItem({ seasonId: v === '__EMPTY__' ? null : v })} options={[{ value: '__EMPTY__', label: '未分配' }, ...state.seasons.filter(s => s.status !== 'archived').map(s => ({ value: s.id, label: s.name }))]} className="w-full h-9 text-sm mt-1" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground flex items-center gap-1"><Layers className="w-3 h-3" />战略层级</label>
+            <SimpleSelect value={(goal as Goal)?.strategyLevel || '__EMPTY__'} onValueChange={(v) => updateItem({ strategyLevel: v === '__EMPTY__' ? null : v })} options={[{ value: '__EMPTY__', label: '未设定' }, { value: 'vision', label: '愿景' }, { value: 'annual', label: '年度' }, { value: 'quarter', label: '季度' }]} className="w-full h-9 text-sm mt-1" />
+          </div>
+          {((goal as Goal)?.seasonId || (goal as Goal)?.strategyLevel) && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(goal as Goal)?.seasonId && (() => {
+                const sn = state.seasons.find(s => s.id === (goal as Goal)!.seasonId);
+                return sn ? (
+                  <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-purple-50 text-purple-700 rounded"><Calendar className="w-3 h-3" />{sn.name}</span>
+                ) : null;
+              })()}
+              {(goal as Goal)?.strategyLevel && (
+                <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded"><Layers className="w-3 h-3" />{(goal as Goal).strategyLevel === 'vision' ? '愿景' : (goal as Goal).strategyLevel === 'annual' ? '年度' : '季度'}</span>
+              )}
+            </div>
+          )}
         </div>
       )}
       {itemType === 'project' && (
@@ -93,6 +121,18 @@ export function DetailRelationships({ itemType, itemId, goal, project, task, can
               </div>
             ) : null;
           })()}
+          <div>
+            <label className="text-xs text-muted-foreground">所属迭代</label>
+            <SprintSelector value={(task as Task)?.sprintId || null} onChange={v => updateItem({ sprintId: v })} className="w-full h-9 text-sm mt-1" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground flex items-center gap-1"><Zap className="w-3 h-3" />故事点</label>
+            <div className="flex items-center gap-1.5 mt-1">
+              {[0, 1, 2, 3, 5, 8, 13, 21].map(pt => (
+                <button key={pt} className={`px-2 py-1 text-xs rounded border cursor-pointer transition-colors ${(task as Task)?.storyPoints === pt ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`} onClick={() => updateItem({ storyPoints: pt })}>{pt || '—'}</button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             {(task as Task)?.projectId && (
               <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-orange-50 text-orange-700 rounded"><FolderKanban className="w-3 h-3" />{getItemTitle((task as Task).projectId!, 'project')}</span>

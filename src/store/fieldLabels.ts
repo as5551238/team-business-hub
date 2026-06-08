@@ -20,8 +20,12 @@ export const fieldLabelMap: Record<string, string> = {
   projectId: '所属项目',
   parentId: '父级',
   blockedBy: '前置依赖',
+  sprintId: '所属迭代',
+  storyPoints: '故事点',
   reminderDate: '提醒日期',
   // Goal-specific
   goalId: '所属目标',
   type: '类型',
+  seasonId: '所属赛季',
+  strategyLevel: '战略层级',
 };

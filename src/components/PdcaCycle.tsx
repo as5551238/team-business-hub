@@ -82,7 +82,8 @@ export function PdcaCycle({ value, onChange, onAIFill, isAIFilling }: Props) {
       {activeStep && (
         <div className="border rounded-lg p-4 space-y-2 animate-fade-in">
           {(() => {
-            const step = PDCA_STEPS.find(s => s.key === activeStep)!;
+            const step = PDCA_STEPS.find(s => s.key === activeStep);
+            if (!step) return null;
             return (
               <>
                 <div className="flex items-center justify-between">

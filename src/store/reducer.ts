@@ -71,6 +71,7 @@ const TABLE_TO_STATE_KEY: Record<string, string> = {
   dste_phases: 'dstePhases',
   business_values: 'businessValues',
   subscriptions: 'subscriptions',
+  installed_agents: 'installedAgents',
 };
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -342,6 +343,18 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'RESET_DATA': {
       if (!state.currentUser || state.currentUser.role !== 'admin') return state;
       return ensureAppStateDefaults(action.payload);
+    }
+
+    case 'ADD_INSTALLED_AGENT': {
+      const s = needMutate(state, ['installedAgents']);
+      s.installedAgents = [...s.installedAgents, action.payload];
+      return s;
+    }
+
+    case 'REMOVE_INSTALLED_AGENT': {
+      const s = needMutate(state, ['installedAgents']);
+      s.installedAgents = s.installedAgents.filter(a => a.agentId !== action.payload);
+      return s;
     }
 
   }

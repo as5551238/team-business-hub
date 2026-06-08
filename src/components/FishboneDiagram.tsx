@@ -96,7 +96,8 @@ export function FishboneDiagram({ value, onChange }: Props) {
       {activeCategory && (
         <div className="border rounded-lg p-3 animate-fade-in">
           {(() => {
-            const cat = FISHBONE_CATEGORIES.find(c => c.key === activeCategory)!;
+            const cat = FISHBONE_CATEGORIES.find(c => c.key === activeCategory);
+            if (!cat) return null;
             return (
               <>
                 <label className="text-xs font-semibold mb-1 block">{cat.label} ({cat.labelEn}) 分析</label>
