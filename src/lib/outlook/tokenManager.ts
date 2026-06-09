@@ -161,23 +161,10 @@ export async function refreshAccessToken(token: OutlookTokenData): Promise<Outlo
     return null;
   }
 
-  // OAuth 模式：调用 Microsoft token endpoint
-  // 预留实现，等 IT 审批 OAuth 后启用
-  // const response = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  //   body: new URLSearchParams({
-  //     client_id: OUTLOOK_CLIENT_ID,
-  //     grant_type: 'refresh_token',
-  //     refresh_token: token.refreshToken,
-  //     scope: 'Calendars.ReadWrite Mail.Read offline_access',
-  //   }),
-  // });
-  // if (!response.ok) return null;
-  // const data = await response.json();
-  // const newToken: OutlookTokenData = { ... };
-  // saveToken(newToken);
-  // return newToken;
+  // OAuth 模式：待 IT 审批后启用
+  // TODO(OAUTH): 实现参考 Microsoft token endpoint API v2.0
+  // 需 OUTLOOK_CLIENT_ID + refresh_token → access_token 刷新流程
+  // 搜索此 TODO 获取详细实现模板
 
   return null;
 }

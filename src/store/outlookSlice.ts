@@ -7,7 +7,7 @@
 
 import type { AppState, OutlookCalendarEvent, OutlookMailSummary } from '@/types';
 import type { Action } from '../types';
-import { needMutate } from './shared';
+import { needMutate, reducerCanDelete } from './shared';
 
 export function outlookReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
@@ -29,6 +29,7 @@ export function outlookReducer(state: AppState, action: Action): AppState | null
     }
 
     case 'DELETE_OUTLOOK_CALENDAR_EVENTS': {
+      if (!reducerCanDelete(state, 'settings_manage')) return state;
       const idsToDelete = new Set(action.payload as string[]);
       const s = needMutate(state, ['outlookCalendarEvents']);
       s.outlookCalendarEvents = s.outlookCalendarEvents.filter(e => !idsToDelete.has(e.id));
