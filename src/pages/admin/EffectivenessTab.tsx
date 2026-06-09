@@ -3,6 +3,7 @@ import { useStore } from '@/store/useStore';
 import type { EffectivenessMetric, AISuggestion } from '@/types';
 import { Target, TrendingUp, Sparkles, CheckCircle, XCircle, Plus, X } from 'lucide-react';
 import { inputCls, primaryBtnCls, btnCls } from './constants';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 export function EffectivenessTab() {
   const { state, dispatch } = useStore();

@@ -134,6 +134,7 @@ export async function callLLM(prompt: string, config: AIConfig, complexity?: Tas
   // 成本路由：根据任务复杂度选择模型
   const detectedComplexity = complexity || detectTaskComplexity(prompt);
   let model = config.model || preset.model;
+  if (!config.apiKey) throw new Error('AI API Key 未配置。请前往 管理中心 > 设置 > AI配置 填写API Key后再试.');
   if (config.costRouting && COST_ROUTING_MAP[config.provider]) {
     const routedModel = COST_ROUTING_MAP[config.provider][detectedComplexity];
     if (routedModel) model = routedModel;
@@ -277,6 +278,7 @@ export async function callLLMStream(
   const baseUrl = (config.baseUrl || preset.baseUrl).replace(/\/+$/, '');
   const detectedComplexity = options?.complexity || detectTaskComplexity(messages[messages.length - 1]?.content || '');
   let model = config.model || preset.model;
+  if (!config.apiKey) throw new Error('AI API Key 未配置。请前往 管理中心 > 设置 > AI配置 填写API Key后再试.');
   if (config.costRouting && COST_ROUTING_MAP[config.provider]) {
     const routedModel = COST_ROUTING_MAP[config.provider][detectedComplexity];
     if (routedModel) model = routedModel;

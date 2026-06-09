@@ -667,7 +667,7 @@ export default function Tasks() {
         </div>
       </PageShell>
 
-      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={closeTaskDetail} itemType={detailItem.type} itemId={detailItem.id} />}
+      {detailItem && <div className="flex-shrink-0 border-l border-border bg-card" style={{ width: 480 }}><ItemDetailPanel key={detailItem.id} inline isOpen={true} onClose={closeTaskDetail} itemType={detailItem.type} itemId={detailItem.id} /></div>}
       {showMatchPanel && <AIMatchPanel onClose={() => setShowMatchPanel(false)} />}
 
       <Dialog open={showCreateDialog} onOpenChange={(v) => { if (!v) closeCreateDialog(); }}>

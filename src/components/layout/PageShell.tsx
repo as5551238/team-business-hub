@@ -115,7 +115,7 @@ export default function PageShell({
       )}
 
       {/* Content */}
-      <div className={cn('flex-1 min-h-0 overflow-y-auto', noPadding ? '' : 'px-4 md:px-6 pb-20 md:pb-4')}>
+      <div className={cn('flex-1 min-h-0', noPadding ? '' : 'px-4 md:px-6 pb-20 md:pb-4')}>
         {children}
       </div>
     </div>

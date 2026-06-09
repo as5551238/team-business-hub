@@ -236,9 +236,10 @@ interface UserMenuDropdownProps {
   toggleTheme?: () => void;
   onlineUsers?: Array<{ id: string; name: string; color: string; cursor?: { entity: string } }>;
   currentPage?: string;
+  onClose?: () => void;
 }
 
-export const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMembers, onSwitchUser, onLogout, density, toggleDensity, theme, toggleTheme, onlineUsers, currentPage }: UserMenuDropdownProps) {
+export const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMembers, onSwitchUser, onLogout, density, toggleDensity, theme, toggleTheme, onlineUsers, currentPage, onClose }: UserMenuDropdownProps) {
   const otherOnlineUsers = (onlineUsers || []).filter(u => u.id !== user?.id);
   return (
     <div className="absolute right-0 top-full mt-1 w-56 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up">
@@ -251,7 +252,7 @@ export const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, vis
       <div className="border-b border-border">
         <div className="px-4 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">显示设置</div>
         {toggleDensity && (
-          <button onClick={(e) => { e.stopPropagation(); toggleDensity(); }}
+          <button onClick={() => { toggleDensity(); setTimeout(() => onClose?.(), 200); }}
             className="w-full flex items-center gap-2.5 px-4 py-2 text-sm hover:bg-muted transition-colors text-left">
             {density === 'comfortable' ? <Maximize2 size={14} className="text-muted-foreground" /> : <Minus size={14} className="text-primary" />}
             <span>{density === 'comfortable' ? '舒适模式' : '紧凑模式'}</span>
@@ -259,7 +260,7 @@ export const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, vis
           </button>
         )}
         {toggleTheme && (
-          <button onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
+          <button onClick={() => { toggleTheme(); setTimeout(() => onClose?.(), 200); }}
             className="w-full flex items-center gap-2.5 px-4 py-2 text-sm hover:bg-muted transition-colors text-left">
             {theme === 'dark' ? <Moon size={14} className="text-primary" /> : theme === 'light' ? <Sun size={14} className="text-muted-foreground" /> : <Monitor size={14} className="text-muted-foreground" />}
             <span>{theme === 'dark' ? '深色模式' : theme === 'light' ? '亮色模式' : '跟随系统'}</span>

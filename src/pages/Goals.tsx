@@ -133,7 +133,119 @@ export default function Goals() {
     window.addEventListener('tbh-switch-view', onViewSwitch);
     window.addEventListener('tbh-toggle-batch', onToggleBatch);
     window.addEventListener('tbh-select-all', onSelectAll);
-    return (
+    return () => {
+      window.removeEventListener('tbh-nav-down', onNavDown);
+      window.removeEventListener('tbh-nav-up', onNavUp);
+      window.removeEventListener('tbh-edit-selected', onEdit);
+      window.removeEventListener('tbh-open-selected', onOpen);
+      window.removeEventListener('tbh-delete-selected', onDelete);
+      window.removeEventListener('tbh-complete-selected', onComplete);
+      window.removeEventListener('tbh-focus-filter', onFilter);
+      window.removeEventListener('tbh-switch-view', onViewSwitch);
+      window.removeEventListener('tbh-toggle-batch', onToggleBatch);
+      window.removeEventListener('tbh-select-all', onSelectAll);
+    };
+  }, [focusedId, filteredGoals, can, dispatch, batchSel, selectAll]);
+
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedGoals(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const commentCounts = useCommentCounts('goal', state.comments);
+
+  const topGoals = useMemo(() => filteredGoals.filter(g => !g.parentId), [filteredGoals]);
+
+  const emptyMessage = filteredGoals.length < state.goals.length ? '没有匹配的目标，试试调整筛选条件' : '暂无目标';
+  const emptyAction = filteredGoals.length < state.goals.length ? undefined : '新建目标';
+  const emptyDesc = filteredGoals.length < state.goals.length ? undefined : '设定团队目标，驱动关键结果达成';
+
+  const activeFilterCount = (selectedStatuses.size > 0 ? 1 : 0) + (selectedPriorities.size > 0 ? 1 : 0) + (selectedLevels.size > 0 ? 1 : 0) + (selectedCategories.size > 0 ? 1 : 0) + (selectedTags.size > 0 ? 1 : 0) + (selectedMembers.size > 0 ? 1 : 0) + (timeRange !== 'all' ? 1 : 0) + (searchText.trim().length > 0 ? 1 : 0);
+
+  const clearFilters = () => {
+    setSelectedStatuses(new Set()); setSelectedPriorities(new Set()); setSelectedLevels(new Set());
+    setSelectedCategories(new Set()); setSelectedTags(new Set()); setSelectedMembers(new Set());
+    setTimeRange('all'); setSearchText('');
+  };
+
+  const { batchDelete: _batchDelete, batchUpdateStatus, batchAssign, batchUpdatePriority, batchAddTags, batchRemoveTags, batchSetDate } = useBatchOperations({
+    entityType: 'goal',
+    updateActionType: 'UPDATE_GOAL',
+    deleteActionType: 'DELETE_GOAL',
+    editPermission: 'goals_edit',
+    deletePermission: 'goals_delete',
+    entityLabel: '目标',
+    items: state.goals,
+    getItemId: (g: any) => g.id,
+    dispatch,
+    can,
+    clearSelection,
+    exitBatchMode,
+    selectedIds,
+  });
+
+  const handleBatchDelete = _batchDelete;
+  const handleBatchStatus = useCallback((status: string) => batchUpdateStatus(status), [batchUpdateStatus]);
+  const handleBatchAssign = useCallback((assigneeId: string) => batchAssign(assigneeId), [batchAssign]);
+  const handleBatchPriority = useCallback((priority: string) => batchUpdatePriority(priority), [batchUpdatePriority]);
+  const handleBatchAddTags = useCallback((newTags: string[]) => batchAddTags(newTags), [batchAddTags]);
+  const handleBatchRemoveTags = useCallback((removeTags: string[]) => batchRemoveTags(removeTags), [batchRemoveTags]);
+  const handleBatchSetDate = useCallback((field: string, value: string) => batchSetDate(field, value), [batchSetDate]);
+
+  const [formData, setFormData] = useState({
+    title: '', description: '', type: 'okr' as GoalType, priority: 'medium' as TaskPriority,
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0],
+    parentId: '', krTitle: '', krTarget: '', krUnit: '', category: '', repeatCycle: 'none' as RepeatCycle,
+  });
+
+  const goalDraft = useDraftSave('goal-create', formData);
+  useEffect(() => { if (showCreateDialog) { const draft = goalDraft.loadDraft(); if (draft) setFormData(f => ({ ...f, ...draft })); } }, [showCreateDialog]);
+  useEffect(() => { if (showCreateDialog && formData.title) goalDraft.saveDraft(formData); }, [showCreateDialog, formData]);
+
+  function handleCreateGoal() {
+    if (!formData.title.trim()) return;
+    dispatch({
+      type: 'ADD_GOAL',
+      payload: {
+        title: formData.title, description: formData.description,
+        type: formData.type, status: 'in_progress' as GoalStatus, parentId: formData.parentId || null,
+        level: formData.parentId ? (state.goals.find(g => g.id === formData.parentId)?.level ?? 0) + 1 : 0,
+        startDate: formData.startDate, endDate: formData.endDate, priority: formData.priority,
+        leaderId: state.currentUser?.id || '', supporterIds: [], category: formData.category,
+        keyResults: formData.krTitle ? [{
+          id: 'kr_new_' + Date.now(), title: formData.krTitle,
+          targetValue: Number(formData.krTarget) || 100, currentValue: 0, unit: formData.krUnit || '%', selected: true,
+        }] : [],
+      }
+    });
+    setShowCreateDialog(false);
+    setShowTemplateDropdown(false);
+    goalDraft.clearDraft();
+    setFormData({ title: '', description: '', type: 'okr', priority: 'medium', startDate: new Date().toISOString().split('T')[0], endDate: new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0], parentId: '', krTitle: '', krTarget: '', krUnit: '', category: '', repeatCycle: 'none' });
+  }
+
+  function applyTemplate(tpl: typeof goalTemplates[0]) {
+    try {
+      const content = JSON.parse(tpl.content);
+      setFormData(f => ({
+        ...f,
+        title: content.title || tpl.title,
+        description: content.description || tpl.description,
+      }));
+    } catch (e) {
+      handleError(e, { module: 'Goals', operation: 'PARSE_TEMPLATE', severity: 'warn' });
+      setFormData(f => ({ ...f, title: tpl.title, description: tpl.description }));
+    }
+    setShowTemplateDropdown(false);
+  }
+
+  const TIME_LABELS: Record<string, string> = { all: '时间', today: '今天', this_week: '本周', this_month: '本月', this_quarter: '本季度' };
+
+  return (
     <div className={cn('h-full animate-fade-in transition-all duration-300', detailItem ? 'flex' : '')}>
       <PageShell
         className={detailItem ? 'flex-1 min-w-0' : ''}

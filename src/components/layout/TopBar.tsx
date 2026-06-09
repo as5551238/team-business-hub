@@ -56,6 +56,16 @@ export default function TopBar({
 
   const closeAllDropdowns = useCallback(() => { setShowNotifications(false); setShowUserMenu(false); setShowMemberFilter(false); setShowTeamSelector(false); }, []);
 
+  // Click-away: close all dropdowns when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-dropdown-area]')) closeAllDropdowns();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [closeAllDropdowns]);
+
   // Team switcher
   const userTeams = useMemo(() => {
     if (!user) return [];
@@ -94,7 +104,7 @@ export default function TopBar({
   const notificationsMemo = useMemo(() => notifications.filter(n => !n.memberId || n.memberId === user?.id), [notifications, user?.id]);
 
   return (
-    <header className="h-14 bg-background border-b border-border flex items-center px-4 gap-4 flex-shrink-0">
+    <header data-dropdown-area className="h-14 bg-background border-b border-border flex items-center px-4 gap-4 flex-shrink-0">
       <button className="md:hidden p-1.5 -ml-1.5 rounded-md hover:bg-muted" onClick={() => setSidebarOpen(true)} aria-label="打开侧边栏"><Menu size={20} /></button>
       {sidebarMode === 'hidden' && <button className="hidden md:flex p-1.5 -ml-1.5 rounded-md hover:bg-muted" onClick={cycleSidebarMode} aria-label="展开侧边栏"><PanelLeft size={20} /></button>}
       <Breadcrumb currentPage={currentPage} itemId={itemId} />
@@ -145,7 +155,7 @@ export default function TopBar({
           <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">{user?.avatar || '?'}</div>
           <ChevronDown size={14} className="hidden sm:block text-muted-foreground" />
         </button>
-        {showUserMenu && <UserMenuDropdown user={user} visibleMembers={visibleMembersMemo} onSwitchUser={handleSwitchUser} onLogout={handleLogout} density={density} toggleDensity={toggleDensity} theme={theme} toggleTheme={toggleTheme} onlineUsers={onlineUsers} currentPage={currentPage} />}
+        {showUserMenu && <UserMenuDropdown user={user} visibleMembers={visibleMembersMemo} onSwitchUser={handleSwitchUser} onLogout={handleLogout} density={density} toggleDensity={toggleDensity} theme={theme} toggleTheme={toggleTheme} onlineUsers={onlineUsers} currentPage={currentPage} onClose={() => setShowUserMenu(false)} />}
       </div>
     </header>
   );

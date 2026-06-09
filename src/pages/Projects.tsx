@@ -14,6 +14,7 @@ import { useDraftSave } from '@/hooks/useDraftSave';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
 import PageShell from '@/components/layout/PageShell';
+import { cn } from '@/lib/utils';
 import { viewTabs, statusOptions, priorityOptions, bpOptions, timeOptions, priorityFromBp } from './projects/constants';
 import type { ViewMode, BatchProps } from './projects/constants';
 import { ProjectTreeNode, ProjectListView, ProjectTableView, ProjectKanbanView, ProjectMatrixView, ProjectTimelineView } from './projects/views';
@@ -192,7 +193,7 @@ export default function Projects() {
   const emptyDesc = activeFilterCount > 0 ? undefined : '创建项目，推进目标落地执行';
 
   return (
-    <div className="h-full animate-fade-in flex">
+    <div className={cn('h-full animate-fade-in', detailItem && 'flex')}>
       <PageShell
         className={detailItem ? 'flex-1 min-w-0' : ''}
         headerContent={(
@@ -321,7 +322,7 @@ export default function Projects() {
         </DialogContent>
       </Dialog>
 
-      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={!!detailItem} onClose={closeProjectDetail} itemType={detailItem.type} itemId={detailItem.id} />}
+      {detailItem && <div className="flex-shrink-0 border-l border-border bg-card" style={{ width: 480 }}><ItemDetailPanel key={detailItem.id} inline isOpen={true} onClose={closeProjectDetail} itemType={detailItem.type} itemId={detailItem.id} /></div>}
     </div>
   );
 }
