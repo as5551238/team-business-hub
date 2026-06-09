@@ -17,10 +17,14 @@ const AIChatAgent = lazy(() =>
 );
 
 const STORAGE_KEY = 'tbh-ai-panel-open';
+const DISMISSED_KEY = 'tbh-ai-hint-dismissed';
 
 export function FloatingAIPanel() {
   const [isOpen, setIsOpen] = useState(() => {
     try { return localStorage.getItem(STORAGE_KEY) === 'true'; } catch { return false; }
+  });
+  const [showHint, setShowHint] = useState(() => {
+    try { return !localStorage.getItem(DISMISSED_KEY); } catch { return true; }
   });
 
   const toggle = useCallback(() => {
@@ -29,6 +33,8 @@ export function FloatingAIPanel() {
       try { localStorage.setItem(STORAGE_KEY, String(next)); } catch { /* ignore */ }
       return next;
     });
+    setShowHint(false);
+    try { localStorage.setItem(DISMISSED_KEY, '1'); } catch { /* ignore */ }
   }, []);
 
   const close = useCallback(() => {
@@ -79,10 +85,18 @@ export function FloatingAIPanel() {
               <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />
               <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-400 border-2 border-background animate-pulse" />
             </button>
-          </TooltipTrigger>
-          <TooltipContent side="left">AI 助手 (Ctrl+Shift+K)</TooltipContent>
-        </Tooltip>
-      )}
+           </TooltipTrigger>
+           <TooltipContent side="left">AI 助手 (Ctrl+Shift+K)</TooltipContent>
+         </Tooltip>
+       )}
+       {/* First-use hint bubble */}
+       {!isOpen && showHint && (
+         <div className="fixed bottom-20 right-6 md:bottom-22 md:right-8 z-50 animate-fade-in bg-card border border-border rounded-lg shadow-lg px-3 py-2 max-w-[200px]">
+           <p className="text-xs text-muted-foreground mb-1">试试AI助手，快速分析团队状况</p>
+           <button onClick={() => { setShowHint(false); try { localStorage.setItem(DISMISSED_KEY, '1'); } catch {} }}
+             className="text-[10px] text-muted-foreground hover:text-foreground">知道了</button>
+         </div>
+       )}
 
       {/* Slide-in panel */}
       {isOpen && (

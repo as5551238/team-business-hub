@@ -1,7 +1,7 @@
 import type { Member, Template } from '@/types';
 import { handleError } from '@/lib/errorHandler';
 
-export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'okrseason' | 'review' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates' | 'privacy' | 'budget' | 'performance' | 'skillmatrix' | 'effectiveness' | 'dste';
+export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'okrseason' | 'review' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates' | 'privacy' | 'budget' | 'performance' | 'skillmatrix' | 'effectiveness' | 'dste' | 'analytics';
 
 export const tabItems: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'team', label: '团队', icon: 'Users' },

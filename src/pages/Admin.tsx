@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense, useEffect } from 'react';
-import { Users, Wrench, Calendar, Settings as SettingsIcon, GitBranch, Zap, Globe, Target, Bot, Server, Shield, BarChart3, Terminal, CreditCard, RotateCcw, Store, ShieldCheck, Radio, LayoutTemplate, ChevronDown, ChevronRight, Trophy, BookOpen, Wallet, Award, LayoutGrid, Activity, RefreshCw } from 'lucide-react';
+import { Users, Wrench, Calendar, Settings as SettingsIcon, GitBranch, Zap, Globe, Target, Bot, Server, Shield, BarChart3, Terminal, CreditCard, RotateCcw, Store, ShieldCheck, Radio, LayoutTemplate, ChevronDown, ChevronRight, Trophy, BookOpen, Wallet, Award, LayoutGrid, Activity, RefreshCw, TrendingUp } from 'lucide-react';
 import type { AdminTab } from './admin/constants';
 import { useStore } from '@/store/useStore';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
@@ -33,6 +33,7 @@ const PerformanceTab = lazy(() => import('./admin/PerformanceTab').then(m => ({ 
 const SkillMatrixTab = lazy(() => import('./admin/SkillMatrixTab').then(m => ({ default: m.SkillMatrixTab })));
 const EffectivenessTab = lazy(() => import('./admin/EffectivenessTab').then(m => ({ default: m.EffectivenessTab })));
 const DSTETab = lazy(() => import('./admin/DSTETab').then(m => ({ default: m.DSTETab })));
+const AnalyticsTab = lazy(() => import('./admin/AnalyticsTab').then(m => ({ default: m.AnalyticsTab })));
 
 // --- Grouped tab structure: 5 sections instead of 19 flat tabs ---
 interface TabItem { key: AdminTab; label: string; icon: typeof Users }
@@ -53,6 +54,7 @@ const tabGroups: TabGroup[] = [
       { key: 'performance', label: '绩效', icon: Award },
       { key: 'skillmatrix', label: '技能矩阵', icon: LayoutGrid },
       { key: 'effectiveness', label: '有效性', icon: Activity },
+      { key: 'analytics', label: '行为分析', icon: TrendingUp },
       { key: 'dste', label: 'DSTE闭环', icon: RefreshCw },
     ],
   },
@@ -94,7 +96,7 @@ const tabGroups: TabGroup[] = [
   },
 ];
 
-const TAB_LABELS: Record<AdminTab, string> = { team: '团队管理', toolbox: '工具箱', schedule: '日程管理', settings: '系统设置', flow: '流程配置', automation: '自动化规则', automaton: 'AI自主执行', integrations: '集成管理', kpi: 'KPI 看板', okrseason: 'OKR 赛季管理', review: '复盘中心', agent: 'Agent 审计', deploy: '私有化部署', riskradar: '风险雷达', teamload: '团队负载', mcptools: 'MCP 工具', billing: '订阅计费', retro: '复盘跟踪', marketplace: 'Agent 市场', compliance: '等保合规', collab: '实时协作', templates: '模板市场', privacy: '隐私政策', budget: '预算管理', performance: '绩效评估', skillmatrix: '技能矩阵', effectiveness: '有效性度量', dste: 'DSTE闭环' };
+const TAB_LABELS: Record<AdminTab, string> = { team: '团队管理', toolbox: '工具箱', schedule: '日程管理', settings: '系统设置', flow: '流程配置', automation: '自动化规则', automaton: 'AI自主执行', integrations: '集成管理', kpi: 'KPI 看板', okrseason: 'OKR 赛季管理', review: '复盘中心', agent: 'Agent 审计', deploy: '私有化部署', riskradar: '风险雷达', teamload: '团队负载', mcptools: 'MCP 工具', billing: '订阅计费', retro: '复盘跟踪', marketplace: 'Agent 市场', compliance: '等保合规', collab: '实时协作', templates: '模板市场', privacy: '隐私政策', budget: '预算管理', performance: '绩效评估', skillmatrix: '技能矩阵', effectiveness: '有效性度量', dste: 'DSTE闭环', analytics: '行为分析' };
 
 // Permission check per tab
 const tabVisibility: Record<AdminTab, 'admin' | 'manager' | 'member' | 'all'> = {
@@ -104,6 +106,7 @@ const tabVisibility: Record<AdminTab, 'admin' | 'manager' | 'member' | 'all'> = 
   retro: 'manager', riskradar: 'all', teamload: 'all', mcptools: 'manager', toolbox: 'member', schedule: 'member',
   privacy: 'all', budget: 'manager',
   performance: 'manager', skillmatrix: 'manager', effectiveness: 'manager', dste: 'manager',
+  analytics: 'manager',
 };
 
 export default function Admin({ activeTab }: { activeTab?: string }) {
@@ -242,6 +245,7 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
           {tab === 'skillmatrix' && <UpgradeGate feature="advancedPermissions"><TabErrorBoundary key="skillmatrix" name={TAB_LABELS.skillmatrix}><Suspense fallback={<TabLoader />}><SkillMatrixTab /></Suspense></TabErrorBoundary></UpgradeGate>}
           {tab === 'effectiveness' && <TabErrorBoundary key="effectiveness" name={TAB_LABELS.effectiveness}><Suspense fallback={<TabLoader />}><EffectivenessTab /></Suspense></TabErrorBoundary>}
           {tab === 'dste' && <TabErrorBoundary key="dste" name={TAB_LABELS.dste}><Suspense fallback={<TabLoader />}><DSTETab /></Suspense></TabErrorBoundary>}
+          {tab === 'analytics' && <TabErrorBoundary key="analytics" name={TAB_LABELS.analytics}><Suspense fallback={<TabLoader />}><AnalyticsTab /></Suspense></TabErrorBoundary>}
         </div>
       </div>
     </div>
