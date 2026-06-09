@@ -14,6 +14,7 @@ import ViewModeSwitch from '@/components/ViewModeSwitch';
 import { TrendingUp, AlertTriangle, Calendar, BarChart3, Settings, CheckCircle2, X, Rocket, UserPlus, Sparkles, Target, Zap, ListTodo, Sun } from 'lucide-react';
 import { useAppNavigate } from '@/lib/routes';
 import type { Page } from '@/components/layout/Layout';
+import PageShell from '@/components/layout/PageShell';
 
 // ── 懒加载 Tab 组件 ──
 const MyTodayTab = lazy(() => import('./dashboard/MyTodayTab'));
@@ -52,12 +53,10 @@ export default function Dashboard() {
   const { isTeamView, viewingMember } = useViewingMember();
   const { goToPage, goToItem, goWithFilter } = useAppNavigate();
 
-  // 创造一个兼容旧子组件的 onPageChange callback
   const onPageChange = useCallback((page: string) => {
     goToPage(page as Page);
   }, [goToPage]);
 
-  // 非管理员默认"我的今日"，管理员/经理默认"业务现况"
   const userRole = state.currentUser?.role;
   const defaultTab: DashboardTab = (userRole === 'admin' || userRole === 'manager' || userRole === 'leader') ? 'business' : 'myToday';
   const [tab, setTab] = useState<DashboardTab>(defaultTab);
@@ -86,47 +85,36 @@ export default function Dashboard() {
   }, []);
 
   const openGantt = useCallback(() => setGanttModalOpen(true), []);
-
-  // 共享回调：每个 Tab 都需要的 3 个函数
   const tabCallbacks = { onOpenDetail: openDetail, onOpenGantt: openGantt, onPageChange };
 
-  // Ctrl+G 全局打开甘特图
   useEffect(() => {
     const handler = () => setGanttModalOpen(true);
     window.addEventListener('tbh-open-gantt', handler);
     return () => window.removeEventListener('tbh-open-gantt', handler);
   }, []);
 
+  // Header content: show personal view banner or default title
+  const headerContent = (!isTeamView && viewingMember) ? (
+    <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2">
+      <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">{viewingMember.avatar}</div>
+      <div className="min-w-0">
+        <span className="text-sm font-medium">{viewingMember.name}</span>
+        <span className="text-sm text-muted-foreground ml-1">的个人工作台</span>
+      </div>
+    </div>
+  ) : (
+    <div>
+      <h1 className="text-xl font-bold">工作台</h1>
+      <p className="text-sm text-muted-foreground mt-0.5">一站式总览业务现况与待办事项</p>
+    </div>
+  );
+
+  const tabsSwitch = (
+    <ViewModeSwitch items={tabItems.map(t => ({ value: t.key, label: t.label, icon: t.icon }))} value={tab} onChange={v => setTab(v as DashboardTab)} size="sm" />
+  );
+
   return (
-    <div className="h-full flex flex-col animate-fade-in">
-      {/* 标题行 — 固定不滚动 */}
-      <div className="flex-shrink-0 px-4 md:px-6 pt-4 md:pt-6 pb-2">
-        <div className="flex items-center justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          {!isTeamView && viewingMember ? (
-            <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">{viewingMember.avatar}</div>
-              <div className="min-w-0">
-                <span className="text-sm font-medium">{viewingMember.name}</span>
-                <span className="text-sm text-muted-foreground ml-1">的个人工作台</span>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <h1 className="text-xl font-bold">工作台</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">一站式总览业务现况与待办事项</p>
-            </div>
-          )}
-        </div>
-      </div>
-      </div>
-
-      <div className="flex-shrink-0 px-4 md:px-6 pb-2">
-        <ViewModeSwitch items={tabItems.map(t => ({ value: t.key, label: t.label, icon: t.icon }))} value={tab} onChange={v => setTab(v as DashboardTab)} size="sm" />
-      </div>
-
-      {/* 可滚动内容区域 — 移动端额外底部留白避免被底栏遮挡 */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pb-20 md:pb-4">
+    <PageShell headerContent={headerContent} tabsComponent={tabsSwitch}>
       {/* 新手引导 OR Tab 内容 */}
       {isNewUser ? (
         <div className="bg-gradient-to-br from-primary/5 via-white to-primary/10 rounded-2xl border border-primary/20 shadow-sm p-6 md:p-8 space-y-6 animate-fade-in">
@@ -205,13 +193,11 @@ export default function Dashboard() {
         </div>
       )}
 
-      </div>{/* end scrollable content area */}
-
       {/* 全局浮层：详情面板 + 甘特图弹窗 */}
       {selectedItemId && selectedItemType && (
         <ItemDetailPanel isOpen={true} onClose={closeDetail} itemId={selectedItemId} itemType={selectedItemType} />
       )}
       <Suspense fallback={null}><GanttModal open={ganttModalOpen} onClose={() => setGanttModalOpen(false)} /></Suspense>
-    </div>
+    </PageShell>
   );
 }

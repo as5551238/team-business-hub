@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import type { Notification } from '@/types';
 import { cn } from '@/lib/utils';
-import { LogOut, Bell, AlertTriangle, UserPlus, AtSign, RefreshCw, AlertCircle, Shield, Info, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
+import { LogOut, Bell, AlertTriangle, UserPlus, AtSign, RefreshCw, AlertCircle, Shield, Info, ChevronDown, ChevronRight, MessageSquare, Maximize2, Minus, Moon, Sun, Monitor, Users } from 'lucide-react';
 import type { Page } from './Layout';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 /** Icon mapping for notification types */
 const TYPE_ICON: Record<Notification['type'], React.ReactNode> = {
@@ -229,16 +230,66 @@ interface UserMenuDropdownProps {
   visibleMembers: { id: string; name: string; avatar: string; role: string; department: string }[];
   onSwitchUser: (id: string) => void;
   onLogout: () => void;
+  density?: 'comfortable' | 'compact';
+  toggleDensity?: () => void;
+  theme?: 'light' | 'dark' | 'system';
+  toggleTheme?: () => void;
+  onlineUsers?: Array<{ id: string; name: string; color: string; cursor?: { entity: string } }>;
+  currentPage?: string;
 }
 
-export const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMembers, onSwitchUser, onLogout }: UserMenuDropdownProps) {
+export const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMembers, onSwitchUser, onLogout, density, toggleDensity, theme, toggleTheme, onlineUsers, currentPage }: UserMenuDropdownProps) {
+  const otherOnlineUsers = (onlineUsers || []).filter(u => u.id !== user?.id);
   return (
     <div className="absolute right-0 top-full mt-1 w-56 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up">
       <div className="px-4 py-3 border-b border-border">
         <div className="font-medium text-sm">{user?.name}</div>
         <div className="text-xs text-muted-foreground">{user?.role === 'admin' ? user?.email : user?.email?.replace(/(.{2}).*(.@.*)/, '$1***$2')}</div>
       </div>
-      <div className="py-1 max-h-64 overflow-y-auto">
+
+      {/* Display settings */}
+      <div className="border-b border-border">
+        <div className="px-4 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">显示设置</div>
+        {toggleDensity && (
+          <button onClick={(e) => { e.stopPropagation(); toggleDensity(); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2 text-sm hover:bg-muted transition-colors text-left">
+            {density === 'comfortable' ? <Maximize2 size={14} className="text-muted-foreground" /> : <Minus size={14} className="text-primary" />}
+            <span>{density === 'comfortable' ? '舒适模式' : '紧凑模式'}</span>
+            <span className="text-xs text-muted-foreground ml-auto">{density === 'comfortable' ? '切换紧凑' : '切换舒适'}</span>
+          </button>
+        )}
+        {toggleTheme && (
+          <button onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2 text-sm hover:bg-muted transition-colors text-left">
+            {theme === 'dark' ? <Moon size={14} className="text-primary" /> : theme === 'light' ? <Sun size={14} className="text-muted-foreground" /> : <Monitor size={14} className="text-muted-foreground" />}
+            <span>{theme === 'dark' ? '深色模式' : theme === 'light' ? '亮色模式' : '跟随系统'}</span>
+            <span className="text-xs text-muted-foreground ml-auto">切换</span>
+          </button>
+        )}
+      </div>
+
+      {/* Online collaborators */}
+      {otherOnlineUsers.length > 0 && (
+        <div className="border-b border-border">
+          <div className="px-4 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">在线协作</div>
+          <div className="px-4 py-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {otherOnlineUsers.slice(0, 6).map(u => {
+                const isSamePage = currentPage && u.cursor?.entity === currentPage;
+                return (
+                  <div key={u.id} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${isSamePage ? 'bg-primary/10 text-primary ring-1 ring-primary/30' : 'bg-muted text-muted-foreground'}`}>
+                    <div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white" style={{ backgroundColor: u.color }}>{(u.name || '?')[0]}</div>
+                    <span className="max-w-[60px] truncate">{u.name}</span>
+                  </div>
+                );
+              })}
+              {otherOnlineUsers.length > 6 && <span className="text-xs text-muted-foreground">+{otherOnlineUsers.length - 6}</span>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="py-1 max-h-48 overflow-y-auto">
         {visibleMembers.map(m => (
           <button key={m.id}
             onClick={(e) => { e.stopPropagation(); onSwitchUser(m.id); }}

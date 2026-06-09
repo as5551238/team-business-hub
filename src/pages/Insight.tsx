@@ -5,6 +5,7 @@ import { BarChart3, Target, CheckCircle2, Clock, TrendingUp, Users, FolderKanban
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
+import PageShell from '@/components/layout/PageShell';
 import { resolveToken } from '@/lib/resolveToken';
 import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 import type { ReviewPeriod, ReviewMetrics, Goal, Project, Task, ReviewEntry } from '@/types';
@@ -268,27 +269,31 @@ export default function Insight() {
   function handleDelete(id: string) { dispatch({ type: 'DELETE_REVIEW', payload: id }); if (editingId === id) { setEditingId(null); setContent(''); } }
 
   return (
-    <div className="h-full flex flex-col animate-fade-in">
-      {/* 标题行 — 固定不滚动 */}
-      <div className="flex-shrink-0 px-4 md:px-6 pt-4 md:pt-6 pb-2">
-        <h1 className="text-xl font-bold">数据洞察</h1>
-        <EmptyState title="多维度分析团队数据，驱动决策优化" compact />
-      </div>
-
-      <div className="flex-shrink-0 px-4 md:px-6 pb-2 flex items-center gap-2 overflow-x-auto">
-        <ViewModeSwitch items={tabItems.map(t => ({ value: t.key, label: t.label, icon: t.icon }))} value={tab} onChange={v => setTab(v as InsightTab)} />
-        {tab === 'review' && editingId && <button onClick={() => { setEditingId(null); setContent(''); }} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-muted/50 transition-colors">新建复盘</button>}
-        {tab === 'review' && <button onClick={() => setShowAIReview(v => !v)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"><Sparkles size={14} />AI 智能复盘</button>}
-        {!isTeamView && viewingMember && (
-          <span className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground whitespace-nowrap">
-            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{(viewingMember.name || '?')[0]}</div>
-            {viewingMember.name}
-          </span>
-        )}
-      </div>
-
-      {/* 可滚动内容区域 — 移动端额外底部留白 */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pb-20 md:pb-4">
+    <PageShell
+      headerContent={(
+        <div>
+          <h1 className="text-xl font-bold">数据洞察</h1>
+          <EmptyState title="多维度分析团队数据，驱动决策优化" compact />
+        </div>
+      )}
+      actions={(
+        <>
+          {!isTeamView && viewingMember && (
+            <span className="flex items-center gap-1.5 text-sm text-muted-foreground whitespace-nowrap">
+              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{(viewingMember.name || '?')[0]}</div>
+              {viewingMember.name}
+            </span>
+          )}
+        </>
+      )}
+      tabsComponent={(
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <ViewModeSwitch items={tabItems.map(t => ({ value: t.key, label: t.label, icon: t.icon }))} value={tab} onChange={v => setTab(v as InsightTab)} />
+          {tab === 'review' && editingId && <button onClick={() => { setEditingId(null); setContent(''); }} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-muted/50 transition-colors">新建复盘</button>}
+          {tab === 'review' && <button onClick={() => setShowAIReview(v => !v)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"><Sparkles size={14} />AI 智能复盘</button>}
+        </div>
+      )}
+    >
       <div key={tab} className="animate-fade-in">
       {tab === 'dashboard' && (
         <TabErrorBoundary name="数据看板">
@@ -565,7 +570,6 @@ export default function Insight() {
         </TabErrorBoundary>
       )}
        </div>
-      </div>{/* end scrollable content area */}
-    </div>
+    </PageShell>
   );
 }

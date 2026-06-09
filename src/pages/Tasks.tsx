@@ -26,6 +26,7 @@ import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 import { useBatchSelection } from '@/hooks/useBatchSelection';
 import { useBatchOperations } from '@/hooks/useBatchOperations';
 import { useCommentCounts } from '@/hooks/useCommentCounts';
+import PageShell from '@/components/layout/PageShell';
 
 const TASK_BATCH_STATUSES = [
   { value: 'todo', label: '待处理' }, { value: 'in_progress', label: '进行中' },
@@ -579,55 +580,58 @@ export default function Tasks() {
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-y-auto">
-         <div className="p-4 sm:p-6 space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <h1 className="text-lg sm:text-xl font-bold whitespace-nowrap">任务中心</h1>
-              {onlineUsers.length > 1 && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Users size={12} /> {onlineUsers.length}人在线</span>}
-              <span className="text-xs sm:text-sm text-muted-foreground bg-muted px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap">{filteredTasks.length}/{state.tasks.length}</span>
-            </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-              {batchMode && selectedIds.size > 0 && (
-                <BatchActionBar
-                  selection={batchSel}
-                  filteredCount={filteredTasks.length}
-                  filteredIds={filteredTasks.map(t => t.id)}
-                  itemLabel="任务"
-                  statuses={TASK_BATCH_STATUSES}
-                  members={batchMembers}
-                  priorities={TASK_BATCH_PRIORITIES}
-                  tags={allTags}
-                  showDateFields
-                  dateFields={[{ key: 'dueDate', label: '截止日' }]}
-                  moveTargets={[{ value: '', label: '无项目' }, ...state.projects.filter(p => p.status === 'in_progress').map(p => ({ value: p.id, label: p.title }))]}
-                  moveLabel="移到项目"
-                  onBatchDelete={(ids) => batchDelete()}
-                  onBatchStatus={(_ids, status) => batchUpdateStatus(status)}
-                  onBatchAssign={(_ids, leaderId) => batchAssign(leaderId)}
-                  onBatchPriority={(_ids, priority) => batchUpdatePriority(priority)}
-                  onBatchAddTags={(_ids, tags) => batchAddTags(tags)}
-                  onBatchRemoveTags={(_ids, tags) => batchRemoveTags(tags)}
-                  onBatchSetDate={(_ids, field, value) => batchSetDate(field, value)}
-                  onBatchMove={(_ids, targetId) => batchMoveToProject(targetId)}
-                  canDelete={can('tasks_delete')}
-                  canEdit={can('tasks_edit')}
-                />
-              )}
-              <button onClick={() => batchSel.toggleBatchMode()} className={cn('inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border transition-colors', batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted')}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
-              <button onClick={() => setShowMatchPanel(true)} className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors"><Sparkles size={14} /><span className="hidden sm:inline">智能匹配</span></button>
-              <button className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-primary/90 transition-colors" onClick={() => setShowCreateDialog(true)}><Plus className="w-4 h-4" /> <span className="hidden xs:inline">新建任务</span></button>
-            </div>
+    <div className={cn('h-full animate-fade-in', detailItem ? 'flex' : '')}>
+      <PageShell
+        className={detailItem ? 'flex-1 min-w-0' : ''}
+        headerContent={(
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold whitespace-nowrap">任务中心</h1>
+            {onlineUsers.length > 1 && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Users size={12} /> {onlineUsers.length}人在线</span>}
+            <span className="text-xs sm:text-sm text-muted-foreground bg-muted px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap">{filteredTasks.length}/{state.tasks.length}</span>
           </div>
-
+        )}
+        actions={(
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            {batchMode && selectedIds.size > 0 && (
+              <BatchActionBar
+                selection={batchSel}
+                filteredCount={filteredTasks.length}
+                filteredIds={filteredTasks.map(t => t.id)}
+                itemLabel="任务"
+                statuses={TASK_BATCH_STATUSES}
+                members={batchMembers}
+                priorities={TASK_BATCH_PRIORITIES}
+                tags={allTags}
+                showDateFields
+                dateFields={[{ key: 'dueDate', label: '截止日' }]}
+                moveTargets={[{ value: '', label: '无项目' }, ...state.projects.filter(p => p.status === 'in_progress').map(p => ({ value: p.id, label: p.title }))]}
+                moveLabel="移到项目"
+                onBatchDelete={(ids) => batchDelete()}
+                onBatchStatus={(_ids, status) => batchUpdateStatus(status)}
+                onBatchAssign={(_ids, leaderId) => batchAssign(leaderId)}
+                onBatchPriority={(_ids, priority) => batchUpdatePriority(priority)}
+                onBatchAddTags={(_ids, tags) => batchAddTags(tags)}
+                onBatchRemoveTags={(_ids, tags) => batchRemoveTags(tags)}
+                onBatchSetDate={(_ids, field, value) => batchSetDate(field, value)}
+                onBatchMove={(_ids, targetId) => batchMoveToProject(targetId)}
+                canDelete={can('tasks_delete')}
+                canEdit={can('tasks_edit')}
+              />
+            )}
+            <button onClick={() => batchSel.toggleBatchMode()} className={cn('inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border transition-colors', batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted')}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
+            <button onClick={() => setShowMatchPanel(true)} className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors"><Sparkles size={14} /><span className="hidden sm:inline">智能匹配</span></button>
+            <button className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-primary/90 transition-colors" onClick={() => setShowCreateDialog(true)}><Plus className="w-4 h-4" /> <span className="hidden xs:inline">新建任务</span></button>
+          </div>
+        )}
+        tabsComponent={(
           <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
             {VIEW_TABS.map(tab => <button key={tab.key} className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0', viewMode === tab.key ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80 text-muted-foreground')} onClick={() => setViewMode(tab.key)}>{tab.label}</button>)}
           </div>
-
-          <div className="bg-card rounded-xl border border-border p-2.5 md:p-3 flex items-center gap-2 flex-wrap">
+        )}
+        filters={(
+          <>
             <Filter size={14} className="text-muted-foreground flex-shrink-0" />
-             <div className="relative flex-1 min-w-[160px] max-w-[260px]"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><input data-search-input type="text" className="w-full pl-8 pr-3 py-1.5 text-sm border border-input rounded-lg bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring" placeholder="搜索任务..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
+            <div className="relative flex-1 min-w-[160px] max-w-[260px]"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><input data-search-input type="text" className="w-full pl-8 pr-3 py-1.5 text-sm border border-input rounded-lg bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring" placeholder="搜索任务..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
             <MultiSelectFilter label="状态" options={[{value:'todo',label:'待处理'},{value:'in_progress',label:'进行中'},{value:'done',label:'已完成'},{value:'blocked',label:'已阻塞'},{value:'cancelled',label:'已取消'}]} selected={selectedStatuses} onToggle={toggleStatus} onClear={() => setSelectedStatuses(new Set())} />
             <MultiSelectFilter label="紧急程度" options={[{value:'urgent',label:'紧急'},{value:'high',label:'高'},{value:'medium',label:'中'},{value:'low',label:'低'}]} selected={selectedPriorities} onToggle={togglePriority} onClear={() => setSelectedPriorities(new Set())} />
             <MultiSelectFilter label="重要程度" options={[{value:'S',label:'S级'},{value:'A',label:'A级'},{value:'B',label:'B级'},{value:'C',label:'C级'}]} selected={selectedLevels} onToggle={toggleLevel} onClear={() => setSelectedLevels(new Set())} />
@@ -649,7 +653,11 @@ export default function Tasks() {
             {activeFilterCount > 0 && <button className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1" onClick={clearFilters}><X size={12} />清除 ({activeFilterCount})</button>}
             <span className="text-xs text-muted-foreground ml-auto">{filteredTasks.length} 条</span>
             <Tooltip><TooltipTrigger asChild><button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button></TooltipTrigger><TooltipContent>{showCompleted ? '隐藏已完成' : '显示已完成'}</TooltipContent></Tooltip>
-          </div>
+          </>
+        )}
+        noPadding
+      >
+        <div className="p-4 sm:p-6 space-y-6">
 
           {viewMode === 'board' && renderBoard()}
           {viewMode === 'list' && renderList()}
@@ -657,8 +665,10 @@ export default function Tasks() {
           {viewMode === 'matrix' && <TaskMatrixView filteredTasks={filteredTasks} setDetailItem={setDetailItem} getMemberName={getName} getQuadrantForPriority={getQuadrantForPriority} handleDropToQuadrant={handleDropToQuadrant} commentCounts={commentCounts} batchProps={batchProps} />}
           {viewMode === 'timeline' && <TaskTimelineView timelineBuckets={timelineBuckets} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={(task: Task) => setDetailItem({ type: 'task', id: task.id })} getName={getName} getAvatar={getAvatar} getProjectTitle={getProjectTitleFn} />}
         </div>
-      </div>
+      </PageShell>
 
+      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={closeTaskDetail} itemType={detailItem.type} itemId={detailItem.id} />}
+      {showMatchPanel && <AIMatchPanel onClose={() => setShowMatchPanel(false)} />}
 
       <Dialog open={showCreateDialog} onOpenChange={(v) => { if (!v) closeCreateDialog(); }}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
@@ -705,8 +715,6 @@ export default function Tasks() {
           </DialogContent>
       </Dialog>
 
-      {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={true} onClose={closeTaskDetail} itemType={detailItem.type} itemId={detailItem.id} />}
-      {showMatchPanel && <AIMatchPanel onClose={() => setShowMatchPanel(false)} />}
     </div>
   );
 }

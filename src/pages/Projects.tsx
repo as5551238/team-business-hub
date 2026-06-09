@@ -13,6 +13,7 @@ import { useCollabPresence } from '@/lib/collab';
 import { useDraftSave } from '@/hooks/useDraftSave';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
+import PageShell from '@/components/layout/PageShell';
 import { viewTabs, statusOptions, priorityOptions, bpOptions, timeOptions, priorityFromBp } from './projects/constants';
 import type { ViewMode, BatchProps } from './projects/constants';
 import { ProjectTreeNode, ProjectListView, ProjectTableView, ProjectKanbanView, ProjectMatrixView, ProjectTimelineView } from './projects/views';
@@ -191,83 +192,93 @@ export default function Projects() {
   const emptyDesc = activeFilterCount > 0 ? undefined : '创建项目，推进目标落地执行';
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-bold">项目中心</h2>
-          {onlineUsers.length > 1 && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground ml-2"><Users size={12} /> {onlineUsers.length}人在线</span>}
-          <EmptyState title="管理团队项目，推进目标落地执行" compact />
-        </div>
-        <div className="flex items-center gap-2">
-          {batchMode && selectedIds.size > 0 && (
-            <BatchActionBar
-              selection={batchSel}
-              filteredCount={filteredProjects.length}
-              filteredIds={filteredProjects.map(p => p.id)}
-              itemLabel="项目"
-              statuses={[{ value: 'todo', label: '待办' }, { value: 'in_progress', label: '进行中' }, { value: 'done', label: '已完成' }, { value: 'blocked', label: '已阻塞' }, { value: 'cancelled', label: '已取消' }]}
-              members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
-              priorities={[{ value: 'urgent', label: '紧急' }, { value: 'high', label: '高' }, { value: 'medium', label: '中' }, { value: 'low', label: '低' }]}
-              tags={projectTags}
-              showDateFields
-              dateFields={[{ key: 'endDate', label: '截止日' }]}
-              moveTargets={[{ value: '', label: '无目标' }, ...state.goals.filter(g => g.status === 'in_progress').map(g => ({ value: g.id, label: g.title }))]}
-              moveLabel="移到目标"
-              onBatchDelete={(ids) => batchDelete()}
-              onBatchStatus={(_ids, status) => batchUpdateStatus(status)}
-              onBatchAssign={(_ids, leaderId) => batchAssign(leaderId)}
-              onBatchPriority={(_ids, priority) => batchUpdatePriority(priority)}
-              onBatchAddTags={(_ids, tags) => batchAddTags(tags)}
-              onBatchRemoveTags={(_ids, tags) => batchRemoveTags(tags)}
-              onBatchSetDate={(_ids, field, value) => batchSetDate(field, value)}
-              onBatchMove={(_ids, targetId) => batchMoveToGoal(targetId)}
-              canDelete={can('delete_projects')}
-              canEdit={can('edit_projects')}
-            />
-          )}
-          <button onClick={() => batchSel.toggleBatchMode()} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted'}`}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
-          <button onClick={() => setShowCreateDialog(true)} className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"><Plus size={16} /> 新建项目</button>
-        </div>
-      </div>
-
-      <ViewModeSwitch items={viewTabs.map(t => ({ value: t.value, label: t.label, icon: t.icon }))} value={viewMode} onChange={v => setViewMode(v as ViewMode)} />
-
-      <div className="bg-card rounded-xl border p-2.5 md:p-3 flex items-center gap-2 flex-wrap">
-        <Filter size={14} className="text-muted-foreground flex-shrink-0" />
-        <div className="relative flex-1 min-w-[160px] max-w-[260px]"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><input data-search-input className="w-full pl-8 pr-3 py-1.5 text-xs border border-input rounded-lg bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary/20" placeholder="搜索项目..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
-        <MultiSelectFilter label="状态" options={statusOptions.filter(o => o.value !== 'all')} selected={selectedStatuses} onToggle={v => setSelectedStatuses(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedStatuses(new Set())} />
-        <MultiSelectFilter label="紧急程度" options={priorityOptions.filter(o => o.value !== 'all')} selected={selectedPriorities} onToggle={v => setSelectedPriorities(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedPriorities(new Set())} />
-        <MultiSelectFilter label="重要程度" options={bpOptions.filter(o => o.value !== 'all')} selected={selectedLevels} onToggle={v => setSelectedLevels(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedLevels(new Set())} />
-        <MultiSelectFilter label="分类" options={categories.map(c => ({value: c, label: c}))} selected={selectedCategories} onToggle={v => setSelectedCategories(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedCategories(new Set())} />
-        <MultiSelectFilter label="标签" options={projectTags.map(t => ({value: t, label: t}))} selected={selectedTags} onToggle={v => setSelectedTags(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedTags(new Set())} />
-        <div className="relative">
-          <button className="text-xs px-2 py-1 rounded-md bg-muted/50 text-muted-foreground hover:text-foreground border border-border flex items-center gap-1" onClick={() => setShowPersonPicker(!showPersonPicker)}>人员筛选 ({personFilter.length || '全部'}) <ChevronDown size={12} /></button>
-          {showPersonPicker && (
-            <div className="absolute z-20 bg-card border rounded-lg shadow-lg p-2 max-h-48 overflow-y-auto min-w-[160px]">
-              <label className="flex items-center gap-2 py-0.5 cursor-pointer text-xs"><input type="checkbox" checked={personFilter.length === 0} onChange={() => setPersonFilter([])} />全部人员</label>
-              {activeMembers.map(m => <label key={m.id} className="flex items-center gap-2 py-0.5 cursor-pointer text-xs"><input type="checkbox" checked={personFilter.includes(m.id)} onChange={() => togglePersonFilter(m.id)} />{m.name}</label>)}
+    <div className="h-full animate-fade-in flex">
+      <PageShell
+        className={detailItem ? 'flex-1 min-w-0' : ''}
+        headerContent={(
+          <div>
+            <h1 className="text-xl font-bold">项目中心</h1>
+            {onlineUsers.length > 1 && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground ml-2"><Users size={12} /> {onlineUsers.length}人在线</span>}
+            <EmptyState title="管理团队项目，推进目标落地执行" compact />
+          </div>
+        )}
+        actions={(
+          <div className="flex items-center gap-2">
+            {batchMode && selectedIds.size > 0 && (
+              <BatchActionBar
+                selection={batchSel}
+                filteredCount={filteredProjects.length}
+                filteredIds={filteredProjects.map(p => p.id)}
+                itemLabel="项目"
+                statuses={[{ value: 'todo', label: '待办' }, { value: 'in_progress', label: '进行中' }, { value: 'done', label: '已完成' }, { value: 'blocked', label: '已阻塞' }, { value: 'cancelled', label: '已取消' }]}
+                members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
+                priorities={[{ value: 'urgent', label: '紧急' }, { value: 'high', label: '高' }, { value: 'medium', label: '中' }, { value: 'low', label: '低' }]}
+                tags={projectTags}
+                showDateFields
+                dateFields={[{ key: 'endDate', label: '截止日' }]}
+                moveTargets={[{ value: '', label: '无目标' }, ...state.goals.filter(g => g.status === 'in_progress').map(g => ({ value: g.id, label: g.title }))]}
+                moveLabel="移到目标"
+                onBatchDelete={(ids) => batchDelete()}
+                onBatchStatus={(_ids, status) => batchUpdateStatus(status)}
+                onBatchAssign={(_ids, leaderId) => batchAssign(leaderId)}
+                onBatchPriority={(_ids, priority) => batchUpdatePriority(priority)}
+                onBatchAddTags={(_ids, tags) => batchAddTags(tags)}
+                onBatchRemoveTags={(_ids, tags) => batchRemoveTags(tags)}
+                onBatchSetDate={(_ids, field, value) => batchSetDate(field, value)}
+                onBatchMove={(_ids, targetId) => batchMoveToGoal(targetId)}
+                canDelete={can('delete_projects')}
+                canEdit={can('edit_projects')}
+              />
+            )}
+            <button onClick={() => batchSel.toggleBatchMode()} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted'}`}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
+            <button onClick={() => setShowCreateDialog(true)} className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"><Plus size={16} /> 新建项目</button>
+          </div>
+        )}
+        tabsComponent={(
+          <ViewModeSwitch items={viewTabs.map(t => ({ value: t.value, label: t.label, icon: t.icon }))} value={viewMode} onChange={v => setViewMode(v as ViewMode)} />
+        )}
+        filters={(
+          <div className="bg-card rounded-xl border p-2.5 md:p-3 flex items-center gap-2 flex-wrap w-full">
+            <Filter size={14} className="text-muted-foreground flex-shrink-0" />
+            <div className="relative flex-1 min-w-[160px] max-w-[260px]"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><input data-search-input className="w-full pl-8 pr-3 py-1.5 text-xs border border-input rounded-lg bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary/20" placeholder="搜索项目..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
+            <MultiSelectFilter label="状态" options={statusOptions.filter(o => o.value !== 'all')} selected={selectedStatuses} onToggle={v => setSelectedStatuses(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedStatuses(new Set())} />
+            <MultiSelectFilter label="紧急程度" options={priorityOptions.filter(o => o.value !== 'all')} selected={selectedPriorities} onToggle={v => setSelectedPriorities(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedPriorities(new Set())} />
+            <MultiSelectFilter label="重要程度" options={bpOptions.filter(o => o.value !== 'all')} selected={selectedLevels} onToggle={v => setSelectedLevels(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedLevels(new Set())} />
+            <MultiSelectFilter label="分类" options={categories.map(c => ({value: c, label: c}))} selected={selectedCategories} onToggle={v => setSelectedCategories(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedCategories(new Set())} />
+            <MultiSelectFilter label="标签" options={projectTags.map(t => ({value: t, label: t}))} selected={selectedTags} onToggle={v => setSelectedTags(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedTags(new Set())} />
+            <div className="relative">
+              <button className="text-xs px-2 py-1 rounded-md bg-muted/50 text-muted-foreground hover:text-foreground border border-border flex items-center gap-1" onClick={() => setShowPersonPicker(!showPersonPicker)}>人员筛选 ({personFilter.length || '全部'}) <ChevronDown size={12} /></button>
+              {showPersonPicker && (
+                <div className="absolute z-20 bg-card border rounded-lg shadow-lg p-2 max-h-48 overflow-y-auto min-w-[160px]">
+                  <label className="flex items-center gap-2 py-0.5 cursor-pointer text-xs"><input type="checkbox" checked={personFilter.length === 0} onChange={() => setPersonFilter([])} />全部人员</label>
+                  {activeMembers.map(m => <label key={m.id} className="flex items-center gap-2 py-0.5 cursor-pointer text-xs"><input type="checkbox" checked={personFilter.includes(m.id)} onChange={() => togglePersonFilter(m.id)} />{m.name}</label>)}
+                </div>
+              )}
+            </div>
+            <SimpleSelect value={timeFilter} onValueChange={v => setTimeFilter(v)} options={timeOptions.map(o => ({ value: o.value, label: o.label }))} className="w-[120px] h-7 text-xs" />
+            {activeFilterCount > 0 && <button className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1" onClick={clearFilters}><X size={12} />清除 ({activeFilterCount})</button>}
+            <span className="text-xs text-muted-foreground ml-auto">{filteredProjects.length} 条</span>
+            <Tooltip><TooltipTrigger asChild><button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button></TooltipTrigger><TooltipContent>{showCompleted ? '隐藏已完成' : '显示已完成'}</TooltipContent></Tooltip>
+          </div>
+        )}
+        noPadding
+      >
+        <div className="p-4 md:p-6 space-y-6">
+          {viewMode === 'detail' && (
+            <div className="space-y-4">
+              {topProjects.map(project => <ProjectTreeNode key={project.id} project={project} filteredProjects={filteredProjects} members={state.members} expandedIds={expandedIds} toggleExpand={toggleExpand} tags={tags} depth={0} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} />)}
+              {topProjects.length === 0 && <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>}
             </div>
           )}
+          {viewMode === 'list' && (filteredProjects.length > 0 ? <ProjectListView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
+          {viewMode === 'table' && (filteredProjects.length > 0 ? <ProjectTableView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
+          {viewMode === 'kanban' && (filteredProjects.length > 0 ? <ProjectKanbanView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} tags={tags} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
+          {viewMode === 'matrix' && (filteredProjects.length > 0 ? <ProjectMatrixView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
+          {viewMode === 'timeline' && (filteredProjects.length > 0 ? <ProjectTimelineView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
         </div>
-        <SimpleSelect value={timeFilter} onValueChange={v => setTimeFilter(v)} options={timeOptions.map(o => ({ value: o.value, label: o.label }))} className="w-[120px] h-7 text-xs" />
-        {activeFilterCount > 0 && <button className="text-xs text-muted-foreground hover:text-foreground underline flex items-center gap-1" onClick={clearFilters}><X size={12} />清除 ({activeFilterCount})</button>}
-        <span className="text-xs text-muted-foreground ml-auto">{filteredProjects.length} 条</span>
-        <Tooltip><TooltipTrigger asChild><button onClick={() => setShowCompleted(v => !v)} className={`p-1.5 rounded-md hover:bg-muted transition-colors ${showCompleted ? 'text-primary' : 'text-muted-foreground'}`}>{showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}</button></TooltipTrigger><TooltipContent>{showCompleted ? '隐藏已完成' : '显示已完成'}</TooltipContent></Tooltip>
-      </div>
+      </PageShell>
 
-      {viewMode === 'detail' && (
-        <div className="space-y-4">
-          {topProjects.map(project => <ProjectTreeNode key={project.id} project={project} filteredProjects={filteredProjects} members={state.members} expandedIds={expandedIds} toggleExpand={toggleExpand} tags={tags} depth={0} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} />)}
-          {topProjects.length === 0 && <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>}
-        </div>
-      )}
-      {viewMode === 'list' && (filteredProjects.length > 0 ? <ProjectListView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
-      {viewMode === 'table' && (filteredProjects.length > 0 ? <ProjectTableView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
-      {viewMode === 'kanban' && (filteredProjects.length > 0 ? <ProjectKanbanView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} tags={tags} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
-      {viewMode === 'matrix' && (filteredProjects.length > 0 ? <ProjectMatrixView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
-      {viewMode === 'timeline' && (filteredProjects.length > 0 ? <ProjectTimelineView projects={filteredProjects} members={state.members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} /> : <div className="bg-card rounded-xl border border-border"><EmptyState icon={FolderKanban} title={emptyMessage} description={emptyDesc} actionLabel={emptyAction} onAction={emptyAction ? () => setShowCreateDialog(true) : undefined} /></div>)}
-
-
+      {/* Create dialog */}
       <Dialog open={showCreateDialog} onOpenChange={(v) => { if (!v) setShowCreateDialog(false); }}>
         <DialogContent className="sm:max-w-lg p-0 gap-0">
           <DialogHeader className="px-6 py-4 border-b border-border flex flex-row items-center justify-between space-y-0">

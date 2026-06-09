@@ -11,27 +11,27 @@ import { NotesView } from '@/pages/knowledge/NotesView';
 import { NOTE_COLORS } from './admin/constants';
 import { cn } from '@/lib/utils';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
+import PageShell from '@/components/layout/PageShell';
 import { useAutoSave } from '@/hooks/useAutoSave';
 
 export default function KnowledgePage() {
   const [activeTab, setActiveTab] = useState<'entries' | 'notes'>('entries');
   return (
-    <div className="h-full flex flex-col animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 pt-6 pb-4 flex-shrink-0">
+    <PageShell
+      headerContent={(
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><BookOpen size={20} /> 知识库</h1>
           <EmptyState title="条目与笔记统一管理，可关联事项" compact />
         </div>
-        <div className="flex items-center gap-1">
-          <ViewModeSwitch items={[{ value: 'entries', label: '条目', icon: BookOpen }, { value: 'notes', label: '笔记', icon: StickyNote }]} value={activeTab} onChange={v => setActiveTab(v as 'entries' | 'notes')} />
-        </div>
+      )}
+      tabsComponent={(
+        <ViewModeSwitch items={[{ value: 'entries', label: '条目', icon: BookOpen }, { value: 'notes', label: '笔记', icon: StickyNote }]} value={activeTab} onChange={v => setActiveTab(v as 'entries' | 'notes')} />
+      )}
+    >
+      <div className="bg-card rounded-xl border border-border shadow-sm h-full flex flex-col">
+        {activeTab === 'entries' ? <EntriesView /> : <NotesView />}
       </div>
-      <div className="flex-1 min-h-0 px-6 pb-6">
-        <div className="bg-card rounded-xl border border-border shadow-sm h-full flex flex-col">
-          {activeTab === 'entries' ? <EntriesView /> : <NotesView />}
-        </div>
-      </div>
-    </div>
+    </PageShell>
   );
 }
 
