@@ -1,0 +1,33 @@
+#!/bin/bash
+# Restore index.html to dev entry point after Vite build overwrites it
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJ_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BACKUP_FILE="$PROJ_ROOT/.index.html.dev"
+
+if [ -f "$BACKUP_FILE" ]; then
+  cp "$BACKUP_FILE" "$PROJ_ROOT/index.html"
+  echo "✓ index.html restored from backup"
+else
+  # Fallback: write the default dev version
+  cat > "$PROJ_ROOT/index.html" << 'HTMLEOF'
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>TB</text></svg>" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <link rel="preconnect" href="https://atexvoyvnnuaonvrgzhn.supabase.co" />
+    <link rel="dns-prefetch" href="https://atexvoyvnnuaonvrgzhn.supabase.co" />
+    <title>团队业务中台 - Team Business Hub</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+HTMLEOF
+  echo "✓ index.html restored from fallback"
+fi
