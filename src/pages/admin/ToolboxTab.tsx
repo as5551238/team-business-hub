@@ -1,19 +1,22 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, lazy, Suspense } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useStore } from '@/store/useStore';
 import { useTemplates } from '@/store/hooks';
 import { uploadFile, BUCKET_NAMES } from '@/supabase/storage';
-import { Plus, Search, Copy, Edit2, Trash2, Eye, Tag, FileText, Upload, Download } from 'lucide-react';
+import { Plus, Search, Copy, Edit2, Trash2, Eye, Tag, FileText, Upload, Download, Wrench, LayoutTemplate } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { inputCls, btnCls, primaryBtnCls, typeLabels, typeColors, emptyForm, formFromTemplate } from './constants';
 import type { TForm } from './constants';
+
+const TemplateMarketTab = lazy(() => import('./TemplateMarketTab').then(m => ({ default: m.TemplateMarketTab })));
 
 export function ToolboxTab() {
   const { state } = useStore();
   const members = state.members || [];
   const currentUser = state.currentUser;
   const { templates, addTemplate, updateTemplate, deleteTemplate } = useTemplates();
+  const [subView, setSubView] = useState<'crud' | 'market'>('crud');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -55,6 +58,29 @@ export function ToolboxTab() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h2 className="text-lg font-bold">工具库 / 模板管理</h2><EmptyState title="创建和管理可复用的模板" compact /></div>
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+          <button
+            onClick={() => setSubView('crud')}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${subView === 'crud' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <Wrench size={12} className="inline mr-1" />模板CRUD
+          </button>
+          <button
+            onClick={() => setSubView('market')}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${subView === 'market' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <LayoutTemplate size={12} className="inline mr-1" />模板市场
+          </button>
+        </div>
+      </div>
+
+      {subView === 'market' ? (
+        <Suspense fallback={<div className="py-8 text-center text-muted-foreground text-xs">加载中...</div>}>
+          <TemplateMarketTab />
+        </Suspense>
+      ) : (
+      <>
+      <div className="flex items-center justify-end">
         <button onClick={openCreate} className={primaryBtnCls}><Plus size={16} /> 新建模板</button>
       </div>
       <div className="bg-card rounded-xl border border-border shadow-sm p-4">
@@ -126,6 +152,8 @@ export function ToolboxTab() {
           </div>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   );
 }

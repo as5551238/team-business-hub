@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense, useEffect } from 'react';
-import { Users, Wrench, Calendar, Settings as SettingsIcon, GitBranch, Zap, Globe, Target, Bot, Server, Shield, BarChart3, Terminal, CreditCard, RotateCcw, Store, ShieldCheck, Radio, LayoutTemplate, ChevronDown, ChevronRight, Trophy, BookOpen, Wallet, Award, LayoutGrid, Activity, RefreshCw, TrendingUp } from 'lucide-react';
+import { Users, Wrench, Calendar, Settings as SettingsIcon, GitBranch, Zap, Globe, Target, Bot, Server, Shield, BarChart3, Terminal, CreditCard, Store, ShieldCheck, Radio, ChevronDown, ChevronRight, Trophy, BookOpen, Wallet, Award, LayoutGrid, TrendingUp } from 'lucide-react';
 import type { AdminTab } from './admin/constants';
 import { useStore } from '@/store/useStore';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
@@ -19,11 +19,9 @@ const RiskRadarTab = lazy(() => import('./admin/RiskRadarTab').then(m => ({ defa
 const TeamLoadTab = lazy(() => import('./admin/TeamLoadTab').then(m => ({ default: m.TeamLoadTab })));
 const McpToolsTab = lazy(() => import('./admin/McpToolsTab').then(m => ({ default: m.McpToolsTab })));
 const BillingTab = lazy(() => import('./admin/BillingTab').then(m => ({ default: m.BillingTab })));
-const RetroTrackingTab = lazy(() => import('./admin/RetroTrackingTab').then(m => ({ default: m.RetroTrackingTab })));
 const AgentMarketplaceTab = lazy(() => import('./admin/AgentMarketplaceTab').then(m => ({ default: m.AgentMarketplaceTab })));
 const ComplianceBaselineTab = lazy(() => import('./admin/ComplianceBaselineTab').then(m => ({ default: m.ComplianceBaselineTab })));
 const CollabTab = lazy(() => import('./admin/CollabTab').then(m => ({ default: m.CollabTab })));
-const TemplateMarketTab = lazy(() => import('./admin/TemplateMarketTab').then(m => ({ default: m.TemplateMarketTab })));
 const AutomatonTab = lazy(() => import('./admin/AutomatonTab').then(m => ({ default: m.AutomatonTab })));
 const PrivacyTab = lazy(() => import('./PrivacyPage').then(m => ({ default: m.PrivacyPage })));
 const OkrSeasonTab = lazy(() => import('./admin/OkrSeasonTab').then(m => ({ default: m.OkrSeasonTab })));
@@ -31,8 +29,6 @@ const ReviewCenterTab = lazy(() => import('./admin/ReviewCenterTab').then(m => (
 const BudgetTab = lazy(() => import('./admin/BudgetTab').then(m => ({ default: m.BudgetTab })));
 const PerformanceTab = lazy(() => import('./admin/PerformanceTab').then(m => ({ default: m.PerformanceTab })));
 const SkillMatrixTab = lazy(() => import('./admin/SkillMatrixTab').then(m => ({ default: m.SkillMatrixTab })));
-const EffectivenessTab = lazy(() => import('./admin/EffectivenessTab').then(m => ({ default: m.EffectivenessTab })));
-const DSTETab = lazy(() => import('./admin/DSTETab').then(m => ({ default: m.DSTETab })));
 const AnalyticsTab = lazy(() => import('./admin/AnalyticsTab').then(m => ({ default: m.AnalyticsTab })));
 
 // --- Grouped tab structure: 5 sections instead of 19 flat tabs ---
@@ -45,17 +41,14 @@ const tabGroups: TabGroup[] = [
     tabs: [
       { key: 'team', label: '团队', icon: Users },
       { key: 'kpi', label: 'KPI', icon: Target },
-      { key: 'okrseason', label: 'OKR赛季', icon: Trophy },
+      { key: 'okrseason', label: 'OKR & DSTE', icon: Trophy },
       { key: 'review', label: '复盘', icon: BookOpen },
       { key: 'riskradar', label: '风险雷达', icon: Shield },
       { key: 'teamload', label: '团队负载', icon: BarChart3 },
-      { key: 'retro', label: '复盘跟踪', icon: RotateCcw },
       { key: 'budget', label: '预算', icon: Wallet },
       { key: 'performance', label: '绩效', icon: Award },
       { key: 'skillmatrix', label: '技能矩阵', icon: LayoutGrid },
-      { key: 'effectiveness', label: '有效性', icon: Activity },
       { key: 'analytics', label: '行为分析', icon: TrendingUp },
-      { key: 'dste', label: 'DSTE闭环', icon: RefreshCw },
     ],
   },
   {
@@ -74,7 +67,6 @@ const tabGroups: TabGroup[] = [
       { key: 'automaton', label: '自主执行', icon: Zap },
       { key: 'integrations', label: '集成', icon: Globe },
       { key: 'collab', label: '实时协作', icon: Radio },
-      { key: 'templates', label: '模板市场', icon: LayoutTemplate },
     ],
   },
   {
@@ -96,16 +88,16 @@ const tabGroups: TabGroup[] = [
   },
 ];
 
-const TAB_LABELS: Record<AdminTab, string> = { team: '团队管理', toolbox: '工具箱', schedule: '日程管理', settings: '系统设置', flow: '流程配置', automation: '自动化规则', automaton: 'AI自主执行', integrations: '集成管理', kpi: 'KPI 看板', okrseason: 'OKR 赛季管理', review: '复盘中心', agent: 'Agent 审计', deploy: '私有化部署', riskradar: '风险雷达', teamload: '团队负载', mcptools: 'MCP 工具', billing: '订阅计费', retro: '复盘跟踪', marketplace: 'Agent 市场', compliance: '等保合规', collab: '实时协作', templates: '模板市场', privacy: '隐私政策', budget: '预算管理', performance: '绩效评估', skillmatrix: '技能矩阵', effectiveness: '有效性度量', dste: 'DSTE闭环', analytics: '行为分析' };
+const TAB_LABELS: Record<AdminTab, string> = { team: '团队管理', toolbox: '工具箱', schedule: '日程管理', settings: '系统设置', flow: '流程配置', automation: '自动化规则', automaton: 'AI自主执行', integrations: '集成管理', kpi: 'KPI 看板', okrseason: 'OKR & DSTE', review: '复盘中心', agent: 'Agent 审计', deploy: '私有化部署', riskradar: '风险雷达', teamload: '团队负载', mcptools: 'MCP 工具', billing: '订阅计费', marketplace: 'Agent 市场', compliance: '等保合规', collab: '实时协作', privacy: '隐私政策', budget: '预算管理', performance: '绩效评估', skillmatrix: '技能矩阵', analytics: '行为分析' };
 
 // Permission check per tab
 const tabVisibility: Record<AdminTab, 'admin' | 'manager' | 'member' | 'all'> = {
   team: 'manager', flow: 'manager', automation: 'manager', automaton: 'manager', integrations: 'manager', kpi: 'manager', okrseason: 'manager', review: 'manager',
   agent: 'admin', deploy: 'admin', settings: 'admin', billing: 'admin',
-  marketplace: 'manager', compliance: 'manager', collab: 'manager', templates: 'all',
-  retro: 'manager', riskradar: 'all', teamload: 'all', mcptools: 'manager', toolbox: 'member', schedule: 'member',
+  marketplace: 'manager', compliance: 'manager', collab: 'manager',
+  riskradar: 'all', teamload: 'all', mcptools: 'manager', toolbox: 'member', schedule: 'member',
   privacy: 'all', budget: 'manager',
-  performance: 'manager', skillmatrix: 'manager', effectiveness: 'manager', dste: 'manager',
+  performance: 'manager', skillmatrix: 'manager',
   analytics: 'manager',
 };
 
@@ -233,18 +225,14 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
           {tab === 'teamload' && <TabErrorBoundary key="teamload" name={'团队负载'}><Suspense fallback={<TabLoader />}><TeamLoadTab /></Suspense></TabErrorBoundary>}
           {tab === 'mcptools' && <TabErrorBoundary key="mcptools" name={TAB_LABELS.mcptools}><Suspense fallback={<TabLoader />}><McpToolsTab /></Suspense></TabErrorBoundary>}
           {tab === 'billing' && <TabErrorBoundary key="billing" name={TAB_LABELS.billing}><Suspense fallback={<TabLoader />}><BillingTab /></Suspense></TabErrorBoundary>}
-          {tab === 'retro' && <TabErrorBoundary key="retro" name={TAB_LABELS.retro}><Suspense fallback={<TabLoader />}><RetroTrackingTab /></Suspense></TabErrorBoundary>}
           {tab === 'marketplace' && <UpgradeGate feature="agentMarketplace"><TabErrorBoundary key="marketplace" name={TAB_LABELS.marketplace}><Suspense fallback={<TabLoader />}><AgentMarketplaceTab /></Suspense></TabErrorBoundary></UpgradeGate>}
           {tab === 'compliance' && <UpgradeGate feature="advancedPermissions"><TabErrorBoundary key="compliance" name={TAB_LABELS.compliance}><Suspense fallback={<TabLoader />}><ComplianceBaselineTab /></Suspense></TabErrorBoundary></UpgradeGate>}
           {tab === 'collab' && <TabErrorBoundary key="collab" name={TAB_LABELS.collab}><Suspense fallback={<TabLoader />}><CollabTab /></Suspense></TabErrorBoundary>}
           {tab === 'automaton' && <UpgradeGate feature="agentAutomation"><TabErrorBoundary key="automaton" name={TAB_LABELS.automaton}><Suspense fallback={<TabLoader />}><AutomatonTab /></Suspense></TabErrorBoundary></UpgradeGate>}
-          {tab === 'templates' && <TabErrorBoundary key="templates" name={TAB_LABELS.templates}><Suspense fallback={<TabLoader />}><TemplateMarketTab /></Suspense></TabErrorBoundary>}
           {tab === 'privacy' && <TabErrorBoundary key="privacy" name={TAB_LABELS.privacy}><Suspense fallback={<TabLoader />}><PrivacyTab /></Suspense></TabErrorBoundary>}
           {tab === 'budget' && <UpgradeGate feature="advancedPermissions"><TabErrorBoundary key="budget" name={TAB_LABELS.budget}><Suspense fallback={<TabLoader />}><BudgetTab /></Suspense></TabErrorBoundary></UpgradeGate>}
           {tab === 'performance' && <UpgradeGate feature="advancedPermissions"><TabErrorBoundary key="performance" name={TAB_LABELS.performance}><Suspense fallback={<TabLoader />}><PerformanceTab /></Suspense></TabErrorBoundary></UpgradeGate>}
           {tab === 'skillmatrix' && <UpgradeGate feature="advancedPermissions"><TabErrorBoundary key="skillmatrix" name={TAB_LABELS.skillmatrix}><Suspense fallback={<TabLoader />}><SkillMatrixTab /></Suspense></TabErrorBoundary></UpgradeGate>}
-          {tab === 'effectiveness' && <TabErrorBoundary key="effectiveness" name={TAB_LABELS.effectiveness}><Suspense fallback={<TabLoader />}><EffectivenessTab /></Suspense></TabErrorBoundary>}
-          {tab === 'dste' && <TabErrorBoundary key="dste" name={TAB_LABELS.dste}><Suspense fallback={<TabLoader />}><DSTETab /></Suspense></TabErrorBoundary>}
           {tab === 'analytics' && <TabErrorBoundary key="analytics" name={TAB_LABELS.analytics}><Suspense fallback={<TabLoader />}><AnalyticsTab /></Suspense></TabErrorBoundary>}
         </div>
       </div>

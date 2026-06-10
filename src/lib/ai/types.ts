@@ -10,22 +10,16 @@ export type TaskComplexity = 'simple' | 'moderate' | 'complex';
 export interface AIConfig {
   provider: AIModelProvider;
   apiKey: string;
-  /** 自定义 API 端点（可选，用于私有部署） */
   baseUrl: string;
-  /** 模型名称 */
   model: string;
-  /** 是否启用 AI 深度分析 */
   enabled: boolean;
-  /** 是否启用成本路由（自动按任务复杂度选模型） */
   costRouting?: boolean;
-  /** 当前套餐层级（门禁用） */
   _planTier?: string;
-  /** 当前团队ID（AI调用计数RPC用） */
   _teamId?: string;
-  /** 当前用户ID（AI调用计数RPC用） */
   userId?: string;
-  /** AI调用上限（AI调用计数RPC用） */
   aiLimit?: number;
+  agentPreferences: string;
+  feedbackHistory: Array<{ date: string; feedback: string; category: string }>;
 }
 
 export type SuggestedAction = {
@@ -149,6 +143,8 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
   model: '',
   enabled: false,
   costRouting: true,
+  agentPreferences: '',
+  feedbackHistory: [],
 };
 
 /** 成本路由：按任务复杂度选择模型 */

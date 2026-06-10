@@ -1,14 +1,14 @@
 import type { Member, Template } from '@/types';
 import { handleError } from '@/lib/errorHandler';
 
-export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'okrseason' | 'review' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates' | 'privacy' | 'budget' | 'performance' | 'skillmatrix' | 'effectiveness' | 'dste' | 'analytics';
+export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'okrseason' | 'review' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'marketplace' | 'compliance' | 'collab' | 'privacy' | 'budget' | 'performance' | 'skillmatrix' | 'analytics';
 
 export const tabItems: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'team', label: '团队', icon: 'Users' },
   { key: 'flow', label: '流程配置', icon: 'GitBranch' },
   { key: 'automation', label: '自动化', icon: 'Zap' },
   { key: 'kpi', label: 'KPI', icon: 'Target' },
-  { key: 'okrseason', label: 'OKR赛季', icon: 'Trophy' },
+  { key: 'okrseason', label: 'OKR & DSTE', icon: 'Trophy' },
   { key: 'review', label: '复盘中心', icon: 'BookOpen' },
   { key: 'riskradar', label: '风险雷达', icon: 'Shield' },
   { key: 'agent', label: 'Agent审计', icon: 'Bot' },
@@ -17,13 +17,10 @@ export const tabItems: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'marketplace', label: 'Agent市场', icon: 'Store' },
   { key: 'compliance', label: '等保合规', icon: 'ShieldCheck' },
   { key: 'collab', label: '实时协作', icon: 'Radio' },
-  { key: 'templates', label: '模板市场', icon: 'LayoutTemplate' },
   { key: 'deploy', label: '部署', icon: 'Server' },
   { key: 'budget', label: '预算管理', icon: 'CreditCard' },
   { key: 'performance', label: '绩效评估', icon: 'Award' },
   { key: 'skillmatrix', label: '技能矩阵', icon: 'LayoutGrid' },
-  { key: 'effectiveness', label: '有效性度量', icon: 'Activity' },
-  { key: 'dste', label: 'DSTE闭环', icon: 'RefreshCw' },
   { key: 'toolbox', label: '工具箱', icon: 'Wrench' },
   { key: 'schedule', label: '日程', icon: 'Calendar' },
   { key: 'settings', label: '设置', icon: 'SettingsIcon' },

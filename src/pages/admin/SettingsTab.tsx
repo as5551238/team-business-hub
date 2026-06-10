@@ -331,11 +331,53 @@ function BackupSection() {
   const [autoExport, setAutoExport] = useState(() => {
     try { return localStorage.getItem('tbh-auto-export') === 'true'; } catch (e) { handleError(e, { module: 'SettingsTab', operation: 'READ_AUTO_EXPORT', severity: 'debug' }); return false; }
   });
+  const [autoExportTime, setAutoExportTime] = useState(() => {
+    try { return localStorage.getItem('tbh-auto-export-time') || '17:00'; } catch { return '17:00'; }
+  });
+  const [cacheInfo, setCacheInfo] = useState({ count: 0, size: 0, lastTime: '', lastStatus: '' });
   const stateRef = useRef(backupData);
   stateRef.current = backupData;
   const pendingBackupRef = useRef<BackupData | null>(null);
 
-  const handleExport = useCallback(() => {
+  function openIDB(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const r = indexedDB.open('tbh-backup-cache', 1);
+      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains('backups')) r.result.createObjectStore('backups'); };
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+  }
+  async function cachePut(key: string, blob: Blob) {
+    const db = await openIDB();
+    return new Promise<void>((res, rej) => { const tx = db.transaction('backups', 'readwrite'); tx.objectStore('backups').put(blob, key); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+  }
+  async function cacheGet(key: string): Promise<Blob | null> {
+    const db = await openIDB();
+    return new Promise((res, rej) => { const tx = db.transaction('backups', 'readonly'); const r = tx.objectStore('backups').get(key); r.onsuccess = () => res(r.result ?? null); r.onerror = () => rej(r.error); });
+  }
+  async function cacheKeys(): Promise<string[]> {
+    const db = await openIDB();
+    return new Promise((res, rej) => { const tx = db.transaction('backups', 'readonly'); const r = tx.objectStore('backups').getAllKeys(); r.onsuccess = () => res(r.result as string[]); r.onerror = () => rej(r.error); });
+  }
+  async function cacheClear() {
+    const db = await openIDB();
+    return new Promise<void>((res, rej) => { const tx = db.transaction('backups', 'readwrite'); tx.objectStore('backups').clear(); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+  }
+
+  const refreshCacheInfo = useCallback(() => {
+    (async () => {
+      try {
+        const keys = await cacheKeys();
+        let size = 0; let lastKey = '';
+        for (const k of keys) { const b = await cacheGet(k); if (b) size += b.size; if (k > lastKey) lastKey = k; }
+        let lastStatus = '';
+        try { const s = localStorage.getItem('tbh-auto-export-status'); if (s) lastStatus = JSON.parse(s).status; } catch { /* ignore */ }
+        setCacheInfo({ count: keys.length, size, lastTime: lastKey ? lastKey.replace('tbh-auto-backup-', '') : '', lastStatus });
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  const handleManualExport = useCallback(() => {
     setExporting(true);
     setTimeout(async () => {
       try {
@@ -346,13 +388,70 @@ function BackupSection() {
         const a = document.createElement('a');
         const date = new Date().toISOString().split('T')[0];
         a.href = url; a.download = `team-business-hub-backup-${date}.xlsx`;
-        a.click(); URL.revokeObjectURL(url);
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
       } catch (e: unknown) { setErrorMsg('导出失败: ' + (e instanceof Error ? e.message : String(e))); setImportStatus('error'); setTimeout(() => setImportStatus('idle'), 3000); }
       setExporting(false);
     }, 50);
   }, []);
 
-  useEffect(() => { if (!autoExport) return; let lastExportDate = ''; const interval = setInterval(() => { const now = new Date(); const today = now.toISOString().split('T')[0]; if (now.getHours() === 17 && now.getMinutes() === 0 && lastExportDate !== today) { lastExportDate = today; handleExport(); } }, 60000); return () => clearInterval(interval); }, [autoExport, handleExport]);
+  const handleAutoExportToCache = useCallback(async () => {
+    try {
+      const { exportToExcel } = await import('@/lib/excelBackup');
+      const buf = exportToExcel(stateRef.current);
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const date = new Date().toISOString().split('T')[0];
+      await cachePut(`tbh-auto-backup-${date}`, blob);
+      try { localStorage.setItem('tbh-auto-export-status', JSON.stringify({ lastAttempt: Date.now(), status: 'saved-to-cache', size: blob.size })); } catch { /* ignore */ }
+      refreshCacheInfo();
+    } catch {
+      try { localStorage.setItem('tbh-auto-export-status', JSON.stringify({ lastAttempt: Date.now(), status: 'failed', size: 0 })); } catch { /* ignore */ }
+    }
+  }, [refreshCacheInfo]);
+
+  async function handleDownloadFromCache() {
+    try {
+      const keys = await cacheKeys();
+      const bk = keys.filter(k => k.startsWith('tbh-auto-backup-')).sort().reverse();
+      if (!bk.length) return;
+      const blob = await cacheGet(bk[0]);
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `team-business-hub-backup-${bk[0].replace('tbh-auto-backup-', '')}.xlsx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+    } catch (e) { setErrorMsg('下载备份失败'); setImportStatus('error'); setTimeout(() => setImportStatus('idle'), 3000); }
+  }
+
+  const parsedTime = autoExportTime.split(':').map(Number);
+  const autoHour = Number.isNaN(parsedTime[0]) ? 17 : parsedTime[0];
+  const autoMin = Number.isNaN(parsedTime[1]) ? 0 : parsedTime[1];
+  useEffect(() => {
+    if (!autoExport) return;
+    let lastExportDate = '';
+    const interval = setInterval(() => {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      if (now.getHours() === autoHour && now.getMinutes() === autoMin && lastExportDate !== today) {
+        lastExportDate = today;
+        handleAutoExportToCache();
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [autoExport, autoHour, autoMin, handleAutoExportToCache]);
+
+  useEffect(() => {
+    refreshCacheInfo();
+    if (!autoExport) return;
+    const today = new Date().toISOString().split('T')[0];
+    (async () => {
+      try {
+        const cached = await cacheGet(`tbh-auto-backup-${today}`);
+        if (!cached) handleAutoExportToCache();
+      } catch { /* ignore */ }
+    })();
+  }, [refreshCacheInfo, handleAutoExportToCache, autoExport]);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file) return;
@@ -390,11 +489,30 @@ function BackupSection() {
     <div className="bg-card rounded-xl border border-border shadow-sm p-5">
       <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><Database size={14} className="text-primary" /> 数据备份与恢复</h3>
       <div className="space-y-3">
-        <div className="flex items-center justify-between px-1"><div><span className="text-xs font-medium">每日17:00自动导出</span><span className="text-[10px] text-muted-foreground ml-1">开启后每天整点自动下载备份</span></div><button onClick={() => { const next = !autoExport; setAutoExport(next); try { localStorage.setItem('tbh-auto-export', String(next)); } catch (e) { handleError(e, { module: 'SettingsTab', operation: 'SAVE_AUTO_EXPORT', severity: 'debug' }); } }} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoExport ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-card transition-transform ${autoExport ? 'translate-x-4' : 'translate-x-0.5'}`} /></button></div>
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium">每日自动导出</span>
+            {autoExport && <input type="time" value={autoExportTime} onChange={e => { setAutoExportTime(e.target.value); try { localStorage.setItem('tbh-auto-export-time', e.target.value); } catch { /* ignore */ } }} className="border border-border rounded px-1.5 py-0.5 text-xs w-[90px]" />}
+          </div>
+          <button onClick={() => { const next = !autoExport; setAutoExport(next); try { localStorage.setItem('tbh-auto-export', String(next)); } catch (e) { handleError(e, { module: 'SettingsTab', operation: 'SAVE_AUTO_EXPORT', severity: 'debug' }); } }} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoExport ? 'bg-green-500' : 'bg-gray-200'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-card transition-transform ${autoExport ? 'translate-x-4' : 'translate-x-0.5'}`} /></button>
+        </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleExport} disabled={exporting} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-border hover:bg-muted transition-colors disabled:opacity-50">{exporting ? '导出中...' : <><Download size={12} /> 导出备份（Excel）</>}</button>
+          <button onClick={handleManualExport} disabled={exporting} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-border hover:bg-muted transition-colors disabled:opacity-50">{exporting ? '导出中...' : <><Download size={12} /> 导出备份（Excel）</>}</button>
           <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-border hover:bg-muted transition-colors cursor-pointer"><Upload size={12} /> 导入恢复<input type="file" accept=".xlsx,.xls,.json" className="hidden" onChange={handleFileSelect} /></label>
         </div>
+        {cacheInfo.count > 0 && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-blue-800">最近自动备份</span>
+              <span className="text-blue-600">{cacheInfo.lastTime} {cacheInfo.lastStatus === 'saved-to-cache' ? '✓ 已缓存' : cacheInfo.lastStatus === 'failed' ? '✗ 失败' : ''}</span>
+            </div>
+            <div className="text-blue-600">缓存 {cacheInfo.count} 份 / {(cacheInfo.size / 1024).toFixed(1)} KB</div>
+            <div className="flex gap-2">
+              <button onClick={handleDownloadFromCache} className="flex items-center gap-1 px-3 py-1.5 rounded bg-blue-600 text-white text-xs hover:bg-blue-700"><Download size={10} /> 下载最新备份</button>
+              <button onClick={async () => { await cacheClear(); refreshCacheInfo(); }} className="flex items-center gap-1 px-3 py-1.5 rounded border border-blue-300 text-xs hover:bg-blue-100"><Trash2 size={10} /> 清除缓存</button>
+            </div>
+          </div>
+        )}
         {importStatus === 'confirming' && <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs space-y-2"><p className="font-medium text-amber-800">确认导入？当前数据将被覆盖。</p><div className="flex gap-2"><button onClick={handleConfirmImport} className="flex items-center gap-1 px-3 py-1.5 rounded bg-amber-600 text-white text-xs hover:bg-amber-700">确认导入</button><button onClick={() => setImportStatus('idle')} className="flex items-center gap-1 px-3 py-1.5 rounded border border-border text-xs hover:bg-muted">取消</button></div></div>}
         {importStatus === 'importing' && <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground"><Loader2 size={14} className="animate-spin" /> 正在导入...</div>}
         {importStatus === 'success' && <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700 font-medium">导入成功！数据已恢复。</div>}

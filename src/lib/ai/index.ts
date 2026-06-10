@@ -1,7 +1,7 @@
 export { collectSnapshot, getPeriodRange } from './dataCollector';
 export type { PeriodSnapshot } from './dataCollector';
 export { analyzeTeam, computeHealth, detectRisks } from './analysisEngine';
-export { getAIInsights, generateLocalInsights, callLLM } from './llmService';
+export { getAIInsights, generateLocalInsights, callLLM, callLLMStream } from './llmService';
 export type { AIInsight } from './types';
 export { loadAIConfig, saveAIConfig, DEFAULT_AI_CONFIG, PROVIDER_PRESETS, PERIOD_LABELS, HEALTH_LEVEL_LABELS, HEALTH_LEVEL_COLORS, HEALTH_LEVEL_BG, RISK_SEVERITY_LABELS, RISK_SEVERITY_COLORS, RISK_TYPE_LABELS } from './types';
 export type { AIConfig, AIModelProvider, AnalysisPeriod, HealthScore, RiskItem, EfficiencyMetrics, TeamAnalysis, MemberAnalysis, SuggestedAction } from './types';

@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, lazy, Suspense } from 'react';
 import { useStore } from '@/store/useStore';
 import { usePermissions } from '@/store/hooks';
 import type { OKRSeason, SeasonStatus, SeasonType } from '@/types';
-import { Plus, Trash2, Edit2, Play, CheckCircle, Clock, Trophy, CalendarDays } from 'lucide-react';
+import { Plus, Trash2, Edit2, Play, CheckCircle, Clock, Trophy, CalendarDays, GitBranch } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+
+const DSTETab = lazy(() => import('./DSTETab').then(m => ({ default: m.DSTETab })));
 
 const STATUS_LABELS: Record<SeasonStatus, string> = {
   draft: '草稿', planning: '规划中', executing: '执行中',
@@ -30,6 +32,7 @@ export function OkrSeasonTab() {
   const seasons = state.seasons || [];
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [subView, setSubView] = useState<'okr' | 'dste'>('okr');
   const [form, setForm] = useState({
     name: '',
     type: 'quarter' as SeasonType,
@@ -122,8 +125,30 @@ export function OkrSeasonTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-sm">OKR 赛季管理</h3>
-        <div className="flex gap-2">
+        <h3 className="font-semibold text-sm">OKR & DSTE</h3>
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+          <button
+            onClick={() => setSubView('okr')}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${subView === 'okr' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <Trophy size={12} className="inline mr-1" />OKR赛季
+          </button>
+          <button
+            onClick={() => setSubView('dste')}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${subView === 'dste' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <GitBranch size={12} className="inline mr-1" />DSTE闭环
+          </button>
+        </div>
+      </div>
+
+      {subView === 'dste' ? (
+        <Suspense fallback={<div className="py-8 text-center text-muted-foreground text-xs">加载中...</div>}>
+          <DSTETab />
+        </Suspense>
+      ) : (
+      <>
+      <div className="flex items-center justify-end gap-2">
           {canManage && (
             <button
               onClick={quickCreateQuarter}
@@ -141,7 +166,6 @@ export function OkrSeasonTab() {
             </button>
           )}
         </div>
-      </div>
 
       {seasons.length === 0 && (
         <EmptyState title="暂无OKR赛季，创建一个赛季开始管理目标周期" compact />
@@ -386,6 +410,8 @@ export function OkrSeasonTab() {
             </button>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
