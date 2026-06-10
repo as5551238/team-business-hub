@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { REVIEW_MODELS, CATEGORY_LABELS, CATEGORY_COLORS } from '@/lib/reviewModelRegistry';
 import type { ReviewModel, ReviewModelCategory } from '@/types';
-import { BookOpen, Play, Clock, CheckCircle, ChevronRight, ChevronDown, Sparkles, Search } from 'lucide-react';
+import { BookOpen, Play, ChevronRight, ChevronDown, Sparkles, Search } from 'lucide-react';
 
 interface Props {
   onSelectModel: (model: ReviewModel) => void;

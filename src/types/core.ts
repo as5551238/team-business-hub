@@ -268,7 +268,7 @@ export interface BatchOperation {
   itemType: ItemType;
   operation: 'delete' | 'update_status' | 'move' | 'assign';
   targetIds: string[];
-  updates?: Record<string, any>;
+  updates?: Record<string, unknown>;
   createdAt: string;
   createdBy: string;
 }
@@ -301,7 +301,7 @@ export interface Team {
   avatar: string;
   inviteCode: string;
   ownerId: string;
-  settings: Record<string, any>;
+  settings: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }

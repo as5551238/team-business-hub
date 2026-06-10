@@ -2,7 +2,7 @@
  * SidebarContainer — 侧边栏容器
  * 从 Layout.tsx 抽出的独立组件，管理导航、用户信息、同步状态
  */
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { hasPermission } from '@/store/reducer';
 import type { Permission } from '@/types';
@@ -14,7 +14,7 @@ import type { Page } from './Layout';
 import {
   LayoutDashboard, Target, FolderKanban, CheckSquare,
   BarChart3, Settings, BookOpen,
-  PanelLeftClose, PanelLeft, ChevronsLeft, ChevronsRight,
+  PanelLeftClose, ChevronsLeft, ChevronsRight,
   Cloud, CloudOff, Loader2, X,
 } from 'lucide-react';
 

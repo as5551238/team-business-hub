@@ -73,7 +73,7 @@ function extractNgrams(text: string): string[] {
 function tokenize(text: string): { keywords: string[]; ngrams: string[] } {
   // Step 1: 按标点+空格拆分得到原始词
   const rawTokens = text
-    .replace(/[，。！？、；：""''（）【】《》\-\–\—\.\,\!\?\;\:\(\)\[\]\{\}\/\\]/g, ' ')
+    .replace(/[，。！？、；：""''（）【】《》–—.,!?:()[\]{}/\\-]/g, ' ')
     .split(/\s+/)
     .filter(t => t.length > 1 && !STOP_WORDS.has(t))
     .map(t => t.toLowerCase());
@@ -115,7 +115,7 @@ export function buildKnowledgeIndex(state: AppState): KnowledgeChunk[] {
 
   // Goals → 每个目标一个chunk
   for (const g of safeState.goals || []) {
-    if ((g as any).deletedAt) continue;
+    if (g.deletedAt) continue;
     const content = [g.title, g.description, ...(g.keyResults || []).map((kr: { title: string; currentValue: number; targetValue: number }) => `KR: ${kr.title} (${kr.currentValue}/${kr.targetValue})`)].filter(Boolean).join('\n');
     const { keywords, ngrams } = tokenize(content);
     chunks.push({ id: `goal-${g.id}`, sourceId: g.id, sourceType: 'goal', sourceTitle: g.title || '目标', content, keywords, ngrams, updatedAt: g.updatedAt || g.createdAt || '' });
@@ -123,7 +123,7 @@ export function buildKnowledgeIndex(state: AppState): KnowledgeChunk[] {
 
   // Tasks → 每个任务一个chunk
   for (const t of safeState.tasks || []) {
-    if ((t as any).deletedAt) continue;
+    if (t.deletedAt) continue;
     const content = [t.title, t.description, t.status ? `状态:${t.status}` : '', t.priority ? `优先级:${t.priority}` : '', t.assigneeName ? `负责人:${t.assigneeName}` : ''].filter(Boolean).join('\n');
     const { keywords, ngrams } = tokenize(content);
     chunks.push({ id: `task-${t.id}`, sourceId: t.id, sourceType: 'task', sourceTitle: t.title || '任务', content, keywords, ngrams, updatedAt: t.updatedAt || t.createdAt || '' });
@@ -131,7 +131,7 @@ export function buildKnowledgeIndex(state: AppState): KnowledgeChunk[] {
 
   // Knowledge entries
   for (const k of safeState.knowledge || []) {
-    if ((k as any).deletedAt) continue;
+    if ((k as Knowledge & { deletedAt?: string }).deletedAt) continue;
     const content = [k.title, k.content].filter(Boolean).join('\n');
     const { keywords, ngrams } = tokenize(content);
     chunks.push({ id: `knowledge-${k.id}`, sourceId: k.id, sourceType: 'knowledge', sourceTitle: k.title || '知识', content, keywords, ngrams, updatedAt: k.updatedAt || '' });

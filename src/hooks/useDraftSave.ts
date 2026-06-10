@@ -5,7 +5,7 @@ import { useRef, useCallback, useEffect } from 'react';
  * 表单数据变化时自动保存到 localStorage，重新打开时自动恢复
  * 成功提交后自动清除草稿
  */
-export function useDraftSave<T extends Record<string, any>>(
+export function useDraftSave<T extends Record<string, unknown>>(
   key: string,
   initialValue: T,
   ttlMs: number = 24 * 60 * 60 * 1000 // 默认24小时过期
@@ -28,7 +28,7 @@ export function useDraftSave<T extends Record<string, any>>(
       }
       const { _ts, ...data } = parsed;
       // 只恢复非空字段（避免用空值覆盖初始值）
-      const restored: Record<string, any> = {};
+      const restored: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(data)) {
         if (v !== '' && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) {
           restored[k] = v;
@@ -43,7 +43,7 @@ export function useDraftSave<T extends Record<string, any>>(
   const saveDraft = useCallback((data: T) => {
     try {
       // 只保存有实际值的字段
-      const toSave: Record<string, any> = { _ts: Date.now() };
+      const toSave: Record<string, unknown> = { _ts: Date.now() };
       for (const [k, v] of Object.entries(data)) {
         if (v !== '' && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) {
           toSave[k] = v;

@@ -1,7 +1,7 @@
 // P3: 预测洞察面板 — 任务逾期风险 + 成员倦怠 + 目标完成概率
 import React, { useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
-import { Brain, AlertTriangle, UserX, Target, Clock, TrendingDown, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Brain, AlertTriangle, UserX, Target, Clock, RefreshCw } from 'lucide-react';
 import { handleError } from '@/lib/errorHandler';
 
 interface TaskRisk {

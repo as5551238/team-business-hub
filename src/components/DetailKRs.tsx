@@ -56,7 +56,7 @@ export function DetailKRs({ goal, canEdit, updateItem }: DetailKRsProps) {
   }
 
   
-  function handleExportReport() {
+  function _handleExportReport() {
     const krs = goal.keyResults ?? [];
     const dualTrack = calcDualTrack(krs);
     const report = {

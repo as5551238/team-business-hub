@@ -10,18 +10,17 @@ import {
 } from '@/components/ui/dialog';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag, X, Filter, Save, GitCompare, Sparkles, Zap } from 'lucide-react';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { SimpleSelect } from '@/components/ui/simple-select';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { handleError } from '@/lib/errorHandler';
 import { autoScheduleLocal, autoScheduleDeep, type ScheduleSuggestion } from '@/lib/ai/aiAutoScheduler';
 import {
-  DAY_MS, parseDate, formatDate, addDays, getMonday, computeTimeRange,
+  DAY_MS, parseDate, formatDate, addDays, computeTimeRange,
   STATUS_COLORS, STATUS_BAR_COLORS, STATUS_LABELS, CRITICAL_BAR_CLASS,
   useGanttDrag, useGanttScale, useCPM,
   renderDependencyLines, renderDependencySVGDefs, renderTodayLine,
   suggestBuffers,
-  buildHeaderDates, groupTasks, getProgressColor, computeMemberLoadHeatmap, getLoadColor, type GroupBy, type TaskGroup,
+  buildHeaderDates, groupTasks, getProgressColor, computeMemberLoadHeatmap, getLoadColor, type GroupBy,
 } from '@/components/gantt/GanttCore';
 
 interface BaselineSnapshot {
@@ -71,7 +70,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
   const canEditTasks = can('tasks_edit');
   const canDeleteTasks = can('tasks_delete');
 
-  const { zoom, scrollOffset, setScrollOffset, toggleZoom, scrollBy } = useGanttScale('week');
+  const { zoom, scrollOffset, setScrollOffset, toggleZoom, scrollBy: _scrollBy } = useGanttScale('week');
   const [filterProject, setFilterProject] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -359,7 +358,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
                   return (
                     <React.Fragment key={group.key}>
                       {isGrouped && (
-                        <div className="flex items-center px-3 py-1.5 bg-muted/40 border-b border-border/50 cursor-pointer select-none" onClick={() => setCollapsedGroups(prev => { const next = new Set(prev); next.has(group.key) ? next.delete(group.key) : next.add(group.key); return next; })}>
+                        <div className="flex items-center px-3 py-1.5 bg-muted/40 border-b border-border/50 cursor-pointer select-none" onClick={() => setCollapsedGroups(prev => { const next = new Set(prev); if (next.has(group.key)) { next.delete(group.key); } else { next.add(group.key); } return next; })}>
                           <span className="text-[10px] mr-1.5 text-muted-foreground">{isCollapsed ? '▶' : '▼'}</span>
                           <span className="text-xs font-semibold flex-1">{group.label}</span>
                           <span className="text-[10px] text-muted-foreground mr-2">{group.tasks.length}项</span>

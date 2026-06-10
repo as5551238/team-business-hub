@@ -2,10 +2,11 @@
  * H5Layout — 微信/飞书内嵌 H5 页面的紧凑布局
  * V2: 创建 + 详情 + 下拉刷新 + 快速状态切换
  */
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useStore } from '@/store/useStore';
 import { Sun, CheckSquare, Target, User, Plus, X, ChevronRight, Clock, Flag, ArrowDown } from 'lucide-react';
-import type { Task as TaskType, Goal } from '@/types';
+import type { Task as TaskType, Goal, AppState, Project, SubTask } from '@/types';
+import type { Action } from '@/store/types';
 
 interface H5LayoutProps {
   children?: React.ReactNode;
@@ -59,7 +60,7 @@ export function H5Layout({ children }: H5LayoutProps) {
 
   const handleRefresh = useCallback(() => {
     // Force-refresh by dispatching MERGE_STATE with current data (triggers Supabase re-fetch)
-    dispatch({ type: 'MERGE_STATE', payload: { _refreshTrigger: Date.now() } as any });
+    dispatch({ type: 'MERGE_STATE', payload: { _refreshTrigger: Date.now() } as unknown as Partial<AppState> });
   }, [dispatch]);
 
   const { containerRef, pullDist, refreshing, onTouchStart, onTouchMove, onTouchEnd } = usePullToRefresh(handleRefresh);
@@ -177,7 +178,7 @@ export function H5Layout({ children }: H5LayoutProps) {
 }
 
 // ── Create Modal ──
-function H5CreateModal({ onClose, dispatch, userId }: { onClose: () => void; dispatch: React.Dispatch<any>; userId: string }) {
+function H5CreateModal({ onClose, dispatch, userId }: { onClose: () => void; dispatch: React.Dispatch<Action>; userId: string }) {
   const [mode, setMode] = useState<'task' | 'goal'>('task');
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<'urgent' | 'high' | 'medium' | 'low'>('medium');
@@ -252,8 +253,8 @@ function H5CreateModal({ onClose, dispatch, userId }: { onClose: () => void; dis
 // ── Detail Bottom Sheet ──
 function H5DetailSheet({ item, state, dispatch, onClose }: {
   item: { type: 'task' | 'goal'; id: string };
-  state: any;
-  dispatch: React.Dispatch<any>;
+  state: AppState;
+  dispatch: React.Dispatch<Action>;
   onClose: () => void;
 }) {
   // Dynamic status flow from statusFlowRules
@@ -277,7 +278,7 @@ function H5DetailSheet({ item, state, dispatch, onClose }: {
     if (!task) return null;
 
     const nextStatuses = statusFlow[task.status] || [];
-    const projectTitle = task.projectId ? state.projects.find((p: any) => p.id === task.projectId)?.title : null;
+    const projectTitle = task.projectId ? state.projects.find((p: Project) => p.id === task.projectId)?.title : null;
 
     return (
       <div className="fixed inset-0 z-50 bg-black/40 flex items-end" onClick={onClose}>
@@ -297,7 +298,7 @@ function H5DetailSheet({ item, state, dispatch, onClose }: {
           {/* Subtasks count */}
           {task.subtasks && task.subtasks.length > 0 && (
             <div className="text-xs text-muted-foreground mb-4">
-              子任务 {task.subtasks.filter((s: any) => s.completed).length}/{task.subtasks.length}
+              子任务 {task.subtasks.filter((s: SubTask) => s.completed).length}/{task.subtasks.length}
             </div>
           )}
           {/* Quick status buttons */}

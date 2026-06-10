@@ -40,7 +40,7 @@ export function ScheduleTab() {
     events.forEach(evt => {
       const start = evt.startDate.split('T')[0];
       const end = evt.endDate.split('T')[0];
-      let d = new Date(start);
+      const d = new Date(start);
       const endD = new Date(end);
       while (d <= endD) { const key = d.toISOString().split('T')[0]; if (!map[key]) map[key] = []; map[key].push(evt); d.setDate(d.getDate() + 1); }
     });
@@ -53,7 +53,7 @@ export function ScheduleTab() {
     outlookEvents.forEach(evt => {
       const start = evt.startTime.split('T')[0];
       const end = evt.endTime.split('T')[0];
-      let d = new Date(start);
+      const d = new Date(start);
       const endD = new Date(end);
       while (d <= endD) { const key = d.toISOString().split('T')[0]; if (!map[key]) map[key] = []; map[key].push(evt); d.setDate(d.getDate() + 1); }
     });

@@ -93,7 +93,7 @@ export function FloatingAIPanel() {
        {!isOpen && showHint && (
          <div className="fixed bottom-20 right-6 md:bottom-22 md:right-8 z-50 animate-fade-in bg-card border border-border rounded-lg shadow-lg px-3 py-2 max-w-[200px]">
            <p className="text-xs text-muted-foreground mb-1">试试AI助手，快速分析团队状况</p>
-           <button onClick={() => { setShowHint(false); try { localStorage.setItem(DISMISSED_KEY, '1'); } catch {} }}
+           <button onClick={() => { setShowHint(false); try { localStorage.setItem(DISMISSED_KEY, '1'); } catch { /* ignore */ } }}
              className="text-[10px] text-muted-foreground hover:text-foreground">知道了</button>
          </div>
        )}

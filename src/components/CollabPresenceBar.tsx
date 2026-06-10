@@ -19,7 +19,7 @@ const PRESENCE_COLORS = [
   'bg-violet-500', 'bg-cyan-500', 'bg-orange-500', 'bg-teal-500',
 ];
 
-export const CollabPresenceBar: React.FC<CollabPresenceBarProps> = ({ userId, userName, currentPage }) => {
+export const CollabPresenceBar: React.FC<CollabPresenceBarProps> = ({ userId, userName, currentPage: _currentPage }) => {
   const { onlineUsers } = useCollabPresence(userId, userName);
 
   // Filter to users actually on a page (presence tracks all, we show ones with cursors or same page)

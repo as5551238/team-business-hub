@@ -3,7 +3,7 @@
  * 通用: 已选计数 / 删除 / 改状态 / 分配人 / 优先级 / 标签 / 日期 / 清空
  */
 import React, { useCallback, useState } from 'react';
-import { Trash2, X, CheckSquare, Tag, Calendar, ArrowUpCircle } from 'lucide-react';
+import { Trash2, X, CheckSquare, Calendar } from 'lucide-react';
 import { SimpleSelect } from '@/components/ui/simple-select';
 import type { BatchSelectionState } from '@/hooks/useBatchSelection';
 

@@ -1,26 +1,18 @@
 import React, { useMemo, useCallback } from 'react';
-import { Zap, Target, FolderKanban, ListTodo } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useStore } from '@/store/useStore';
 import { buildAIContext, extractFocusItems } from '@/lib/ai/aiContextEngine';
 import type { ItemContext } from '@/lib/ai/aiContextEngine';
 import { useAppNavigate } from '@/lib/routes';
-import type { Page } from '@/components/layout/Layout';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
-interface AIFocusWidgetProps {
-}
+type AIFocusWidgetProps = Record<string, never>;
 
 const typeIcon: Record<ItemContext['type'], React.ReactNode> = {
   goal: <span>🎯</span>,
   project: <span>📋</span>,
   task: <span>✅</span>,
-};
-
-const typePageMap: Record<ItemContext['type'], string> = {
-  goal: 'goals',
-  project: 'projects',
-  task: 'tasks',
 };
 
 const priorityBorder: Record<string, string> = {

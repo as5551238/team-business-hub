@@ -1,16 +1,15 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
-import { useMemberLookup, usePermissions } from '@/store/hooks';
-import type { Project, ProjectStatus, TaskPriority } from '@/types';
+import { usePermissions } from '@/store/hooks';
+import type { Project } from '@/types';
 import { FolderKanban, Calendar, MoreHorizontal, Edit2, Trash2, GripVertical, ChevronRight, MessageSquare, CheckCircle2, Target, Tag } from 'lucide-react';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { handleError } from '@/lib/errorHandler';
+
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { statusLabels, statusColors, priorityLabels, priorityColors, bpLabels, bpFromPriority, getTouchPos } from './constants';
+import { statusLabels, statusColors, priorityLabels, priorityColors, bpLabels, bpFromPriority } from './constants';
 import type { BatchProps } from './constants';
 import { useVirtualScroll } from '@/hooks/useVirtualScroll';
 
-import { KanbanMiniCard, PROJECT_Q_ARROW_MAP, MatrixQuadrantCard, ProjectKanbanView, ProjectMatrixView, ProjectTimelineView, ProjectCanvasView } from './ViewMatrixKanban';
+import { ProjectKanbanView, ProjectMatrixView, ProjectTimelineView, ProjectCanvasView } from './ViewMatrixKanban';
 export { ProjectKanbanView, ProjectMatrixView, ProjectTimelineView, ProjectCanvasView };
 const ProjectCard = React.memo(function ProjectCard({ project, members, expanded, hasChildren, onToggle, onClick, tags, commentCount, batchMode, isSelected, onToggleSelect }: {
   project: Project; members: { id: string; name: string; avatar: string }[];

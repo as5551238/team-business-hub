@@ -2,8 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useStore } from '@/store/useStore';
 import { useMemberLookup, usePermissions, useActiveMembers } from '@/store/hooks';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
-import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag, X } from 'lucide-react';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { Plus, Trash2, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Flag } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { SimpleSelect } from '@/components/ui/simple-select';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -21,7 +20,7 @@ interface Props {
   projectEndDate: string;
 }
 
-export function ProjectGanttChart({ projectId, projectStartDate, projectEndDate }: Props) {
+export function ProjectGanttChart({ projectId, projectStartDate: _projectStartDate, projectEndDate: _projectEndDate }: Props) {
   const { state, dispatch } = useStore();
   const { getName } = useMemberLookup();
   const { can } = usePermissions();

@@ -61,7 +61,7 @@ function inferVision(goals: Goal[]): string {
   if (goals.length === 0) return '待定义团队愿景';
   const keywords = new Set<string>();
   for (const g of goals) {
-    const words = g.title.replace(/[，。、；：""''【】（）\[\]{}]/g, ' ').split(/\s+/).filter(w => w.length >= 2);
+    const words = g.title.replace(/[，。、；：""''【】（）[\]{}]/g, ' ').split(/\s+/).filter(w => w.length >= 2);
     for (const w of words.slice(0, 3)) keywords.add(w);
   }
   if (keywords.size === 0) return '团队目标驱动';

@@ -213,7 +213,7 @@ export const BUILTIN_AUTOMATON_RULES: AutomatonRule[] = [
 // ===== Automaton Runner =====
 
 let _automatonTimer: ReturnType<typeof setInterval> | null = null;
-let _lastScanTime: Record<string, number> = {};
+const _lastScanTime: Record<string, number> = {};
 
 export function startAutomaton(getState: () => AppState, dispatch: (action: Action) => void) {
   stopAutomaton();

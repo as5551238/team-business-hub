@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import type { ReviewModel, ReviewSession, ReviewActionItem } from '@/types';
-import { getReviewModel } from '@/lib/reviewModelRegistry';
-import { ChevronRight, ChevronLeft, CheckCircle, Sparkles, X, ListChecks, Plus, Clock, Target } from 'lucide-react';
+import { ChevronRight, ChevronLeft, CheckCircle, Sparkles, X, ListChecks, Plus, Target } from 'lucide-react';
 import { SwotMatrix } from './SwotMatrix';
 import { PdcaCycle } from './PdcaCycle';
 import { FishboneDiagram } from './FishboneDiagram';
@@ -22,7 +21,7 @@ export function ReviewSessionWizard({ model, onClose, onComplete }: Props) {
   const [currentStep, setCurrentStep] = useState(0);
   const [inputs, setInputs] = useState<Record<string, string | string[]>>({});
   const [isAIFilling, setIsAIFilling] = useState(false);
-  const [aiInsights, setAiInsights] = useState<string | null>(null);
+  const [aiInsights, _setAiInsights] = useState<string | null>(null);
   const [actionItems, setActionItems] = useState<ReviewActionItem[]>([]);
   const [newActionText, setNewActionText] = useState('');
   const [view, setView] = useState<'wizard' | 'summary'>('wizard');

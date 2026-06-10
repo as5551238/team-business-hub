@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
-import { useTags, useViewingMember, useMemberLookup, usePermissions, useActiveMembers } from '@/store/hooks';
+import { useTags, useViewingMember, usePermissions, useActiveMembers } from '@/store/hooks';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
-import type { GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
-import { Trash2, Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check, Users, EyeOff, Eye } from 'lucide-react';
+import type { Goal, GoalStatus, GoalType, TaskPriority, RepeatCycle } from '@/types';
+import { Plus, Target, Filter, ChevronDown, X, FileText, Search, Sparkles, Check, Users, EyeOff, Eye } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { SimpleSelect } from '@/components/ui/simple-select';
@@ -15,11 +15,11 @@ import { FilterChipSelect } from '@/components/FilterChipSelect';
 import { cn } from '@/lib/utils';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
 import PageShell from '@/components/layout/PageShell';
-import { filterViewModes, computeUserLevel } from '@/lib/progressiveDisclosure';
+import { filterViewModes } from '@/lib/progressiveDisclosure';
 import {
-  GoalCard, GoalTreeNode, GoalListView, GoalMatrixView
+  GoalTreeNode, GoalListView, GoalMatrixView
 } from './goals/views';
-import { viewTabs, statusLabels, statusColors, bizLabels, bizColors, type ViewMode, VALID_VIEW_MODES } from './goals/constants';
+import { viewTabs, type ViewMode, VALID_VIEW_MODES } from './goals/constants';
 import { useDraftSave } from '@/hooks/useDraftSave';
 import { OKRAlignmentView } from './admin/OKRAlignmentTab';
 import { StrategyHierarchyView } from '@/components/StrategyHierarchyView';
@@ -34,10 +34,9 @@ import { isDateRangeInTimeRange } from '@/lib/timeRangeUtils';
 
 export default function Goals() {
   const { state, dispatch } = useStore();
-  const { getName: getMemberName } = useMemberLookup();
   const { can } = usePermissions();
   const { tags } = useTags();
-  const { isTeamView, viewingMember, viewingMemberId, setViewingMember } = useViewingMember();
+  const { isTeamView, viewingMember } = useViewingMember();
   const { onlineUsers } = useCollabPresence(state.currentUser?.id || '', state.currentUser?.name || '');
   const { broadcastOp } = useCollabBroadcast(state.currentUser?.id || '');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -75,7 +74,7 @@ export default function Goals() {
   const [customRepeatWeeks, setCustomRepeatWeeks] = useState(0);
 
   const batchSel = useBatchSelection();
-  const { batchMode, selectedIds, toggleSelect, selectAll, selectRange, clearSelection, exitBatchMode } = batchSel;
+  const { batchMode, selectedIds, toggleSelect, selectAll, clearSelection, exitBatchMode } = batchSel;
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
   const { activeMembers } = useActiveMembers();
@@ -179,7 +178,7 @@ export default function Goals() {
     deletePermission: 'goals_delete',
     entityLabel: '目标',
     items: state.goals,
-    getItemId: (g: any) => g.id,
+    getItemId: (g: Goal) => g.id,
     dispatch,
     can,
     clearSelection,
@@ -304,11 +303,11 @@ export default function Goals() {
           <>
             <Filter size={14} className="text-muted-foreground flex-shrink-0" />
             <div className="relative flex-1 min-w-[140px] max-w-[220px]"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><input data-search-input type="text" placeholder="搜索..." value={searchText} onChange={e => setSearchText(e.target.value)} className="w-full pl-8 pr-3 py-1 text-xs border border-input rounded-full bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary/20" /></div>
-            <MultiSelectFilter label="状态" options={[{value:'todo',label:'待办'},{value:'in_progress',label:'进行中'},{value:'done',label:'已完成'},{value:'blocked',label:'已阻塞'}]} selected={selectedStatuses} onToggle={v => setSelectedStatuses(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedStatuses(new Set())} className="!text-xs !px-2 !py-1 !min-w-0" />
-            <MultiSelectFilter label="紧急程度" options={[{value:'urgent',label:'紧急'},{value:'high',label:'高'},{value:'medium',label:'中'},{value:'low',label:'低'}]} selected={selectedPriorities} onToggle={v => setSelectedPriorities(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedPriorities(new Set())} />
-            <MultiSelectFilter label="重要程度" options={[{value:'S',label:'S级'},{value:'A',label:'A级'},{value:'B',label:'B级'},{value:'C',label:'C级'}]} selected={selectedLevels} onToggle={v => setSelectedLevels(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedLevels(new Set())} />
-            <MultiSelectFilter label="分类" options={state.categories.map(c => ({value: c.name, label: c.name}))} selected={selectedCategories} onToggle={v => setSelectedCategories(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedCategories(new Set())} />
-            <MultiSelectFilter label="标签" options={tags.map(t => ({value: t.id, label: t.name}))} selected={selectedTags} onToggle={v => setSelectedTags(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedTags(new Set())} />
+            <MultiSelectFilter label="状态" options={[{value:'todo',label:'待办'},{value:'in_progress',label:'进行中'},{value:'done',label:'已完成'},{value:'blocked',label:'已阻塞'}]} selected={selectedStatuses} onToggle={v => setSelectedStatuses(p => { const n = new Set(p); if (n.has(v)) { n.delete(v); } else { n.add(v); } return n; })} onClear={() => setSelectedStatuses(new Set())} className="!text-xs !px-2 !py-1 !min-w-0" />
+            <MultiSelectFilter label="紧急程度" options={[{value:'urgent',label:'紧急'},{value:'high',label:'高'},{value:'medium',label:'中'},{value:'low',label:'低'}]} selected={selectedPriorities} onToggle={v => setSelectedPriorities(p => { const n = new Set(p); if (n.has(v)) { n.delete(v); } else { n.add(v); } return n; })} onClear={() => setSelectedPriorities(new Set())} />
+            <MultiSelectFilter label="重要程度" options={[{value:'S',label:'S级'},{value:'A',label:'A级'},{value:'B',label:'B级'},{value:'C',label:'C级'}]} selected={selectedLevels} onToggle={v => setSelectedLevels(p => { const n = new Set(p); if (n.has(v)) { n.delete(v); } else { n.add(v); } return n; })} onClear={() => setSelectedLevels(new Set())} />
+            <MultiSelectFilter label="分类" options={state.categories.map(c => ({value: c.name, label: c.name}))} selected={selectedCategories} onToggle={v => setSelectedCategories(p => { const n = new Set(p); if (n.has(v)) { n.delete(v); } else { n.add(v); } return n; })} onClear={() => setSelectedCategories(new Set())} />
+            <MultiSelectFilter label="标签" options={tags.map(t => ({value: t.id, label: t.name}))} selected={selectedTags} onToggle={v => setSelectedTags(p => { const n = new Set(p); if (n.has(v)) { n.delete(v); } else { n.add(v); } return n; })} onClear={() => setSelectedTags(new Set())} />
             <FilterChipSelect label="人员" options={activeMembers.map(m => ({value: m.id, label: m.name}))} selected={selectedMembers} onSelect={v => setSelectedMembers(new Set(v as string[]))} onClear={() => setSelectedMembers(new Set())} multiple />
             <FilterChipSelect label={timeRange === 'all' ? '时间' : TIME_LABELS[timeRange] || '时间'} options={[{value:'all',label:'全部时间'},{value:'today',label:'今天'},{value:'this_week',label:'本周'},{value:'this_month',label:'本月'},{value:'this_quarter',label:'本季度'}]} selected={timeRange} onSelect={v => setTimeRange(v as string)} onClear={() => setTimeRange('all')} />
             {activeFilterCount > 0 && (

@@ -6,13 +6,10 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
-import { useActiveMembers } from '@/store/hooks';
 import { QuickCreateModal } from '@/components/QuickCreateModal';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ShortcutHelpPanel } from '@/components/ShortcutHelpPanel';
 import { OnboardingWizard, shouldShowOnboarding } from '@/components/OnboardingWizard';
-import { useTheme } from '@/hooks/useTheme';
-import { handleError } from '@/lib/errorHandler';
 import { PageTransition } from '@/components/ui/motion';
 import { useCollabPresence } from '@/lib/collab';
 import { H5Layout } from '@/components/H5Layout';
@@ -46,7 +43,7 @@ function isH5Mode(): boolean {
     const isFeishu = ua.includes('lark') || ua.includes('feishu');
     const hasParam = new URLSearchParams(window.location.search).get('h5') === '1';
     return isWechat || isFeishu || hasParam;
-  } catch (e) { return false; }
+  } catch (_) { return false; }
 }
 
 export default function Layout({ children, currentUser }: LayoutProps) {
@@ -60,19 +57,17 @@ export default function Layout({ children, currentUser }: LayoutProps) {
 
   const { state, dispatch, connectionMode } = useStore();
   const user = state.currentUser;
-  const { activeMembers } = useActiveMembers();
-  const isAdmin = user?.role === 'admin';
   const unreadCount = useMemo(() => state.notifications.filter(n => !n.read && (!n.memberId || n.memberId === user?.id)).length, [state.notifications, user?.id]);
   const overdueCount = useMemo(() => { const today = new Date().toISOString().split('T')[0]; return state.tasks.filter(t => (t.leaderId === user?.id || (t.supporterIds ?? []).includes(user?.id || '')) && t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today).length; }, [state.tasks, user?.id]);
   const inProgressGoalsCount = useMemo(() => state.goals.filter(g => g.status === 'in_progress').length, [state.goals]);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(() => {
-    try { const s = localStorage.getItem('tbh-sidebar-mode'); if (s === 'wide' || s === 'narrow' || s === 'hidden') return s; } catch (e) {}
+    try { const s = localStorage.getItem('tbh-sidebar-mode'); if (s === 'wide' || s === 'narrow' || s === 'hidden') return s; } catch (_) { /* ignore */ }
     return window.innerWidth < 768 ? 'hidden' : window.innerWidth <= 1024 ? 'narrow' : 'wide';
   });
   const [density, setDensity] = useState<DensityMode>(() => {
-    try { const d = localStorage.getItem('tbh-density'); if (d === 'comfortable' || d === 'compact') return d; } catch (e) {} return 'comfortable';
+    try { const d = localStorage.getItem('tbh-density'); if (d === 'comfortable' || d === 'compact') return d; } catch (_) { /* ignore */ } return 'comfortable';
   });
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
@@ -84,17 +79,16 @@ export default function Layout({ children, currentUser }: LayoutProps) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  const { theme } = useTheme();
   const { onlineUsers, updateCursor } = useCollabPresence(user?.id || '', user?.name || '');
   const cycleSidebarMode = useCallback(() => {
     setSidebarMode(prev => {
       const next = prev === 'wide' ? 'narrow' : prev === 'narrow' ? 'hidden' : 'wide';
-      try { localStorage.setItem('tbh-sidebar-mode', next); } catch (e) {}
+      try { localStorage.setItem('tbh-sidebar-mode', next); } catch (_) { /* ignore */ }
       return next;
     });
   }, []);
   const toggleDensity = useCallback(() => {
-    setDensity(prev => { const next = prev === 'comfortable' ? 'compact' : 'comfortable'; try { localStorage.setItem('tbh-density', next); } catch (e) {} return next; });
+    setDensity(prev => { const next = prev === 'comfortable' ? 'compact' : 'comfortable'; try { localStorage.setItem('tbh-density', next); } catch (_) { /* ignore */ } return next; });
   }, []);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -106,7 +100,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
   // Offline writes tracking
   useEffect(() => {
     if (connectionMode !== 'offline') { setOfflineWrites(0); return; }
-    const check = () => { try { setOfflineWrites(parseInt(localStorage.getItem('tbh-offline-writes') || '0')); } catch (e) {} };
+    const check = () => { try { setOfflineWrites(parseInt(localStorage.getItem('tbh-offline-writes') || '0')); } catch (_) { /* ignore */ } };
     check(); const id = setInterval(check, 2000); return () => clearInterval(id);
   }, [connectionMode]);
 
@@ -131,7 +125,7 @@ export default function Layout({ children, currentUser }: LayoutProps) {
       if (newest) {
         const relatedPage = newest.relatedType === 'goal' ? 'goals' : newest.relatedType === 'project' ? 'projects' : newest.relatedType === 'task' ? 'tasks' : null;
         const deepUrl = relatedPage && newest.relatedId ? `/${newest.relatedType}/${newest.relatedId}` : '/';
-        try { sendBrowserNotification(newest.title, { body: newest.message, tag: newest.id, data: { url: deepUrl } }); } catch (e) {}
+        try { sendBrowserNotification(newest.title, { body: newest.message, tag: newest.id, data: { url: deepUrl } }); } catch (_) { /* ignore */ }
       }
     }
     prevNotificationCountRef.current = currCount;

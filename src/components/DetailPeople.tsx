@@ -18,7 +18,7 @@ interface DetailPeopleProps {
   updateItem: (updates: Record<string, unknown>) => void;
 }
 
-export function DetailPeople({ itemType, itemId, goal, project, task, canEdit, updateItem }: DetailPeopleProps) {
+export function DetailPeople({ itemType, itemId: _itemId, goal, project, task, canEdit: _canEdit, updateItem }: DetailPeopleProps) {
   const { state } = useStore();
   const { activeMembers } = useActiveMembers();
 

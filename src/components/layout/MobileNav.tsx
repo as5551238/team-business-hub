@@ -7,7 +7,7 @@ import { useStore } from '@/store/useStore';
 import { hasPermission } from '@/store/reducer';
 import { isFeatureVisible, recordAction } from '@/lib/progressiveDisclosure';
 import type { Page } from './Layout';
-import { LayoutDashboard, Target, FolderKanban, CheckSquare, BarChart3, Settings, BookOpen, Plus, Menu } from 'lucide-react';
+import { LayoutDashboard, Target, FolderKanban, CheckSquare, BarChart3, Plus, Menu } from 'lucide-react';
 
 const mobileNavItems: { page: Page; label: string; icon: React.ReactNode; shortLabel: string; requirePermission?: string }[] = [
   { page: 'dashboard', label: '工作台', icon: <LayoutDashboard size={20} />, shortLabel: '工作' },

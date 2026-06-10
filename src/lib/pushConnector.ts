@@ -62,7 +62,7 @@ async function pushToWeChatWork(config: PushConfig, msg: PushMessage): Promise<P
   if (!config.webhookUrl) return { success: false, channel: 'wechat_work', error: 'Webhook URL 未配置' };
 
   try {
-    const body: Record<string, any> = {
+    const body: { msgtype: string; markdown: { content: string; mentioned_mobile_list?: string[] } } = {
       msgtype: 'markdown',
       markdown: {
         content: `### ${msg.title}\n${msg.content}${msg.url ? `\n[查看详情](${msg.url})` : ''}`,
@@ -90,7 +90,7 @@ async function pushToWeChatWork(config: PushConfig, msg: PushMessage): Promise<P
 async function pushToDingTalk(config: PushConfig, msg: PushMessage): Promise<PushResult> {
   if (!config.webhookUrl) return { success: false, channel: 'dingtalk', error: 'Webhook URL 未配置' };
   try {
-    const body: Record<string, any> = {
+    const body: { msgtype: string; markdown: { title: string; text: string }; secret?: string } = {
       msgtype: 'markdown',
       markdown: {
         title: msg.title,
@@ -178,7 +178,7 @@ export async function pushNotification(msg: PushMessage, channels?: PushChannel[
 // ===== Zapier/n8n 连接器 Webhook =====
 export async function triggerZapierWebhook(event: {
   type: 'task.created' | 'task.updated' | 'task.completed' | 'goal.created' | 'goal.updated' | 'goal.completed';
-  data: Record<string, any>;
+  data: Record<string, unknown>;
 }, webhookUrl?: string): Promise<boolean> {
   const config = getPushConfig('webhook');
   const url = webhookUrl || config?.webhookUrl;

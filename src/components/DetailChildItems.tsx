@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useStore } from '@/store/useStore';
-import type { Goal, Project, Task, ItemType } from '@/types';
+import type { Task, ItemType } from '@/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Target, FolderKanban, CheckSquare, ChevronRight } from 'lucide-react';

@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { useTags, useViewingMember, usePermissions, useActiveMembers } from '@/store/hooks';
 import { ItemDetailPanel } from '@/components/ItemDetailPanel';
-import type { TaskPriority } from '@/types';
+import type { Project, TaskPriority } from '@/types';
 import { Plus, FolderKanban, Search, Check, Users, X, Filter, ChevronDown, EyeOff, Eye } from 'lucide-react';
 import { SimpleSelect } from '@/components/ui/simple-select';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -162,7 +162,7 @@ export default function Projects() {
     deletePermission: 'delete_projects',
     entityLabel: '项目',
     items: state.projects,
-    getItemId: (p: any) => p.id,
+    getItemId: (p: Project) => p.id,
     dispatch,
     can,
     clearSelection,
@@ -242,11 +242,11 @@ export default function Projects() {
           <div className="bg-card rounded-xl border p-2.5 md:p-3 flex items-center gap-2 flex-wrap w-full">
             <Filter size={14} className="text-muted-foreground flex-shrink-0" />
             <div className="relative flex-1 min-w-[160px] max-w-[260px]"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><input data-search-input className="w-full pl-8 pr-3 py-1.5 text-xs border border-input rounded-lg bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary/20" placeholder="搜索项目..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
-            <MultiSelectFilter label="状态" options={statusOptions.filter(o => o.value !== 'all')} selected={selectedStatuses} onToggle={v => setSelectedStatuses(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedStatuses(new Set())} />
-            <MultiSelectFilter label="紧急程度" options={priorityOptions.filter(o => o.value !== 'all')} selected={selectedPriorities} onToggle={v => setSelectedPriorities(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedPriorities(new Set())} />
-            <MultiSelectFilter label="重要程度" options={bpOptions.filter(o => o.value !== 'all')} selected={selectedLevels} onToggle={v => setSelectedLevels(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedLevels(new Set())} />
-            <MultiSelectFilter label="分类" options={categories.map(c => ({value: c, label: c}))} selected={selectedCategories} onToggle={v => setSelectedCategories(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedCategories(new Set())} />
-            <MultiSelectFilter label="标签" options={projectTags.map(t => ({value: t, label: t}))} selected={selectedTags} onToggle={v => setSelectedTags(p => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; })} onClear={() => setSelectedTags(new Set())} />
+            <MultiSelectFilter label="状态" options={statusOptions.filter(o => o.value !== 'all')} selected={selectedStatuses} onToggle={v => setSelectedStatuses(p => { const n = new Set(p); if (n.has(v)) { n.delete(v); } else { n.add(v); } return n; })} onClear={() => setSelectedStatuses(new Set())} />
+            <MultiSelectFilter label="紧急程度" options={priorityOptions.filter(o => o.value !== 'all')} selected={selectedPriorities} onToggle={v => setSelectedPriorities(p => { const n = new Set(p); if (n.has(v)) { n.delete(v); } else { n.add(v); } return n; })} onClear={() => setSelectedPriorities(new Set())} />
+            <MultiSelectFilter label="重要程度" options={bpOptions.filter(o => o.value !== 'all')} selected={selectedLevels} onToggle={v => setSelectedLevels(p => { const n = new Set(p); if (n.has(v)) { n.delete(v); } else { n.add(v); } return n; })} onClear={() => setSelectedLevels(new Set())} />
+            <MultiSelectFilter label="分类" options={categories.map(c => ({value: c, label: c}))} selected={selectedCategories} onToggle={v => setSelectedCategories(p => { const n = new Set(p); if (n.has(v)) { n.delete(v); } else { n.add(v); } return n; })} onClear={() => setSelectedCategories(new Set())} />
+            <MultiSelectFilter label="标签" options={projectTags.map(t => ({value: t, label: t}))} selected={selectedTags} onToggle={v => setSelectedTags(p => { const n = new Set(p); if (n.has(v)) { n.delete(v); } else { n.add(v); } return n; })} onClear={() => setSelectedTags(new Set())} />
             <div className="relative">
               <button className="text-xs px-2 py-1 rounded-md bg-muted/50 text-muted-foreground hover:text-foreground border border-border flex items-center gap-1" onClick={() => setShowPersonPicker(!showPersonPicker)}>人员筛选 ({personFilter.length || '全部'}) <ChevronDown size={12} /></button>
               {showPersonPicker && (

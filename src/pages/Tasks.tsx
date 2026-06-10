@@ -6,7 +6,7 @@ import { useVirtualScroll } from '@/hooks/useVirtualScroll';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { cn } from '@/lib/utils';
 import { handleError } from '@/lib/errorHandler';
-import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, Clock, AlertCircle, CheckCircle2, Circle, FileText, Copy, MessageSquare, Trash2, Check, Filter, Sparkles, Users, EyeOff, Eye } from 'lucide-react';
+import { Plus, Search, ChevronDown, ChevronRight, Calendar, X, FileText, Copy, Check, Filter, Sparkles, Users, EyeOff, Eye } from 'lucide-react';
 import { SimpleSelect } from '@/components/ui/simple-select';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -18,9 +18,9 @@ import { TaskCard, TaskRow, StatusBadge, PriorityBadge, STATUS_CYCLE, PRIORITY_C
 import { TaskMatrixView } from './tasks/TasksMatrix';
 import { TaskTimelineView } from './tasks/TasksTimeline';
 import {
-  STATUS_CONFIG, BOARD_COLUMNS, VIEW_TABS, TIME_OPTIONS,
+  BOARD_COLUMNS, VIEW_TABS, TIME_OPTIONS,
   getTodayStr, priorityToBP, getQuadrantForPriority, isOverdue, isInTimeRange,
-  type ViewMode, type BusinessPriority, type BatchProps, type KanbanGroupBy
+  type ViewMode, type BatchProps, type KanbanGroupBy
 } from './tasks/constants';
 import { useDetailFromUrl, useFiltersFromUrl } from '@/hooks/useDetailFromUrl';
 import { useBatchSelection } from '@/hooks/useBatchSelection';
@@ -42,7 +42,7 @@ export default function Tasks() {
   const { state, dispatch } = useStore();
   const { can } = usePermissions();
   const { tags } = useTags();
-  const { isTeamView, viewingMember, setViewingMember, viewingMemberId } = useViewingMember();
+  const { isTeamView, viewingMember } = useViewingMember();
   const { onlineUsers } = useCollabPresence(state.currentUser?.id || '', state.currentUser?.name || '');
   const { broadcastOp } = useCollabBroadcast(state.currentUser?.id || '');
   const currentUser = state.currentUser;
@@ -560,7 +560,7 @@ export default function Tasks() {
     deletePermission: 'delete_tasks',
     entityLabel: '任务',
     items: state.tasks,
-    getItemId: (t: any) => t.id,
+    getItemId: (t: Task) => t.id,
     dispatch,
     can,
     clearSelection,
@@ -606,7 +606,7 @@ export default function Tasks() {
                 dateFields={[{ key: 'dueDate', label: '截止日' }]}
                 moveTargets={[{ value: '', label: '无项目' }, ...state.projects.filter(p => p.status === 'in_progress').map(p => ({ value: p.id, label: p.title }))]}
                 moveLabel="移到项目"
-                onBatchDelete={(ids) => batchDelete()}
+                onBatchDelete={(_ids) => batchDelete()}
                 onBatchStatus={(_ids, status) => batchUpdateStatus(status)}
                 onBatchAssign={(_ids, leaderId) => batchAssign(leaderId)}
                 onBatchPriority={(_ids, priority) => batchUpdatePriority(priority)}
@@ -695,8 +695,8 @@ export default function Tasks() {
                     <div><label className="text-sm font-medium mb-1.5 block">父任务</label><SimpleSelect value={newParentId || '__EMPTY__'} onValueChange={v => setNewParentId(v === '__EMPTY__' ? '' : v)} options={[{ value: '__EMPTY__', label: '无' }, ...state.tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled').map(t => ({ value: t.id, label: t.title }))]} className="w-full h-9 text-sm" /></div>
                   </div>
                   <div><label className="text-sm font-medium mb-1.5 block">分类</label><SimpleSelect value={newCategory || '__EMPTY__'} onValueChange={v => setNewCategory(v === '__EMPTY__' ? '' : v)} options={[{ value: '__EMPTY__', label: '未分类' }, ...allCategories.map(c => ({ value: c, label: c }))]} className="w-full h-9 text-sm" /></div>
-                  <div><label className="text-sm font-medium mb-1.5 block">标签</label><div className="flex flex-wrap gap-1.5">{tags.map(t => <button key={t.id || t.name} data-new-task-tag={t.name} type="button" className={cn('text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer', newTags.has(t.name) ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border hover:border-primary/50')} onClick={() => setNewTags(prev => { const n = new Set(prev); n.has(t.name) ? n.delete(t.name) : n.add(t.name); return n; })}>{t.name}</button>)}</div></div>
-                  {activeMembers.length > 0 && <div><label className="text-sm font-medium mb-1.5 block">协作者</label><div className="flex flex-wrap gap-1.5">{activeMembers.map(m => { const sel = newSupporters.has(m.id); return <button key={m.id} type="button" className={cn('text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer flex items-center gap-1', sel ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border hover:border-primary/50')} onClick={() => setNewSupporters(prev => { const n = new Set(prev); n.has(m.id) ? n.delete(m.id) : n.add(m.id); return n; })}><span className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-[8px]">{(m.name || '?')[0]}</span>{m.name}</button>; })}</div></div>}
+                  <div><label className="text-sm font-medium mb-1.5 block">标签</label><div className="flex flex-wrap gap-1.5">{tags.map(t => <button key={t.id || t.name} data-new-task-tag={t.name} type="button" className={cn('text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer', newTags.has(t.name) ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border hover:border-primary/50')} onClick={() => setNewTags(prev => { const n = new Set(prev); if (n.has(t.name)) { n.delete(t.name); } else { n.add(t.name); } return n; })}>{t.name}</button>)}</div></div>
+                  {activeMembers.length > 0 && <div><label className="text-sm font-medium mb-1.5 block">协作者</label><div className="flex flex-wrap gap-1.5">{activeMembers.map(m => { const sel = newSupporters.has(m.id); return <button key={m.id} type="button" className={cn('text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer flex items-center gap-1', sel ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border hover:border-primary/50')} onClick={() => setNewSupporters(prev => { const n = new Set(prev); if (n.has(m.id)) { n.delete(m.id); } else { n.add(m.id); } return n; })}><span className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-[8px]">{(m.name || '?')[0]}</span>{m.name}</button>; })}</div></div>}
                   <button className="w-full bg-primary text-primary-foreground py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors" onClick={doCreateTask}>创建任务</button>
                   {taskTemplates.length > 0 && <button className="w-full border border-border text-muted-foreground py-2.5 rounded-lg text-sm font-medium hover:bg-accent transition-colors flex items-center justify-center gap-1.5" onClick={() => setFromTemplate(true)}><Copy className="w-4 h-4" />从模板创建</button>}
                 </div>

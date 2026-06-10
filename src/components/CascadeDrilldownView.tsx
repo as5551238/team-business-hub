@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
-import type { Goal, Project, Task } from '@/types';
+import type { Task } from '@/types';
 import { ChevronRight, ChevronDown, Target, FolderKanban, ListChecks, Users, Clock, AlertTriangle } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 

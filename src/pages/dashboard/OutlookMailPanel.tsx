@@ -21,10 +21,6 @@ export function OutlookMailPanel() {
   const [convertingId, setConvertingId] = useState<string | null>(null);
 
   const connectionStatus = getConnectionStatus();
-  if (!connectionStatus.connected) return null;
-
-  const unreadMails = mails.filter(m => !m.isRead);
-  const displayMails = unreadMails.length > 0 ? unreadMails : mails.slice(0, 5);
 
   const handleSync = useCallback(async () => {
     if (!state.currentUser) return;
@@ -76,6 +72,11 @@ export function OutlookMailPanel() {
     }
     setConvertingId(null);
   }, [mails, state.currentUser, dispatch]);
+
+  if (!connectionStatus.connected) return null;
+
+  const unreadMails = mails.filter(m => !m.isRead);
+  const displayMails = unreadMails.length > 0 ? unreadMails : mails.slice(0, 5);
 
   const importanceColor: Record<string, string> = {
     high: 'text-red-500',

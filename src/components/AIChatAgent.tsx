@@ -277,7 +277,7 @@ export function AIChatAgent() {
     setIsStreaming(false);
   }, []);
 
-  const clearChat = useCallback(() => {
+  const _clearChat = useCallback(() => {
     const welcome = { id: 'welcome', role: 'assistant' as const, content: '对话已清空。有什么可以帮你的？', timestamp: Date.now() };
     setMessages([welcome]);
     try { localStorage.removeItem(CHAT_STORAGE_KEY); } catch { /* ignore */ }

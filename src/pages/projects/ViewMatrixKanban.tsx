@@ -2,11 +2,10 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useStore } from '@/store/useStore';
 import { usePermissions } from '@/store/hooks';
 import type { Project, ProjectStatus, TaskPriority } from '@/types';
-import { GripVertical, Target, Trash2, Edit2, MessageSquare, Tag } from 'lucide-react';
+import { Trash2, MessageSquare } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { handleError } from '@/lib/errorHandler';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { statusLabels, statusColors, priorityLabels, priorityColors, bpLabels, bpFromPriority, getTouchPos } from './constants';
+import { statusLabels, statusColors, priorityColors, bpLabels, bpFromPriority, getTouchPos } from './constants';
 import type { BatchProps } from './constants';
 const KanbanMiniCard = React.memo(function KanbanMiniCard({ p, members, setDetailItem, commentCounts, batchProps, enableDrag }: { p: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; enableDrag?: boolean }) {
   const leader = (members || []).find(m => m.id === p.leaderId);
@@ -300,8 +299,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
   const boxRefs = useRef<Record<string, HTMLElement | null>>({});
 
   function daysUntilEnd(endDate: string) { return Math.ceil((new Date(endDate).getTime() - new Date(todayStr).getTime()) / MS_DAY); }
-  function isUrgent(p: Project) { return p.status !== 'done' && p.status !== 'cancelled' && p.status !== 'blocked' && !!p.endDate && daysUntilEnd(p.endDate) <= URGENT_DAYS; }
-  function isImportant(p: Project) { return p.priority === 'urgent' || p.priority === 'high'; }
+
 
   const quadrants: Record<string, { title: string; accent: string; hoverAccent: string; dropPriority: TaskPriority }> = {
     Q1: { title: '紧急重要', accent: 'border-red-200 bg-red-50/30', hoverAccent: 'border-red-300 bg-red-50/60 ring-2 ring-red-200', dropPriority: 'urgent' },

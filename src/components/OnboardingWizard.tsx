@@ -20,9 +20,7 @@ import {
   isOnboarded,
   markOnboarded,
   recommendConfig,
-  INDUSTRY_TEMPLATES,
   type OnboardingConfig,
-  type IndustryTemplate,
 } from '@/lib/onboardingAI';
 import {
   Rocket,

@@ -2,13 +2,12 @@
  * TopBar — 顶部栏
  * 从 Layout.tsx 抽出：面包屑、搜索、通知、用户菜单、团队切换、视图切换、密度/主题
  */
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
-import { useViewingMember, useMemberLookup, useActiveMembers } from '@/store/hooks';
+import { useViewingMember, useActiveMembers } from '@/store/hooks';
 import { useTheme } from '@/hooks/useTheme';
 import { handleError } from '@/lib/errorHandler';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Breadcrumb } from '@/components/Breadcrumb';
 import { MemberFilterDropdown, NotificationDropdown, UserMenuDropdown } from './LayoutDropdowns';
 import type { Page } from './Layout';
@@ -38,12 +37,11 @@ interface TopBarProps {
 export default function TopBar({
   currentPage, itemId, sidebarMode, cycleSidebarMode, setSidebarOpen,
   user, notifications, unreadCount, onlineUsers,
-  density, toggleDensity, goToPage, goToItem, searchInputRef,
+  density, toggleDensity, goToPage: _goToPage, goToItem, searchInputRef,
 }: TopBarProps) {
   const navigate = useNavigate();
   const { state, dispatch } = useStore();
   const { viewingMemberId, setViewingMember, isTeamView, viewingMember } = useViewingMember();
-  const memberLookup = useMemberLookup();
   const { activeMembers } = useActiveMembers();
   const { theme, toggleTheme } = useTheme();
   const isAdmin = user?.role === 'admin';

@@ -24,9 +24,7 @@ function MarkdownToolbar({ onInsert }: { onInsert: (before: string, after: strin
     { icon: <List size={14} />, before: '- ', after: '', placeholder: '列表项', tip: '无序列表' },
     { icon: <ListOrdered size={14} />, before: '1. ', after: '', placeholder: '列表项', tip: '有序列表' },
     { icon: <Link2 size={14} />, before: '[', after: '](url)', placeholder: '链接文字', tip: '链接' },
-    { icon: <Minus size={14} />, before: '
----
-', after: '', placeholder: '', tip: '分割线' },
+    { icon: <Minus size={14} />, before: '\n---\n', after: '', placeholder: '', tip: '分割线' },
   ];
   return (
     <div className="flex items-center gap-0.5">
@@ -157,7 +155,10 @@ export function NotesView() {
               {markdownPreview ? (
                 <div className="flex-1 w-full p-4 text-sm overflow-y-auto prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: renderMarkdown(editingContent) }} />
               ) : (
-                <MarkdownToolbar onInsert={insertMarkdown} /><textarea ref={textareaRef} className="flex-1 w-full p-4 text-sm border-none outline-none resize-none bg-transparent" placeholder="开始书写... (支持Markdown)" value={editingContent} onChange={e => setEditingContent(e.target.value)} onBlur={() => flushContent()} />
+                <>
+                  <MarkdownToolbar onInsert={insertMarkdown} />
+                  <textarea ref={textareaRef} className="flex-1 w-full p-4 text-sm border-none outline-none resize-none bg-transparent" placeholder="开始书写... (支持Markdown)" value={editingContent} onChange={e => setEditingContent(e.target.value)} onBlur={() => flushContent()} />
+                </>
               )}
             </>
           ) : <div className="flex-1 flex items-center justify-center text-muted-foreground"><div className="text-center"><StickyNote size={48} className="mx-auto mb-2 opacity-30" /><p className="text-sm">选择或新建一条笔记</p></div></div>}

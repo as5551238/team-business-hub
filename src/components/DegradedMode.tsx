@@ -2,8 +2,8 @@
  * SLA 降级组件 — Supabase不可达时显示只读模式提示
  * R8升级：品牌视觉统一 + 离线页面美化 + 自动重连倒计时
  */
-import { useState, useEffect, useCallback } from 'react';
-import { CloudOff, RefreshCw, Wifi, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CloudOff, RefreshCw } from 'lucide-react';
 import { getSupabaseClient } from '@/supabase/client';
 import { handleError } from '@/lib/errorHandler';
 

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { X, Sparkles, Zap, UserPlus, Users, ListChecks, UserCheck, Route } from 'lucide-react';
+import { Sparkles, Zap, UserPlus, Users, ListChecks, UserCheck, Route } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useStore } from '@/store/useStore';
@@ -281,7 +281,7 @@ interface TaskMatchCardProps {
   taskAssigned: boolean;
 }
 
-function TaskMatchCard({ match, memberMap, onAssign, taskAssigned }: TaskMatchCardProps) {
+function TaskMatchCard({ match, memberMap: _memberMap, onAssign, taskAssigned }: TaskMatchCardProps) {
   return (
     <div className={`rounded-lg border p-3 transition-colors ${taskAssigned ? 'border-green-200 bg-green-50/40' : 'border-border'}`}>
       <div className="flex items-center gap-2 mb-2">

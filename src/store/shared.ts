@@ -28,7 +28,7 @@ export function setWeChatNotify(fn: (title: string, message: string) => void) { 
 function fireWeChatNotify(title: string, message: string) { try { _wechatNotify?.(title, message); } catch (e) { handleError(e, { module: 'store', operation: 'WECHAT_NOTIFY', severity: 'debug' }); } }
 
 // ==================== 自动化执行锁（防循环触发） ====================
-let _executingRuleIds: Set<string> = new Set();
+const _executingRuleIds: Set<string> = new Set();
 const MAX_RULE_DEPTH = 3;
 let _ruleDepth = 0;
 

@@ -27,8 +27,8 @@ export interface AgentCapability {
   name: string;
   description: string;
   protocol: 'mcp' | 'a2a' | 'rest';
-  inputSchema?: Record<string, any>;
-  outputSchema?: Record<string, any>;
+  inputSchema?: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
 }
 
 /** 生成 TBH Agent Card（A2A 发现端点） */
@@ -58,7 +58,7 @@ export type GatewayProtocol = 'mcp' | 'a2a' | 'rest';
 export interface GatewayRequest {
   protocol: GatewayProtocol;
   action: string;
-  args: Record<string, any>;
+  args: Record<string, unknown>;
   authToken?: string;
   agentId?: string;
 }
@@ -132,7 +132,7 @@ function translateMCPToREST(mcpTool: string): { method: string; path: string } |
 export function translateGatewayRequest(req: GatewayRequest): {
   targetProtocol: GatewayProtocol;
   toolName: string;
-  args: Record<string, any>;
+  args: Record<string, unknown>;
 } {
   if (req.protocol === 'a2a') {
     const mcpName = translateA2AToMCP(req.action);
@@ -153,7 +153,7 @@ export interface AuditLogEntry {
   id: string;
   agentId: string;
   toolName: string;
-  args: Record<string, any>;
+  args: Record<string, unknown>;
   result: 'success' | 'error' | 'denied';
   error?: string;
   protocol: GatewayProtocol;

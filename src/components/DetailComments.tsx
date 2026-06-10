@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { uploadFile, BUCKET_NAMES } from '@/supabase/storage';
 import type { ItemType, Attachment, Task } from '@/types';
@@ -23,7 +23,7 @@ const AI_TRIGGER_RE = /@AI\s?$/;
 
 /** Simple markdown→HTML (bold, italic, code, code block, links, line breaks, @mention) */
 function renderMarkdown(text: string, memberNames?: Set<string>): string {
-  let html = text
+  const html = text
     // Code blocks (```...```)
     .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-gray-100 text-xs p-2 rounded overflow-x-auto my-1"><code>$2</code></pre>')
     // Inline code (`...`)

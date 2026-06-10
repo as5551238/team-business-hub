@@ -2,7 +2,7 @@
  * QuickCreateModal — 快速创建对话框
  * R10: 迁移到 shadcn Dialog，自动焦点管理+ESC关闭
  */
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '@/store/useStore';
 import type { TaskStatus, TaskPriority, GoalType, GoalStatus, ProjectStatus } from '@/types';
 import { cn } from '@/lib/utils';
@@ -53,7 +53,7 @@ export function QuickCreateModal({ open, onClose, initialType = 'task' }: QuickC
     }
   }
 
-  const typeIcon = type === 'task' ? <CheckSquare size={14} /> : type === 'goal' ? <Target size={14} /> : <FolderKanban size={14} />;
+  const _typeIcon = type === 'task' ? <CheckSquare size={14} /> : type === 'goal' ? <Target size={14} /> : <FolderKanban size={14} />;
   const typeLabel = type === 'task' ? '任务' : type === 'goal' ? '目标' : '项目';
 
   const priorityOptions = [

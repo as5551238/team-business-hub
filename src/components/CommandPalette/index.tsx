@@ -102,13 +102,13 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // S4-4: Recent commands — persist last 8 executed commands
-  const recentIdsRef = useRef<string[]>(() => {
+  const recentIdsRef = useRef<string[]>((() => {
     try { return JSON.parse(localStorage.getItem('tbh-recent-cmds') || '[]'); } catch { return []; }
-  }());
+  })());
   const trackRecent = useCallback((id: string) => {
     const next = [id, ...recentIdsRef.current.filter(r => r !== id)].slice(0, 8);
     recentIdsRef.current = next;
-    try { localStorage.setItem('tbh-recent-cmds', JSON.stringify(next)); } catch {}
+    try { localStorage.setItem('tbh-recent-cmds', JSON.stringify(next)); } catch { /* ignore */ }
   }, []);
 
   const items: CommandItem[] = useMemo(() => {

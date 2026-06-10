@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import type { Notification } from '@/types';
 import { cn } from '@/lib/utils';
-import { LogOut, Bell, AlertTriangle, UserPlus, AtSign, RefreshCw, AlertCircle, Shield, Info, ChevronDown, ChevronRight, MessageSquare, Maximize2, Minus, Moon, Sun, Monitor, Users } from 'lucide-react';
+import { LogOut, Bell, AlertTriangle, UserPlus, AtSign, RefreshCw, AlertCircle, Shield, Info, ChevronDown, ChevronRight, Maximize2, Minus, Moon, Sun, Monitor } from 'lucide-react';
 import type { Page } from './Layout';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
@@ -70,7 +70,7 @@ interface MemberFilterDropdownProps {
   onClose: () => void;
 }
 
-export const MemberFilterDropdown = React.memo(function MemberFilterDropdown({ isTeamView, viewingMemberId, viewingMember, visibleMembers, setViewingMember, onClose }: MemberFilterDropdownProps) {
+export const MemberFilterDropdown = React.memo(function MemberFilterDropdown({ isTeamView, viewingMemberId, viewingMember: _viewingMember, visibleMembers, setViewingMember, onClose }: MemberFilterDropdownProps) {
   return (
     <div className="absolute left-0 top-full mt-1 w-56 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up max-h-64 overflow-y-auto">
       <div className="px-3 py-2 border-b border-border">

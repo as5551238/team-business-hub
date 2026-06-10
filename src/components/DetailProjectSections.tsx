@@ -1,7 +1,6 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { useStore } from '@/store/useStore';
 import type { Project } from '@/types';
-import { Button } from '@/components/ui/button';
 import { Plus, FolderKanban, CheckSquare } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';

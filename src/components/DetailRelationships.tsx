@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import type { Goal, Project, Task, ItemType } from '@/types';
-import { Target, FolderKanban, CheckSquare, Zap, Calendar, Layers, Type } from 'lucide-react';
+import { Target, FolderKanban, Zap, Calendar, Layers, Type } from 'lucide-react';
 import { Section } from './detail-shared';
 import { collectDescendantIds } from './detail-shared';
 import { SimpleSelect } from '@/components/ui/simple-select';
@@ -17,7 +17,7 @@ interface DetailRelationshipsProps {
   updateItem: (updates: Record<string, unknown>) => void;
 }
 
-export function DetailRelationships({ itemType, itemId, goal, project, task, canEdit, updateItem }: DetailRelationshipsProps) {
+export function DetailRelationships({ itemType, itemId, goal, project, task, canEdit: _canEdit, updateItem }: DetailRelationshipsProps) {
   const { state } = useStore();
 
   const { availableParentGoals, availableParentProjects, availableParentTasks } = useMemo(() => {

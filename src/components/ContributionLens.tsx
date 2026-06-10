@@ -1,7 +1,7 @@
 // P1: 贡献度透镜 — 成员贡献多维度对比 + 单人详情展开
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
-import { Award, ChevronDown, ChevronUp, BarChart3, RefreshCw } from 'lucide-react';
+import { Award, ChevronDown, ChevronUp } from 'lucide-react';
 import { handleError } from '@/lib/errorHandler';
 import { resolveToken } from '@/lib/resolveToken';
 
@@ -48,7 +48,7 @@ const LEVEL_STYLES: Record<string, string> = {
 function ContributionBar({ memberId }: { memberId: string }) {
   const { state } = useStore();
   const [data, setData] = useState<ContributionData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const member = state.members.find(m => m.id === memberId);

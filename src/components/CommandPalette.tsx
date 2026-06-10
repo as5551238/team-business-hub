@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Search, Target, FolderKanban, CheckSquare, Settings, LayoutDashboard, X, Plus, Zap, BarChart3, GitBranch, Users, Command, ArrowRight } from 'lucide-react';
+import { Target, FolderKanban, CheckSquare, Settings, LayoutDashboard, Plus, Zap, BarChart3, GitBranch, Users, Command, ArrowRight } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // ===== 增强命令定义 =====
@@ -14,12 +14,12 @@ interface CommandItem {
   keywords?: string[]; // 模糊搜索关键词
 }
 
-export function CommandPalette({ open, onClose, onNavigate, onPageChange, onNavigateItem, onCreateItem }: {
+export function CommandPalette({ open, onClose, _onNavigate, onPageChange, _onNavigateItem, onCreateItem }: {
   open: boolean;
   onClose: () => void;
-  onNavigate?: (path: string) => void;
+  _onNavigate?: (path: string) => void;
   onPageChange?: (page: string) => void;
-  onNavigateItem?: (id: string, type: string) => void;
+  _onNavigateItem?: (id: string, type: string) => void;
   onCreateItem?: (type: string) => void;
 }) {
   const [query, setQuery] = useState('');

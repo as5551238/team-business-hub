@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Loader2, RefreshCw, X, FileText } from 'lucide-react';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { generateReviewLocal, generateReviewDeep } from '@/lib/ai/aiReviewGenerator';
 import type { ReviewResult, ReviewSection, OKRFeedback } from '@/lib/ai/aiReviewGenerator';
 import { useStore } from '@/store/useStore';
@@ -96,7 +95,7 @@ function ExpandableSection({ section }: { section: ReviewSection }) {
   );
 }
 
-function KRFeedbackCard({ feedback, memberName }: { feedback: OKRFeedback; memberName?: string }) {
+function KRFeedbackCard({ feedback, memberName: _memberName }: { feedback: OKRFeedback; memberName?: string }) {
   const pct = Math.round(feedback.score * 100);
   return (
     <div className="border rounded-lg p-4">
@@ -131,7 +130,7 @@ export default function AIReviewPanel({ goalId, onClose }: AIReviewPanelProps) {
   );
 
   const activeGoalId = selectedGoalId;
-  const activeGoal = useMemo(
+  const _activeGoal = useMemo(
     () => (activeGoalId ? state.goals.find(g => g.id === activeGoalId) : undefined) ?? null,
     [state.goals, activeGoalId]
   );

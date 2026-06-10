@@ -339,7 +339,7 @@ export function WebhookSection() {
             <label className="text-xs font-medium mb-1 block">订阅事件 *</label>
             <div className="flex flex-wrap gap-1.5">
               {WEBHOOK_EVENTS.map(ev => (
-                <button key={ev.value} type="button" onClick={() => setFormEvents(p => { const n = new Set(p); n.has(ev.value) ? n.delete(ev.value) : n.add(ev.value); return n; })} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${formEvents.has(ev.value) ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border hover:border-primary/50'}`}>
+                <button key={ev.value} type="button" onClick={() => setFormEvents(p => { const n = new Set(p); if (n.has(ev.value)) { n.delete(ev.value); } else { n.add(ev.value); } return n; })} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${formEvents.has(ev.value) ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border hover:border-primary/50'}`}>
                   {ev.label}
                 </button>
               ))}

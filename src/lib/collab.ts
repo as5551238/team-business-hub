@@ -464,7 +464,7 @@ export interface ConflictRecord {
 
 const MAX_CONFLICT_HISTORY = 100;
 let _conflictHistory: ConflictRecord[] = [];
-let _conflictListeners: Set<() => void> = new Set();
+const _conflictListeners: Set<() => void> = new Set();
 
 export function recordConflict(record: Omit<ConflictRecord, 'id'>) {
   const entry: ConflictRecord = { ...record, id: `cf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` };

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import type { Action } from '@/store/types';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Send, Lightbulb, Target, AlertTriangle, UserCheck, Bot, ChevronDown } from 'lucide-react';
+import { Sparkles, Send, Bot, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Section } from './detail-shared';
 import type { ItemType } from '@/types';
@@ -24,7 +24,7 @@ interface ChatMessage {
   actionExecuted?: boolean;
 }
 
-function generateContextualResponse(prompt: string, itemType: string, itemTitle: string, itemDescription: string, agent: AiAgentPersona): string {
+function generateContextualResponse(prompt: string, itemType: string, itemTitle: string, _itemDescription: string, _agent: AiAgentPersona): string {
   const lower = prompt.toLowerCase();
   if (lower.includes('分解') || lower.includes('拆分') || lower.includes('步骤')) {
     return `关于"${itemTitle}"的分解建议：\n\n1. 明确核心目标和验收标准\n2. 梳理关键路径和依赖关系\n3. 按里程碑拆分为可衡量的阶段成果\n4. 为每个阶段指定负责人和截止日期\n5. 设置检查点，确保进度可控\n\n💡 你可以说"创建任务"让我直接帮你创建分解后的子任务。`;
@@ -119,7 +119,7 @@ export function AiChatPanel({ itemId, itemType, itemTitle, itemDescription }: Ai
     }, 400 + Math.random() * 600);
   }
 
-  const typeLabel = itemType === 'goal' ? '目标' : itemType === 'project' ? '项目' : '任务';
+  const _typeLabel = itemType === 'goal' ? '目标' : itemType === 'project' ? '项目' : '任务';
 
   return (
     <Section title="AI 助手" icon={<Sparkles className="w-3.5 h-3.5" />}>

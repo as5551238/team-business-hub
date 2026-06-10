@@ -6,12 +6,12 @@ import { useState, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { generateLocalDecomposition, generateDeepDecomposition } from '@/lib/ai/aiDecomposition';
-import type { DecompositionResult, KRDraft, TaskDraft } from '@/lib/ai/aiDecomposition';
-import type { Attachment, TrackingRecord, SubTask, ItemType } from '@/types';
+import type { DecompositionResult } from '@/lib/ai/aiDecomposition';
+import type { Attachment, TrackingRecord, SubTask } from '@/types';
 import { loadAIConfig } from '@/lib/ai/types';
 import { handleError } from '@/lib/errorHandler';
 import { genId } from '@/store/utils';
-import { Sparkles, Target, FolderKanban, ListTodo, ChevronDown, ChevronRight, Loader2, CheckCircle2, X, Wand2 } from 'lucide-react';
+import { Sparkles, Target, FolderKanban, ListTodo, ChevronDown, ChevronRight, Loader2, CheckCircle2, Wand2 } from 'lucide-react';
 
 interface AIItemFlowProps {
   onClose: () => void;
@@ -54,7 +54,7 @@ export function AIItemFlow({ onClose, onNavigateToGoal }: AIItemFlowProps) {
   const toggleProject = (idx: number) => {
     setExpandedProjects(prev => {
       const n = new Set(prev);
-      n.has(idx) ? n.delete(idx) : n.add(idx);
+      if (n.has(idx)) { n.delete(idx); } else { n.add(idx); }
       return n;
     });
   };

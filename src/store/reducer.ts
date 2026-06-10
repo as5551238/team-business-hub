@@ -1,11 +1,11 @@
 import { handleError } from '@/lib/errorHandler';
-import type { AppState, Goal, Project, Task, Member, SubTask, ItemLink, Bookmark, Permission, StatusFlowRule, AutomationRule, Sprint, Knowledge } from '@/types';
+import type { AppState, Member, ItemLink } from '@/types';
 import { isSupabaseConfigured } from '@/supabase/client';
 import type { Action } from './types';
 import { ensureAppStateDefaults } from './types';
-import { supabaseUpsert, supabaseUpdate, supabaseInsert, supabaseDelete, logActivity } from './supabase';
+import { supabaseUpsert, supabaseInsert, supabaseDelete, logActivity } from './supabase';
 import { genId } from './utils';
-import { hasPermission, reducerCanDelete, canDeleteOwnContent, needMutate, tsNow, clampComment, markPendingDelete, cleanPendingDeletes, isPendingDelete, validateNewFlowRule } from './shared';
+import { reducerCanDelete, needMutate, tsNow, markPendingDelete, cleanPendingDeletes, isPendingDelete } from './shared';
 import { goalReducer } from './goalSlice';
 import { projectReducer } from './projectSlice';
 import { taskReducer } from './taskSlice';
