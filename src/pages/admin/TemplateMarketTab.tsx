@@ -2,7 +2,7 @@
  * 模板市场 — 项目模板一键部署、模板创作、模板浏览
  * Phase 3-5: Templates (免费模板市场，不含付费)
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import {
   LayoutTemplate,
@@ -156,11 +156,13 @@ function TemplateCard({
   isExpanded,
   onToggle,
   onDeploy,
+  onDelete,
 }: {
   template: ProjectTemplate;
   isExpanded: boolean;
   onToggle: () => void;
   onDeploy: (id: string) => void;
+  onDelete?: (id: string) => void;
 }) {
   const catConfig = CATEGORY_CONFIG[template.category];
   const CatIcon = catConfig.icon;
@@ -239,6 +241,15 @@ function TemplateCard({
             >
               <Download size={12} />一键部署
             </button>
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(template.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                删除
+              </button>
+            )}
             <span className="text-[10px] text-muted-foreground">作者: {template.author}</span>
           </div>
         </div>
@@ -250,14 +261,22 @@ function TemplateCard({
 // ===== 主组件 =====
 
 export function TemplateMarketTab() {
-  const { dispatch } = useStore();
+  const { dispatch, stateRef } = useStore();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<TemplateCategory>('all');
   const [deployedIds, setDeployedIds] = useState<Set<string>>(new Set());
+  const [customTemplates, setCustomTemplates] = useState<ProjectTemplate[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('tbh-custom-templates');
+      if (raw) setCustomTemplates(JSON.parse(raw));
+    } catch { /* ignore parse errors */ }
+  }, []);
 
   const filteredTemplates = useMemo(() => {
-    let list = TEMPLATE_CATALOG;
+    let list = [...TEMPLATE_CATALOG, ...customTemplates];
     if (categoryFilter !== 'all') {
       list = list.filter(t => t.category === categoryFilter);
     }
@@ -270,51 +289,76 @@ export function TemplateMarketTab() {
       );
     }
     return list;
-  }, [categoryFilter, searchQuery]);
+  }, [categoryFilter, searchQuery, customTemplates]);
 
   const handleDeploy = useCallback((templateId: string) => {
-    const template = TEMPLATE_CATALOG.find(t => t.id === templateId);
-    if (!template) return;
+    const tpl = TEMPLATE_CATALOG.find(t => t.id === templateId) || customTemplates.find(t => t.id === templateId);
+    if (!tpl) return;
 
-    // 创建目标
-    for (const goalDef of template.goals) {
-      const goalId = `goal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const today = new Date().toISOString().slice(0, 10);
+    const leaderId = stateRef.current?.currentUser?.id || '';
+
+    for (const goalDef of tpl.goals) {
       dispatch({
         type: 'ADD_GOAL',
         payload: {
-          id: goalId,
           title: goalDef.title,
-          description: `来自模板: ${template.name}`,
+          description: `来自模板: ${tpl.name}`,
+          type: 'okr',
           status: 'todo',
           priority: 'medium',
+          parentId: null,
+          level: 0,
+          startDate: today,
+          endDate: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10),
+          leaderId,
+          seasonId: null,
+          strategyLevel: null,
           keyResults: goalDef.keyResults.map((kr, i) => ({
             id: `kr-${Date.now()}-${i}`,
             title: kr,
             currentValue: 0,
             targetValue: 100,
+            unit: '%',
           })),
-          createdAt: new Date().toISOString(),
         },
       });
     }
 
-    // 创建项目
-    for (const projDef of template.projects) {
-      dispatch({
-        type: 'ADD_PROJECT',
-        payload: {
-          id: `proj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          title: projDef.title,
-          description: `来自模板: ${template.name}`,
-          status: 'todo',
-          priority: 'medium',
-          createdAt: new Date().toISOString(),
-        },
-      });
-    }
+    setTimeout(() => {
+      const s = stateRef.current;
+      if (!s) return;
+      const recentGoal = [...s.goals].reverse().find(g => g.description === `来自模板: ${tpl.name}`);
+      const firstGoalId = recentGoal?.id || null;
+      for (const projDef of tpl.projects) {
+        dispatch({
+          type: 'ADD_PROJECT',
+          payload: {
+            title: projDef.title,
+            description: `来自模板: ${tpl.name}`,
+            goalId: firstGoalId,
+            parentId: null,
+            status: 'todo',
+            priority: 'medium',
+            leaderId,
+            startDate: today,
+            endDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+            taskCount: projDef.taskCount,
+          },
+        });
+      }
+    }, 0);
 
     setDeployedIds(prev => new Set([...prev, templateId]));
-  }, [dispatch]);
+  }, [dispatch, customTemplates, stateRef]);
+
+  const handleDeleteCustom = useCallback((id: string) => {
+    setCustomTemplates(prev => {
+      const updated = prev.filter(ct => ct.id !== id);
+      localStorage.setItem('tbh-custom-templates', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -380,22 +424,40 @@ export function TemplateMarketTab() {
               isExpanded={expandedId === template.id}
               onToggle={() => setExpandedId(expandedId === template.id ? null : template.id)}
               onDeploy={handleDeploy}
+              onDelete={template.id.startsWith('custom-') ? handleDeleteCustom : undefined}
             />
           ))
         )}
       </div>
 
-      {/* 自定义模板提示 */}
+      {/* 自定义模板 */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
         <h4 className="font-semibold text-sm flex items-center gap-2"><Plus size={14} />创建自定义模板</h4>
         <p className="text-xs text-blue-700">
-          选择现有的目标和项目，将其打包为可复用的模板。自定义模板存储在本地，可导出分享给团队。未来版本将支持模板市场发布。
+          将业务流程打包为可复用的模板，存储在本地，可导出分享给团队。
         </p>
         <button
           type="button"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
           onClick={() => {
-            alert('自定义模板创作功能即将推出，敬请期待！');
+            const name = prompt('请输入模板名称：');
+            if (!name?.trim()) return;
+            const newTpl: ProjectTemplate = {
+              id: `custom-${Date.now()}`,
+              name: name.trim(),
+              description: '用户自定义模板',
+              category: 'personal',
+              author: '我',
+              rating: 0,
+              useCount: 0,
+              tags: ['自定义'],
+              goals: [{ title: name.trim(), keyResults: [] }],
+              projects: [{ title: `${name.trim()}项目`, taskCount: 0 }],
+              preview: '自定义模板，可通过编辑进一步完善',
+            };
+            const updated = [...customTemplates, newTpl];
+            setCustomTemplates(updated);
+            localStorage.setItem('tbh-custom-templates', JSON.stringify(updated));
           }}
         >
           <Plus size={12} />创建模板

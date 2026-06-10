@@ -113,155 +113,8 @@ export async function callLLM(prompt: string, config: AIConfig, complexity?: Tas
     if (sb) {
       const { error: rpcErr } = await sb.rpc('check_and_increment_ai_call', {
         p_team_id: config._teamId || '__default__',
-      });
-      if (rpcErr) {
-        // If RPC says limit exceeded, block the call
-        if (rpcErr.message?.includes('limit') || rpcErr.message?.includes('exceeded') || rpcErr.code === '429') {
-          throw new Error(`今日AI调用次数已达服务端上限。请升级套餐或明日再试。`);
-        }
-        // Other RPC errors (function not deployed, etc.) — ignore, use local count
-      }
-    }
-  } catch (e) {
-    if (e instanceof Error && e.message.includes('服务端上限')) throw e;
-    // Non-limit errors — silently continue with local-only check
-  }
-
-  if (!config.apiKey) throw new Error('AI API Key 未配置。请前往 管理中心 > 设置 > AI配置 填写API Key后再试.');
-  const preset = PROVIDER_PRESETS[config.provider];
-  const baseUrl = (config.baseUrl || preset.baseUrl).replace(/\/+$/, '');
-
-  // 成本路由：根据任务复杂度选择模型
-  const detectedComplexity = complexity || detectTaskComplexity(prompt);
-  let model = config.model || preset.model;
-  if (!config.apiKey) throw new Error('AI API Key 未配置。请前往 管理中心 > 设置 > AI配置 填写API Key后再试.');
-  if (config.costRouting && COST_ROUTING_MAP[config.provider]) {
-    const routedModel = COST_ROUTING_MAP[config.provider][detectedComplexity];
-    if (routedModel) model = routedModel;
-  }
-
-  // 缓存检查
-  const cacheKey = `${model}:${prompt.slice(0, 200)}`;
-  const cached = getCachedResult(cacheKey);
-  if (cached) return cached;
-
-  // 按复杂度调整token预算
-  const maxTokens = detectedComplexity === 'complex' ? 4000 : detectedComplexity === 'moderate' ? 3000 : 1500;
-
-  const url = `${baseUrl}/chat/completions`;
-  const requestBody = {
-    model,
-    messages: [{ role: 'system', content: '你是团队管理分析顾问，输出纯JSON，不含markdown代码块标记。' }, { role: 'user', content: prompt }],
-    temperature: 0.3,
-    max_tokens: maxTokens,
-  };
-
-  // Strategy 1: Direct browser fetch (preferred — lowest latency)
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-    try {
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
-      if (!resp.ok) {
-        const errText = await resp.text().catch(() => '');
-        const providerLabel = preset.label;
-        const providerUrl = preset.baseUrl;
-        if (resp.status === 401 || resp.status === 403) throw new Error(`认证失败(${resp.status})：API Key 无效或已过期，请检查 Key 是否正确`);
-        if (resp.status === 402) throw new Error(`账户余额不足(402)：请前往 ${providerUrl.replace('/api/v3', '').replace('/v1', '').replace('/anthropic', '')} 充值后再试`);
-        if (resp.status === 404) throw new Error(`接口地址错误(404)：请确认端点 ${url} 是否正确，${providerLabel} 端点应为 ${providerUrl}/chat/completions`);
-        if (resp.status === 429) throw new Error(`请求过于频繁(429)：${providerLabel} API 调用次数超限，请稍后重试`);
-        throw new Error(`API 返回错误 ${resp.status}: ${errText.slice(0, 200)}`);
-      }
-      const data = await resp.json();
-      const result = data.choices?.[0]?.message?.content || null;
-      if (result) { setCachedResult(cacheKey, result); incrementAICallCount(); }
-      return result;
-    } finally {
-      clearTimeout(timeout);
-    }
-  } catch (directErr) {
-    // Strategy 2: Supabase RPC proxy fallback (bypasses browser CORS/CSP)
-    const isNetworkError = directErr instanceof TypeError && directErr.message === 'Failed to fetch';
-    const isTimeout = directErr instanceof DOMException && directErr.name === 'AbortError';
-
-    if (isNetworkError || isTimeout) {
-      console.warn('[LLM] Direct fetch failed (' + (isNetworkError ? 'CORS/network' : 'timeout') + '), falling back to Supabase RPC proxy...');
-      try {
-        const sb = getSupabaseClient();
-        if (sb) {
-          // P3#27 fix: add 30s timeout for RPC proxy to prevent UI hang
-          const rpcPromise = sb.rpc('call_llm_proxy', {
-            p_url: url,
-            p_body: JSON.stringify(requestBody),
-            p_api_key: config.apiKey,
-          });
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('RPC代理超时(30s)')), 30000)
-          );
-          const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
-          if (error) {
-            console.error('[LLM] RPC proxy error:', error);
-            throw error;
-          }
-          // call_llm_proxy returns the raw LLM API response as text
-          if (typeof data === 'string') {
-            try {
-              const parsed = JSON.parse(data);
-              return parsed.choices?.[0]?.message?.content || data;
-            } catch {
-              return data;
-            }
-          }
-          if (data?.choices?.[0]?.message?.content) {
-            const result = data.choices[0].message.content;
-            setCachedResult(cacheKey, result);
-            return result;
-          }
-          return typeof data === 'string' ? data : JSON.stringify(data);
-        }
-      } catch (proxyErr: unknown) {
-        console.error('[LLM] RPC proxy also failed:', proxyErr instanceof Error ? proxyErr.message : String(proxyErr));
-        // Fall through to throw with helpful message
-      }
-
-      if (isTimeout) {
-        throw new Error('请求超时：直连和代理均超时。请稍后重试或检查API Key配置');
-      }
-      throw new Error('网络请求失败：浏览器直连和Supabase代理均不可用。请检查：1) AI设置中API Key是否正确；2) 网络是否正常；3) 稍后重试');
-    }
-
-    // Re-throw non-network errors (auth, 402, 429, etc.) as-is
-    throw directErr;
-  }
-}
-
-/** 流式 LLM 调用 — 返回 ReadableStream，逐步输出 token */
-export async function callLLMStream(
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-  config: AIConfig,
-  onChunk: (text: string) => void,
-  options?: { complexity?: TaskComplexity; signal?: AbortSignal }
-): Promise<string> {
-  // Feature gate: AI daily call limit (localStorage + optional server-side check)
-  const todayCount = getAITodayCount();
-  const PLAN_AI_LIMITS: Record<string, number> = { 'free': 10, 'pro': 1000, 'enterprise': 999999 };
-  const plan = config._planTier || 'free';
-  const aiLimit = PLAN_AI_LIMITS[plan] ?? 10;
-  if (todayCount >= aiLimit) {
-    throw new Error(`今日AI调用次数已达上限(${aiLimit}次)。请升级套餐或明日再试。`);
-  }
-
-  // Server-side AI call limit check (optional)
-  try {
-    const sb = getSupabaseClient();
-    if (sb) {
-      const { error: rpcErr } = await sb.rpc('check_and_increment_ai_call', {
-        p_team_id: config._teamId || '__default__',
+        p_user_id: config.userId || 'anonymous',
+        p_limit: config.aiLimit || 50,
       });
       if (rpcErr) {
         if (rpcErr.message?.includes('limit') || rpcErr.message?.includes('exceeded') || rpcErr.code === '429') {
@@ -273,7 +126,7 @@ export async function callLLMStream(
     if (e instanceof Error && e.message.includes('服务端上限')) throw e;
   }
 
-  if (!config.apiKey) throw new Error('AI API Key 未配置。请前往 管理中心 > 设置 > AI配置 填写API Key后再试.');
+  if (!config.apiKey) throw new Error('AI API Key 未配置。请在「管理后台 > AI设置」中配置 DeepSeek 或 Doubao 的 API Key。');
   const preset = PROVIDER_PRESETS[config.provider];
   const baseUrl = (config.baseUrl || preset.baseUrl).replace(/\/+$/, '');
   const detectedComplexity = options?.complexity || detectTaskComplexity(messages[messages.length - 1]?.content || '');

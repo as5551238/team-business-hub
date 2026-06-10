@@ -200,7 +200,7 @@ export function AIChatAgent() {
     if (!input.trim() || isStreaming) return;
     const config = loadAIConfig();
     if (!config.enabled || !config.apiKey) {
-      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: 'system', content: 'AI未启用。请先在设置中配置API Key。', timestamp: Date.now() }]);
+      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: 'system', content: 'AI未启用。请在「管理后台 > AI设置」中配置 DeepSeek 或 Doubao 的 API Key 后再试。', timestamp: Date.now() }]);
       return;
     }
     // Feature gate: AI daily call limit

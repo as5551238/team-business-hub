@@ -196,19 +196,35 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
   const activeBaseline = useMemo(() => baselines.find(b => b.id === activeBaselineId), [baselines, activeBaselineId]);
 
   const handleAutoSchedule = useCallback(() => {
-    const result = autoScheduleLocal(state);
-    setScheduleSuggestions(result.suggestions);
-    setScheduleDeepSummary(result.fromLLM ? result.summary : '');
-    setShowSchedule(true);
+    try {
+      const result = autoScheduleLocal(state);
+      if (result.suggestions.length === 0) {
+        alert('当前排程合理，无需调整');
+        return;
+      }
+      setScheduleSuggestions(result.suggestions);
+      setScheduleDeepSummary(result.fromLLM ? result.summary : '');
+      setShowSchedule(true);
+    } catch (e) {
+      handleError(e, { module: 'GanttModal', operation: 'AUTO_SCHEDULE', severity: 'error' });
+      alert(`AI排程失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }, [state]);
 
   const handleAutoScheduleDeep = useCallback(async () => {
     setSchedulingDeep(true);
     try {
       const result = await autoScheduleDeep(state);
+      if (result.suggestions.length === 0) {
+        alert('当前排程合理，无需调整');
+        return;
+      }
       setScheduleSuggestions(result.suggestions);
       setScheduleDeepSummary(result.summary);
       setShowSchedule(true);
+    } catch (e) {
+      handleError(e, { module: 'GanttModal', operation: 'AUTO_SCHEDULE_DEEP', severity: 'error' });
+      alert(`深度排程失败: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setSchedulingDeep(false);
     }

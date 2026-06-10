@@ -108,8 +108,8 @@ export const BatchActionBar = React.memo(function BatchActionBar({
   }, [selectedIds, onBatchSetDate]);
 
   const handleMoveChange = useCallback((val: string) => {
-    if (disabled || !val || !onBatchMove) return;
-    onBatchMove(ids, val);
+    if (disabled || !onBatchMove) return;
+    onBatchMove(ids, val === '__EMPTY__' ? '' : val);
     setBatchMoveVal('');
   }, [disabled, ids, onBatchMove]);
 

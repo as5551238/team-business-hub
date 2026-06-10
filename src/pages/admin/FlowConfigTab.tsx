@@ -226,7 +226,7 @@ export function FlowConfigTab() {
           {/* itemType filter */}
           <SimpleSelect value={filterType} onValueChange={v => setFilterType(v as ItemType | 'all')} options={[{ value: 'all', label: '全部类型' }, ...ITEM_TYPES.map(t => ({ value: t, label: ITEM_TYPE_LABELS[t] }))]} className="border border-input rounded px-2 py-1 text-xs" />
           {/* Preset selector */}
-          {rules.length > 0 && (<SimpleSelect value="" onValueChange={v => { if (v) { const preset = FLOW_PRESETS[v]; if (preset) dispatch({ type: 'SET_STATUS_FLOW_RULES', payload: preset.rules }); } }} options={[{ value: '', label: '重置为预设模板...' }, ...Object.entries(FLOW_PRESETS).map(([key, preset]) => ({ value: key, label: `${preset.label}—${preset.desc}` }))]} className="border border-input rounded px-2 py-1 text-xs" />)}
+          {rules.length > 0 && (<SimpleSelect value="__EMPTY__" onValueChange={v => { if (v !== '__EMPTY__') { const preset = FLOW_PRESETS[v]; if (preset) dispatch({ type: 'SET_STATUS_FLOW_RULES', payload: preset.rules }); } }} options={[{ value: '__EMPTY__', label: '重置为预设模板...' }, ...Object.entries(FLOW_PRESETS).map(([key, preset]) => ({ value: key, label: `${preset.label}—${preset.desc}` }))]} className="border border-input rounded px-2 py-1 text-xs" />)}
           {/* View mode toggle */}
           <div className="flex items-center border border-border rounded overflow-hidden">
             <button className={cn('px-2 py-1 text-xs transition-colors', viewMode === 'graph' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')} onClick={() => setViewMode('graph')}><GitBranch size={14} /></button>
@@ -339,13 +339,13 @@ export function FlowConfigTab() {
                     </>
                   )}
                   {act.type === 'assign' && (
-                    <SimpleSelect value={act.config.memberId ?? ''} onValueChange={v => updateAction(i, { ...act.config, memberId: v })} options={[{ value: '', label: '选择成员' }, ...state.members.filter(m => m.status === 'active').map(m => ({ value: m.id, label: m.name }))]} className="border border-input rounded px-1.5 py-0.5 text-xs" />
+                    <SimpleSelect value={act.config.memberId || '__EMPTY__'} onValueChange={v => updateAction(i, { ...act.config, memberId: v === '__EMPTY__' ? '' : v })} options={[{ value: '__EMPTY__', label: '选择成员' }, ...state.members.filter(m => m.status === 'active').map(m => ({ value: m.id, label: m.name }))]} className="border border-input rounded px-1.5 py-0.5 text-xs" />
                   )}
                   {act.type === 'create_subtask' && (
                     <>
                       <input className="w-28 border border-input rounded px-1.5 py-0.5 text-xs" placeholder="子任务标题" value={act.config.title ?? ''} onChange={e => updateAction(i, { ...act.config, title: e.target.value })} />
                       <SimpleSelect value={act.config.priority ?? 'medium'} onValueChange={v => updateAction(i, { ...act.config, priority: v })} options={[{ value: 'low', label: '低' }, { value: 'medium', label: '中' }, { value: 'high', label: '高' }]} className="border border-input rounded px-1.5 py-0.5 text-xs" />
-                      <SimpleSelect value={act.config.memberId ?? ''} onValueChange={v => updateAction(i, { ...act.config, memberId: v })} options={[{ value: '', label: '自动分配' }, ...state.members.filter(m => m.status === 'active').map(m => ({ value: m.id, label: m.name }))]} className="border border-input rounded px-1.5 py-0.5 text-xs" />
+                      <SimpleSelect value={act.config.memberId ?? '__EMPTY__'} onValueChange={v => updateAction(i, { ...act.config, memberId: v === '__EMPTY__' ? '' : v })} options={[{ value: '__EMPTY__', label: '自动分配' }, ...state.members.filter(m => m.status === 'active').map(m => ({ value: m.id, label: m.name }))]} className="border border-input rounded px-1.5 py-0.5 text-xs" />
                     </>
                   )}
                   <button onClick={() => removeAction(i)} className="text-muted-foreground hover:text-destructive cursor-pointer" aria-label="移除动作"><Trash2 size={12} /></button>

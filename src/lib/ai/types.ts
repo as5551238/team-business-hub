@@ -22,6 +22,10 @@ export interface AIConfig {
   _planTier?: string;
   /** 当前团队ID（AI调用计数RPC用） */
   _teamId?: string;
+  /** 当前用户ID（AI调用计数RPC用） */
+  userId?: string;
+  /** AI调用上限（AI调用计数RPC用） */
+  aiLimit?: number;
 }
 
 export type SuggestedAction = {

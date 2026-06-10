@@ -438,7 +438,7 @@ export interface AutomationRule {
 }
 
 // ==================== 复盘模型库 ====================
-export type ReviewModelCategory = 'strategy' | 'process' | 'goal' | 'problem' | 'lightweight' | 'comprehensive';
+export type ReviewModelCategory = 'strategy' | 'process' | 'goal' | 'problem' | 'lightweight' | 'comprehensive' | 'vision' | 'strategic' | 'okr' | 'critical' | 'people' | 'system' | 'performance' | 'efficiency';
 
 export interface ReviewModelStep {
   index: number;

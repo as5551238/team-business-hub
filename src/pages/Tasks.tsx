@@ -568,7 +568,7 @@ export default function Tasks() {
     selectedIds,
     showToast: true,
   });
-  const batchMoveToProject = useCallback((projectId: string) => batchMoveTo('projectId', projectId, '批量移动到项目'), [batchMoveTo]);
+  const batchMoveToProject = useCallback((projectId: string) => batchMoveTo('projectId', projectId || null, '批量移动到项目'), [batchMoveTo]);
 
   function closeCreateDialog() { setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate(''); setNewTags(new Set()); setNewSupporters(new Set()); setNewPriority('medium'); setNewGoalId(''); setNewProjectId(''); setNewLeaderId(''); setNewParentId(''); setNewCategory(''); }
 
@@ -604,7 +604,7 @@ export default function Tasks() {
                 tags={allTags}
                 showDateFields
                 dateFields={[{ key: 'dueDate', label: '截止日' }]}
-                moveTargets={[{ value: '', label: '无项目' }, ...state.projects.filter(p => p.status === 'in_progress').map(p => ({ value: p.id, label: p.title }))]}
+                moveTargets={[{ value: '__EMPTY__', label: '无项目' }, ...state.projects.filter(p => p.status === 'in_progress').map(p => ({ value: p.id, label: p.title }))]}
                 moveLabel="移到项目"
                 onBatchDelete={(_ids) => batchDelete()}
                 onBatchStatus={(_ids, status) => batchUpdateStatus(status)}

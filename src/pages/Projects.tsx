@@ -169,7 +169,7 @@ export default function Projects() {
     exitBatchMode,
     selectedIds,
   });
-  const batchMoveToGoal = useCallback((goalId: string) => batchMoveTo('goalId', goalId, '批量移动到目标'), [batchMoveTo]);
+  const batchMoveToGoal = useCallback((goalId: string) => batchMoveTo('goalId', goalId || null, '批量移动到目标'), [batchMoveTo]);
 
   function handleCreate() {
     if (!formData.title.trim()) return;
@@ -217,7 +217,7 @@ export default function Projects() {
                 tags={projectTags}
                 showDateFields
                 dateFields={[{ key: 'endDate', label: '截止日' }]}
-                moveTargets={[{ value: '', label: '无目标' }, ...state.goals.filter(g => g.status === 'in_progress').map(g => ({ value: g.id, label: g.title }))]}
+                moveTargets={[{ value: '__EMPTY__', label: '无目标' }, ...state.goals.filter(g => g.status === 'in_progress').map(g => ({ value: g.id, label: g.title }))]}
                 moveLabel="移到目标"
                 onBatchDelete={(ids) => batchDelete()}
                 onBatchStatus={(_ids, status) => batchUpdateStatus(status)}

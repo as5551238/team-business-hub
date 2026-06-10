@@ -203,12 +203,12 @@ export function ScheduleTab() {
             <div>
               <label className="block text-sm font-medium mb-1">关联项</label>
               <div className="flex gap-2">
-                <SimpleSelect value={form.linkedItemType || ''} onValueChange={v => setForm(f => ({ ...f, linkedItemType: (v || null) as EvtForm['linkedItemType'], linkedItemId: '' }))} options={[{ value: '', label: '无' }, { value: 'goal', label: '目标' }, { value: 'project', label: '项目' }, { value: 'task', label: '任务' }]} className="border border-border rounded-lg px-3 py-2 text-sm" />
-                {form.linkedItemType && <SimpleSelect value={form.linkedItemId} onValueChange={v => setForm(f => ({ ...f, linkedItemId: v }))} options={[{ value: '', label: '选择...' }, ...(form.linkedItemType === 'goal' ? goals.map(g => ({ value: g.id, label: g.title })) : form.linkedItemType === 'project' ? projects.map(p => ({ value: p.id, label: p.title })) : tasks.map(t => ({ value: t.id, label: t.title })))]} className="flex-1 border border-border rounded-lg px-3 py-2 text-sm" />}
+                <SimpleSelect value={form.linkedItemType || '__EMPTY__'} onValueChange={v => setForm(f => ({ ...f, linkedItemType: (v === '__EMPTY__' ? null : v) as EvtForm['linkedItemType'], linkedItemId: '' }))} options={[{ value: '__EMPTY__', label: '无' }, { value: 'goal', label: '目标' }, { value: 'project', label: '项目' }, { value: 'task', label: '任务' }]} className="border border-border rounded-lg px-3 py-2 text-sm" />
+                {form.linkedItemType && <SimpleSelect value={form.linkedItemId || '__EMPTY__'} onValueChange={v => setForm(f => ({ ...f, linkedItemId: v === '__EMPTY__' ? '' : v }))} options={[{ value: '__EMPTY__', label: '选择...' }, ...(form.linkedItemType === 'goal' ? goals.map(g => ({ value: g.id, label: g.title })) : form.linkedItemType === 'project' ? projects.map(p => ({ value: p.id, label: p.title })) : tasks.map(t => ({ value: t.id, label: t.title })))]} className="flex-1 border border-border rounded-lg px-3 py-2 text-sm" />}
               </div>
             </div>
             <div><label className="block text-sm font-medium mb-1">成员</label>
-              <SimpleSelect value={form.memberId} onValueChange={v => setForm(f => ({ ...f, memberId: v }))} options={[{ value: '', label: '选择成员' }, ...members.filter(m => m.status === 'active').map(m => ({ value: m.id, label: m.name }))]} className="w-full border border-border rounded-lg px-3 py-2 text-sm" />
+              <SimpleSelect value={form.memberId || '__EMPTY__'} onValueChange={v => setForm(f => ({ ...f, memberId: v === '__EMPTY__' ? '' : v }))} options={[{ value: '__EMPTY__', label: '选择成员' }, ...members.filter(m => m.status === 'active').map(m => ({ value: m.id, label: m.name }))]} className="w-full border border-border rounded-lg px-3 py-2 text-sm" />
             </div>
           </div>
           <div className="px-6 py-4 border-t border-border flex justify-end gap-3">

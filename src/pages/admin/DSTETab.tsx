@@ -58,6 +58,13 @@ export function DSTETab() {
 
   function handleInitDSTE() {
     if (!dsteSeasonId) return;
+    const existing = phases.filter(p => p.seasonId === dsteSeasonId);
+    if (existing.length > 0) {
+      alert('该赛季已有DSTE闭环');
+      setShowInitDSTE(false);
+      setDsteSeasonId('');
+      return;
+    }
     const seasonPhases: DSTEPhase['phase'][] = ['strategy', 'decode', 'execute', 'evaluate'];
     for (const phase of seasonPhases) {
       dispatch({
@@ -267,6 +274,9 @@ export function DSTETab() {
               <option value="">选择OKR周期</option>
               {state.seasons.filter(s => s.status !== 'closed').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {state.seasons.filter(s => s.status !== 'closed').length === 0 && (
+              <p className="text-[11px] text-amber-600 mt-1">暂无可用赛季，请先在OKR赛季管理中创建赛季</p>
+            )}
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowInitDSTE(false)} className={btnCls}>取消</button>
               <button onClick={handleInitDSTE} disabled={!dsteSeasonId} className={primaryBtnCls}>启动</button>
