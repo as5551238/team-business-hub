@@ -3,6 +3,7 @@ import { useStore } from '@/store/useStore';
 import type { GoalApprovalStatus } from '@/types';
 import { shouldShowUpgrade } from '@/lib/featureGating';
 import Paywall from '@/components/Paywall';
+import { isAdminOrManagerRole } from '@/lib/roleUtils';
 import { getTeamPlan } from '@/lib/featureGating';
 import { Section } from './detail-shared';
 import { Shield, CheckCircle2, XCircle, Clock, RotateCcw, Send } from 'lucide-react';
@@ -39,7 +40,7 @@ export function ApprovalPanel({ goalId, approvalStatus, goalLeaderId }: Approval
   const currentUser = state.currentUser;
   const currentUserId = currentUser?.id ?? '';
   const currentRole = currentUser?.role;
-  const isAdminOrManager = currentRole === 'admin' || currentRole === 'manager';
+  const isAdminOrManager = isAdminOrManagerRole(currentRole);
   const isLeader = goalLeaderId === currentUserId;
 
   const audits = useMemo(

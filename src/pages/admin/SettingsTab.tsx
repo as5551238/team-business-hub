@@ -10,6 +10,7 @@ import {
   Database, Download, Upload, Copy, Mail, Trash2, ChevronDown,
   Tag as TagIcon,
 } from 'lucide-react';
+import { isAdminRole } from '@/lib/roleUtils';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { inputCls, loadEmailConfig, saveEmailConfig } from './constants';
 import type { EmailConfig } from './constants';
@@ -433,7 +434,7 @@ function TagsCategoriesSection() {
 
 export function SettingsTab() {
   const { state } = useStore();
-  const isAdmin = state.currentUser?.role === 'admin';
+  const isAdmin = isAdminRole(state.currentUser?.role);
   if (!isAdmin) {
     return <div className="p-8 text-center text-muted-foreground text-sm">权限不足：系统设置仅管理员可访问</div>;
   }

@@ -19,6 +19,7 @@ export function projectReducer(state: AppState, action: Action): AppState | null
         title: pTitle,
         description: pDesc,
         id: genId('p'),
+        appType: payload.appType ?? 'personal',
         progress: 0,
         priority: (inheritedPriority || payload.priority) ?? 'medium',
         tags: payload.tags ?? [],

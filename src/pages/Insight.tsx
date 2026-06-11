@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, Suspense, lazy } from 'react';
 import { useStore } from '@/store/useStore';
 import { useViewingMember, useReviewList, usePermissions } from '@/store/hooks';
+import { isAdminRole } from '@/lib/roleUtils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { BarChart3, Target, CheckCircle2, Clock, TrendingUp, Users, FolderKanban, FileText, Lightbulb, Save, Calendar, Brain, Sparkles } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -460,7 +461,7 @@ export default function Insight() {
                           <span className="text-xs text-gray-400">{review.periodStart} ~ {review.periodEnd}</span>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          {(!review.memberId || review.memberId === state.currentUser?.id || state.currentUser?.role === 'admin') && <button onClick={() => handleEdit(review)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors"><FileText size={14} /></button>}
+                          {(!review.memberId || review.memberId === state.currentUser?.id || isAdminRole(state.currentUser?.role)) && <button onClick={() => handleEdit(review)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors"><FileText size={14} /></button>}
                           {can('team_manage') && <button onClick={() => handleDelete(review.id)} className="p-1 text-gray-400 hover:text-red-600 transition-colors"><Clock size={14} /></button>}
                         </div>
                       </div>

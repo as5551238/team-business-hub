@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useStore } from '@/store/useStore';
-import { useViewingMember, useMemberLookup, useActiveMembers } from '@/store/hooks';
+import { useViewingMember, useMemberLookup, useActiveMembers, usePermissions } from '@/store/hooks';
 import { hasPermission } from '@/store/reducer';
 import type { Permission, ItemType } from '@/types';
 import type { Notification } from '@/types';
@@ -13,6 +13,7 @@ import { computeUserLevel, isFeatureVisible, getLevelDescription, setUserLevel, 
 import { pushTaskEvent, pushGoalEvent, pushRiskAlert } from '@/lib/pushEventEngine';
 import { useCollabPresence } from '@/lib/collab';
 import { CollabPresenceBar } from '@/components/CollabPresenceBar';
+import { getRoleLabel, isAdminRole, isManagerRole } from '@/lib/roleUtils';
 import { H5Layout } from '@/components/H5Layout';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { OperationToast } from '@/components/OperationToast';
@@ -36,7 +37,7 @@ import {
   Settings, Cloud, CloudOff, Loader2, FileText, Eye, Users2,
   LogOut, BookOpen, Building2, Shield, PanelLeftClose, PanelLeft,
   ChevronsLeft, ChevronsRight, Plus, Minus, Maximize2, Edit2, Trash2, Check,
-  Moon, Sun, Monitor
+  Moon, Sun, Monitor, Sparkles
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CURRENT_USER_KEY } from '@/store/types';
@@ -147,7 +148,7 @@ const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMem
     <div className="absolute right-0 top-full mt-1 w-56 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up">
       <div className="px-4 py-3 border-b border-border">
         <div className="font-medium text-sm">{user?.name}</div>
-        <div className="text-xs text-muted-foreground">{user?.role === 'admin' ? user?.email : user?.email?.replace(/(.{2}).*(.@.*)/, '$1***$2')}</div>
+        <div className="text-xs text-muted-foreground">{isAdminRole(user?.role) ? user?.email : user?.email?.replace(/(.{2}).*(.@.*)/, '$1***$2')}</div>
       </div>
       <div className="py-1 max-h-64 overflow-y-auto">
         {visibleMembers.map(m => (
@@ -155,7 +156,7 @@ const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMem
             onClick={(e) => { e.stopPropagation(); onSwitchUser(m.id); }}
             className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted transition-colors text-left ${m.id === user?.id ? 'bg-primary/5 text-primary' : ''}`}>
             <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">{m.avatar}</div>
-            <div className="flex flex-col"><span>{m.name}</span><span className="text-xs text-muted-foreground">{m.role === 'admin' ? '管理员' : m.role === 'manager' ? '经理' : m.role === 'leader' ? '负责人' : '成员'}</span></div>
+            <div className="flex flex-col"><span>{m.name}</span><span className="text-xs text-muted-foreground">{getRoleLabel(m.role)}</span></div>
             <span className="text-xs text-muted-foreground ml-auto">{m.department}</span>
           </button>
         ))}
@@ -222,9 +223,11 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
   const user = state.currentUser;
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const unreadCount = useMemo(() => state.notifications.filter(n => !n.read).length, [state.notifications]);
   const overdueCount = useMemo(() => { const today = new Date().toISOString().split('T')[0]; return state.tasks.filter(t => (t.leaderId === user?.id || (t.supporterIds ?? []).includes(user?.id || '')) && t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today).length; }, [state.tasks, user?.id]);
+  const activeGoalsCount = useMemo(() => state.goals.filter(g => g.status === 'in_progress').length, [state.goals]);
+  const activeProjectsCount = useMemo(() => state.projects.filter(p => p.status === 'in_progress').length, [state.projects]);
   const visibleMembers = isAdmin ? activeMembers : activeMembers.filter(m => m.id === currentUser?.id);
   // Memoize visibleMembers for React.memo props comparison
   const visibleMembersMemo = useMemo(() => visibleMembers, [isAdmin, activeMembers, currentUser?.id]);
@@ -614,7 +617,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
 
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {navItems.filter(item => {
-            if (item.requirePermission && (!user || (user.role !== 'admin' && !hasPermission(state, user.id, item.requirePermission)))) return false;
+            if (item.requirePermission && (!user || (!isAdminRole(user.role) && !hasPermission(state, user.id, item.requirePermission)))) return false;
             // Progressive disclosure: filter nav items by user level
             const featureMap: Record<string, string> = { dashboard: 'dashboard', goals: 'goals_basic', projects: 'projects', tasks: 'tasks', insight: 'insight', knowledge: 'knowledge', admin: 'dashboard', privacy: 'dashboard' };
             return isFeatureVisible(featureMap[item.page] || item.page);
@@ -627,8 +630,11 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
               {!sidebarNarrow && !sidebarCollapsed && item.page === 'tasks' && overdueCount > 0 && (
                 <span className="ml-auto bg-destructive text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{overdueCount}</span>
               )}
-              {!sidebarNarrow && !sidebarCollapsed && item.page === 'goals' && state.goals.filter(g => g.status === 'in_progress').length > 0 && (
-                <span className="ml-auto bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{state.goals.filter(g => g.status === 'in_progress').length}</span>
+              {!sidebarNarrow && !sidebarCollapsed && item.page === 'goals' && activeGoalsCount > 0 && (
+                <span className="ml-auto bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{activeGoalsCount}</span>
+              )}
+              {!sidebarNarrow && !sidebarCollapsed && item.page === 'projects' && activeProjectsCount > 0 && (
+                <span className="ml-auto bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{activeProjectsCount}</span>
               )}
               {!sidebarNarrow && !sidebarCollapsed && item.page === 'dashboard' && unreadCount > 0 && (
                 <span className="ml-auto bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{unreadCount}</span>
@@ -639,6 +645,12 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
               )}
               {sidebarNarrow && item.page === 'dashboard' && unreadCount > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+              )}
+              {sidebarNarrow && item.page === 'goals' && activeGoalsCount > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full" />
+              )}
+              {sidebarNarrow && item.page === 'projects' && activeProjectsCount > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-emerald-500 rounded-full" />
               )}
               {!sidebarNarrow && !sidebarCollapsed && <span className="ml-auto text-[10px] text-sidebar-foreground/30 hidden lg:inline">{idx + 1}</span>}
             </button>
@@ -692,7 +704,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{user?.name}</div>
                 <div className="text-xs text-sidebar-foreground/50 truncate">{user?.department}</div>
-                {user?.role && <div className="text-xs text-sidebar-foreground/40 truncate">{user.role === 'admin' ? '管理员' : user.role === 'manager' ? '经理' : user.role === 'leader' ? '负责人' : '成员'}</div>}
+                {user?.role && <div className="text-xs text-sidebar-foreground/40 truncate">{getRoleLabel(user.role)}</div>}
               </div>
             )}
           </div>
@@ -746,6 +758,11 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           <div className="hidden md:flex items-center gap-2 bg-muted rounded-lg px-3 py-1.5 text-sm w-64">
             <Search size={16} /><input ref={searchInputRef} type="text" placeholder="搜索... (⌘K)" className="bg-transparent border-none outline-none flex-1 text-sm text-foreground placeholder:text-muted-foreground" onKeyDown={handleGlobalSearch} />
           </div>
+          {/* AI Quick Access — opens CommandPalette focused on AI commands */}
+          <button className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors" onClick={() => setCommandPaletteOpen(true)} title="AI 助手 (⌘K)">
+            <Sparkles size={14} />
+            <span>AI</span>
+          </button>
           {/* Density toggle: comfortable ↔ compact */}
           <button className="hidden md:flex p-1.5 rounded-md hover:bg-muted transition-colors" onClick={toggleDensity} title={density === 'comfortable' ? '切换紧凑模式' : '切换舒适模式'}>
             {density === 'comfortable' ? <Maximize2 size={16} className="text-muted-foreground" /> : <Minus size={16} className="text-primary" />}
@@ -801,7 +818,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
       {/* Mobile bottom navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border flex items-center justify-around h-14 px-1" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         {navItems.filter(item => {
-          if (item.requirePermission && (!user || (user.role !== 'admin' && !hasPermission(state, user.id, item.requirePermission)))) return false;
+            if (item.requirePermission && (!user || (!isAdminRole(user.role) && !hasPermission(state, user.id, item.requirePermission)))) return false;
           const featureMap: Record<string, string> = { dashboard: 'dashboard', goals: 'goals_basic', projects: 'projects', tasks: 'tasks', insight: 'insight', knowledge: 'knowledge', admin: 'dashboard', privacy: 'dashboard' };
           return isFeatureVisible(featureMap[item.page] || item.page);
         }).filter(item => ['dashboard', 'goals', 'projects', 'tasks'].includes(item.page)).map(item => (

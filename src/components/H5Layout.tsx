@@ -3,6 +3,7 @@
  * 特性：底部导航栏、无侧边栏、紧凑间距、返回 IM 按钮
  */
 import React, { useState } from 'react';
+import { getRoleLabel } from '@/lib/roleUtils';
 import { useStore } from '@/store/useStore';
 import { Sun, CheckSquare, Target, User } from 'lucide-react';
 
@@ -207,7 +208,7 @@ function H5MeView() {
         </div>
         <div>
           <p className="text-base font-semibold">{user.name}</p>
-          <p className="text-xs text-muted-foreground">{user.role === 'admin' ? '管理员' : user.role === 'manager' ? '经理' : '成员'}</p>
+          <p className="text-xs text-muted-foreground">{getRoleLabel(user.role)}</p>
         </div>
       </div>
     </div>

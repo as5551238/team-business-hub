@@ -27,6 +27,7 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
         title: tTitle,
         description: tDesc,
         id: genId('t'),
+        appType: payload.appType ?? 'personal',
         startDate: payload.startDate || null,
         dueDate: payload.dueDate || null,
         reminderDate: payload.reminderDate || null,

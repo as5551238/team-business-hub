@@ -18,6 +18,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
         title: pTitle,
         description: pDesc,
         id: genId('g'),
+        appType: payload.appType ?? 'personal',
         progress: 0,
         priority: (inheritedPriority || payload.priority) ?? 'medium',
         tags: payload.tags ?? [],

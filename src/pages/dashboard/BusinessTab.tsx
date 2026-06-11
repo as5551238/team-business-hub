@@ -3,6 +3,7 @@
  */
 import { useMemo } from 'react';
 import { Target, FolderKanban, CheckCircle2, AlertTriangle, TrendingUp, Clock, BarChart3 } from 'lucide-react';
+import { isManagerRole, isAdminOrManagerRole } from '@/lib/roleUtils';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { getFunnelMetrics } from '@/lib/analytics';
@@ -114,12 +115,12 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
       </div>
 
       {/* P0: 行为画像 — 管理员可见当前用户画像 */}
-      {state.currentUser?.role && ['admin', 'manager', 'leader'].includes(state.currentUser.role) && state.currentUser?.id && (
+      {isManagerRole(state.currentUser?.role) && state.currentUser?.id && (
         <MemberProfileCard memberId={state.currentUser.id} />
       )}
 
       {/* P1: AI团队诊断 + 贡献度透镜 — 管理员可见 */}
-      {state.currentUser?.role && ['admin', 'manager'].includes(state.currentUser.role) && (
+      {isAdminOrManagerRole(state.currentUser?.role) && (
         <>
           <TeamDiagnosticsPanel />
           <ContributionLens />
@@ -127,12 +128,12 @@ export default function BusinessTab({ onOpenDetail, onPageChange }: DashboardTab
       )}
 
       {/* P2: 行业适配 — 管理员可见 */}
-      {state.currentUser?.role && ['admin', 'manager'].includes(state.currentUser.role) && (
+      {isAdminOrManagerRole(state.currentUser?.role) && (
         <IndustryAdapter />
       )}
 
       {/* P3: 预测洞察 — 管理员可见 */}
-      {state.currentUser?.role && ['admin', 'manager'].includes(state.currentUser.role) && (
+      {isAdminOrManagerRole(state.currentUser?.role) && (
         <PredictiveInsights />
       )}
 

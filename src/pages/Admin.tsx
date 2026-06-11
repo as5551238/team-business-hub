@@ -3,6 +3,7 @@ import { Users, Wrench, Calendar, Settings as SettingsIcon, GitBranch, Zap, Glob
 import type { AdminTab } from './admin/constants';
 import { useStore } from '@/store/useStore';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
+import { isAdminRole, isManagerRole } from '@/lib/roleUtils';
 
 const TeamTab = lazy(() => import('./admin/TeamTab').then(m => ({ default: m.TeamTab })));
 const ToolboxTab = lazy(() => import('./admin/ToolboxTab').then(m => ({ default: m.ToolboxTab })));
@@ -90,8 +91,8 @@ const tabVisibility: Record<AdminTab, 'admin' | 'manager' | 'member' | 'all'> = 
 export default function Admin({ activeTab }: { activeTab?: string }) {
   const { state } = useStore();
   const role = state.currentUser?.role || 'member';
-  const isAdmin = role === 'admin';
-  const isManager = isAdmin || role === 'manager' || role === 'leader';
+  const isAdmin = isAdminRole(role);
+  const isManager = isManagerRole(role);
 
   const hasAccess = (tab: AdminTab) => {
     const v = tabVisibility[tab];

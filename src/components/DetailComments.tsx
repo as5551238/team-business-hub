@@ -3,6 +3,7 @@ import { useStore } from '@/store/useStore';
 import { uploadFile, BUCKET_NAMES } from '@/supabase/storage';
 import type { ItemType } from '@/types';
 import { Button } from '@/components/ui/button';
+import { getRoleLabel } from '@/lib/roleUtils';
 import { MessageSquare, Edit2, Save, Trash2, Bell, Sparkles, ListChecks } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
@@ -384,7 +385,7 @@ export function DetailComments({ itemId, itemType, canEdit, updateItem, attachme
                         <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold flex-shrink-0">{(m.name || '?')[0]}</div>
                         <div className="flex-1 min-w-0">
                           <span className="font-medium">{m.name}</span>
-                          <span className="ml-1 text-muted-foreground">{m.role === 'admin' ? '管理员' : m.role === 'manager' ? '经理' : m.role === 'leader' ? '负责人' : ''}</span>
+                          <span className="ml-1 text-muted-foreground">{getRoleLabel(m.role)}</span>
                         </div>
                         {m.department && <span className="text-[10px] text-muted-foreground truncate max-w-[60px]">{m.department}</span>}
                       </button>

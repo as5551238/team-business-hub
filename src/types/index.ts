@@ -104,6 +104,8 @@ export interface Goal {
   parentId: string | null;
   level: number;
   category: string;
+  /** 应用类型：personal=智简协作(TBH), enterprise=智企中台(TBH-Next) */
+  appType: AppType;
   startDate: string;
   endDate: string;
   leaderId: string;
@@ -141,6 +143,8 @@ export interface Project {
   supporterIds: string[];
   tags: string[];
   category: string;
+  /** 应用类型：personal=智简协作(TBH), enterprise=智企中台(TBH-Next) */
+  appType: AppType;
   attachments: Attachment[];
   trackingRecords: TrackingRecord[];
   repeatCycle: RepeatCycle;
@@ -188,6 +192,9 @@ export interface Comment {
   createdAt: string;
 }
 
+// ==================== 应用类型 ====================
+export type AppType = 'personal' | 'enterprise';
+
 // ==================== 任务 ====================
 export interface Task {
   id: string;
@@ -202,6 +209,8 @@ export interface Task {
   supporterIds: string[];
   tags: string[];
   category: string;
+  /** 应用类型：personal=智简协作(TBH), enterprise=智企中台(TBH-Next) */
+  appType: AppType;
   startDate: string | null;
   dueDate: string | null;
   reminderDate: string | null;

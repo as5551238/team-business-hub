@@ -162,6 +162,7 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: Memb
     startDate: g.startDate ?? '', endDate: g.endDate ?? '',
     description: g.description ?? '', type: g.type ?? 'okr',
     approvalStatus: g.approvalStatus ?? 'draft',
+    appType: g.appType ?? 'personal',
   }));
   result.projects = result.projects.map((p: Project) => ({
     ...p, tags: p.tags ?? [], attachments: p.attachments ?? [],
@@ -172,6 +173,7 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: Memb
     parentId: p.parentId ?? null, goalId: p.goalId ?? null,
     startDate: p.startDate ?? '', endDate: p.endDate ?? '',
     taskCount: p.taskCount ?? 0, description: p.description ?? '',
+    appType: p.appType ?? 'personal',
   }));
   result.tasks = result.tasks.map((t: Task) => ({
     ...t, tags: t.tags ?? [], subtasks: t.subtasks ?? [],
@@ -186,6 +188,7 @@ export function ensureAppStateDefaults(data: Partial<AppState> & { members: Memb
     blockedBy: t.blockedBy ?? [],
     sprintId: t.sprintId ?? null,
     description: t.description ?? '',
+    appType: t.appType ?? 'personal',
   }));
   result.members = result.members.map((m: Member) => ({
     ...m, permissions: m.permissions ?? [], role: m.role ?? 'member',

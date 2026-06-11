@@ -212,3 +212,27 @@ export function trackAISuggestion(suggestionId: string, accepted: boolean) {
     metadata: {},
   });
 }
+
+// AI 意图解析追踪 — Week1 P0 新增
+export function trackAIIntent(intentType: string, actionId: string | undefined, confidence: number, source: 'llm' | 'keyword', fallback: boolean) {
+  if (!_currentUserId) return;
+  enqueue({
+    userId: _currentUserId,
+    eventType: 'ai.intent_parsed',
+    entityType: 'ai_intent',
+    entityId: actionId || 'unknown',
+    metadata: { intentType, confidence, source, fallback },
+  });
+}
+
+// AI 对话追踪 — Week1 P0 新增
+export function trackAIChat(messageLength: number, responseType: 'action' | 'query' | 'chat' | 'error') {
+  if (!_currentUserId) return;
+  enqueue({
+    userId: _currentUserId,
+    eventType: 'ai.chat_interaction',
+    entityType: 'ai_chat',
+    entityId: '',
+    metadata: { messageLength, responseType },
+  });
+}

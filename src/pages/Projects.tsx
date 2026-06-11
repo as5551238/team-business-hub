@@ -5,6 +5,8 @@ import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import type { Project, ProjectStatus, TaskPriority, Comment } from '@/types';
 import { Plus, FolderKanban, Search, Check, Users, Trash2, X, Filter, ChevronDown } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { AiActionButton } from '@/components/AiActionButton';
+import { AIItemFlow } from '@/components/AIItemFlow';
 import { useCollabPresence } from '@/lib/collab';
 import { useDraftSave } from '@/hooks/useDraftSave';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
@@ -24,6 +26,7 @@ export default function Projects() {
   useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d && d.itemType === 'project') setDetailItem({ type: 'project', id: d.itemId }); }; window.addEventListener('tbh-open-detail', h); return () => window.removeEventListener('tbh-open-detail', h); }, []);
   useEffect(() => { const h = (e: Event) => { const d = (e as CustomEvent).detail; if (!d || d.page !== 'projects') return; if (d.statuses) setSelectedStatuses(new Set(d.statuses as string[])); }; window.addEventListener('tbh-nav-filter', h); return () => window.removeEventListener('tbh-nav-filter', h); }, []);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showAIFlow, setShowAIFlow] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('detail');
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
@@ -168,6 +171,7 @@ export default function Projects() {
           )}
           <button onClick={() => { setBatchMode(!batchMode); setSelectedIds(new Set()); setBatchStatus(''); setBatchLeader(''); }} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${batchMode ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
           <button onClick={() => setShowCreateDialog(true)} className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"><Plus size={16} /> 新建项目</button>
+          <AiActionButton label="AI项目规划" onClick={() => setShowAIFlow(true)} />
         </div>
       </div>
 
@@ -253,6 +257,8 @@ export default function Projects() {
       )}
 
       {detailItem && <ItemDetailPanel key={detailItem.id} isOpen={!!detailItem} onClose={() => setDetailItem(null)} itemType={detailItem.type} itemId={detailItem.id} />}
+
+      {showAIFlow && <AIItemFlow onClose={() => setShowAIFlow(false)} />}
     </div>
   );
 }
