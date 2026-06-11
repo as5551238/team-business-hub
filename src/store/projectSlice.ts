@@ -2,17 +2,12 @@ import type { AppState, Project } from '@/types';
 import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete, logActivity } from './supabase';
 import { genId } from './utils';
-import { needMutate, reducerCanDelete, calcProjectProgress, clampTitle, clampDesc, resolveInheritedPriority, diffAssigned, executeAutomationActions, matchCondition, notifyAssigned, tsNow, validateStatusFlow, fireAutomationRules } from './shared';
-import { cascadeAddProject } from './cascadeHandlers';
-import { pushFieldUndo } from './undo';
-
-/** Field name → human-readable label (shared across slices, S5-5) */
-import { fieldLabelMap as projectFieldLabelMap } from './fieldLabels';
+import { needMutate, reducerCanDelete, notifyAssigned, calcGoalProgress, calcProjectProgress, clampTitle, clampDesc, markPendingDelete, diffAssigned, resolveInheritedPriority, executeAutomationActions, matchCondition, tsNow, validateStatusFlow, fireAutomationRules } from './shared';
 
 export function projectReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
     case 'ADD_PROJECT': {
-      const s = needMutate(state, ['projects', 'goals', 'tasks', 'notifications']);
+      const s = needMutate(state, ['projects', 'notifications']);
       const now = tsNow();
       const payload = action.payload;
       const pTitle = clampTitle(payload.title) ?? payload.title;
@@ -24,6 +19,7 @@ export function projectReducer(state: AppState, action: Action): AppState | null
         title: pTitle,
         description: pDesc,
         id: genId('p'),
+        appType: payload.appType ?? 'personal',
         progress: 0,
         priority: (inheritedPriority || payload.priority) ?? 'medium',
         tags: payload.tags ?? [],
@@ -41,30 +37,25 @@ export function projectReducer(state: AppState, action: Action): AppState | null
       s.projects.push(p);
       supabaseInsert('projects', p);
       logActivity({ memberId: state.currentUser?.id, action: '创建', targetType: '项目', targetId: p.id, targetTitle: p.title });
-      cascadeAddProject(s, p, state.currentUser?.id);
+      notifyAssigned(s, state.currentUser?.id, [p.leaderId, ...(p.supporterIds ?? [])].filter(Boolean), p.title, p.id, 'project');
+      for (const rule of s.automationRules) {
+        if (rule.trigger === 'item_created' && rule.itemType === 'project' && rule.enabled !== false) {
+          try { executeAutomationActions(s, rule, p.id, 'project', p.title); } catch (e) { console.warn('item_created automation failed:', e); }
+        }
+      }
       return s;
     }
 
     case 'UPDATE_PROJECT': {
-      const s = needMutate(state, ['projects', 'goals', 'tasks', 'notifications']);
+      const s = needMutate(state, ['projects', 'notifications']);
       const now = tsNow();
       const idx = s.projects.findIndex(p => p.id === action.payload.id);
       if (idx !== -1) {
-        const oldProject = s.projects[idx];
-        const oldUpdatedAt = oldProject.updatedAt;
-        const oldLeaderId = oldProject.leaderId;
-        const oldSupporterIds = oldProject.supporterIds;
-        const oldStatus = oldProject.status;
+        const oldUpdatedAt = s.projects[idx].updatedAt;
+        const oldLeaderId = s.projects[idx].leaderId;
+        const oldSupporterIds = s.projects[idx].supporterIds;
+        const oldStatus = s.projects[idx].status;
         const updates = { ...action.payload.updates };
-        // S4-3: Capture old field values for undo before applying updates
-        const changedKeys = Object.keys(updates).filter(k => (updates as Record<string, unknown>)[k] !== (oldProject as Record<string, unknown>)[k]);
-        if (changedKeys.length > 0) {
-          const oldValues: Record<string, unknown> = {};
-          const newValues: Record<string, unknown> = {};
-          for (const k of changedKeys) { oldValues[k] = (oldProject as Record<string, unknown>)[k]; newValues[k] = (updates as Record<string, unknown>)[k]; }
-          const fieldLabel = changedKeys.length === 1 ? projectFieldLabelMap[changedKeys[0]] || changedKeys[0] : `${changedKeys.length}个字段`;
-          pushFieldUndo('UPDATE_PROJECT', action.payload.id, oldValues, newValues, `更新项目${fieldLabel}`, (action as Action & { _skipUndo?: boolean })._skipUndo);
-        }
         if (updates.title) updates.title = clampTitle(updates.title) ?? updates.title;
         if (updates.description) updates.description = clampDesc(updates.description) ?? updates.description;
         if ('goalId' in updates || 'parentId' in updates) {
@@ -84,7 +75,7 @@ export function projectReducer(state: AppState, action: Action): AppState | null
             executeAutomationActions(s, rule, s.projects[idx].id, 'project', s.projects[idx].title);
           }
         }
-        s.projects[idx] = { ...oldProject, ...updates, updatedAt: now };
+        s.projects[idx] = { ...s.projects[idx], ...updates, updatedAt: now };
         s.projects[idx].progress = calcProjectProgress(s.tasks, action.payload.id);
         supabaseUpdate('projects', action.payload.id, { ...updates, progress: s.projects[idx].progress, updated_at: now }, oldUpdatedAt);
         if ('leaderId' in updates || 'supporterIds' in updates) {
@@ -108,10 +99,9 @@ export function projectReducer(state: AppState, action: Action): AppState | null
       const now = tsNow();
       const deletedProject = s.projects.find(p => p.id === pid);
       if (deletedProject) {
-        const oldUpdatedAt = deletedProject.updatedAt;
         deletedProject.deletedAt = now;
         deletedProject.updatedAt = now;
-        supabaseUpdate('projects', pid, { deleted_at: now, updated_at: now }, oldUpdatedAt);
+        supabaseUpdate('projects', pid, { deleted_at: now, updated_at: now });
       }
       logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '项目', targetId: pid, targetTitle: deletedProject?.title || '' });
       return s;
@@ -121,10 +111,9 @@ export function projectReducer(state: AppState, action: Action): AppState | null
       const s = needMutate(state, ['projects']);
       const project = s.projects.find(p => p.id === pid);
       if (project) {
-        const oldUpdatedAt = project.updatedAt;
         project.deletedAt = undefined;
         project.updatedAt = tsNow();
-        supabaseUpdate('projects', pid, { deleted_at: null, updated_at: project.updatedAt }, oldUpdatedAt);
+        supabaseUpdate('projects', pid, { deleted_at: null, updated_at: project.updatedAt });
       }
       return s;
     }

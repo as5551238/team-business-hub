@@ -1,18 +1,13 @@
-import type { AppState, Goal, KeyResult } from '@/types';
+import type { AppState, Goal } from '@/types';
 import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete, logActivity } from './supabase';
 import { genId } from './utils';
-import { needMutate, reducerCanDelete, notifyAssigned, calcGoalLevel, computeGoalProgressInfo, applyGoalProgressInfo, calcProjectProgress, clampTitle, clampDesc, markPendingDelete, diffAssigned, resolveInheritedPriority, executeAutomationActions, matchCondition, tsNow, validateStatusFlow, fireAutomationRules } from './shared';
-import { cascadeAddGoal, cascadeGoalStatusChange, cascadeGoalProgressUpdate } from './cascadeHandlers';
-import { pushFieldUndo } from './undo';
-
-/** Field name → human-readable label (shared across slices, S5-5) */
-import { fieldLabelMap as goalFieldLabelMap } from './fieldLabels';
+import { needMutate, reducerCanDelete, notifyAssigned, calcGoalLevel, calcGoalProgress, clampTitle, clampDesc, markPendingDelete, diffAssigned, resolveInheritedPriority, executeAutomationActions, matchCondition, tsNow, validateStatusFlow, fireAutomationRules } from './shared';
 
 export function goalReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
     case 'ADD_GOAL': {
-      const s = needMutate(state, ['goals', 'projects', 'tasks', 'notifications']);
+      const s = needMutate(state, ['goals', 'notifications']);
       const now = tsNow();
       const payload = action.payload;
       const pTitle = clampTitle(payload.title) ?? payload.title;
@@ -23,6 +18,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
         title: pTitle,
         description: pDesc,
         id: genId('g'),
+        appType: payload.appType ?? 'personal',
         progress: 0,
         priority: (inheritedPriority || payload.priority) ?? 'medium',
         tags: payload.tags ?? [],
@@ -35,14 +31,19 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
         teamId: payload.teamId || s.currentTeamId || '__default__',
         discussionThreadId: payload.discussionThreadId ?? null,
         summary: payload.summary ?? '',
-        keyResults: (payload.keyResults ?? []).map((kr: Partial<KeyResult> & Pick<KeyResult, 'title' | 'targetValue' | 'currentValue'>) => ({ ...kr, selected: kr.selected ?? true })),
+        keyResults: (payload.keyResults ?? []).map((kr: any) => ({ ...kr, selected: kr.selected ?? true })),
         createdAt: now,
         updatedAt: now,
       };
       s.goals.push(g);
       supabaseInsert('goals', g);
       logActivity({ memberId: state.currentUser?.id, action: '创建', targetType: '目标', targetId: g.id, targetTitle: g.title });
-      cascadeAddGoal(s, g, state.currentUser?.id);
+      notifyAssigned(s, state.currentUser?.id, [g.leaderId, ...(g.supporterIds ?? [])].filter(Boolean), g.title, g.id, 'goal');
+      for (const rule of s.automationRules) {
+        if (rule.trigger === 'item_created' && rule.itemType === 'goal' && rule.enabled !== false) {
+          try { executeAutomationActions(s, rule, g.id, 'goal', g.title); } catch (e) { console.warn('item_created automation failed:', e); }
+        }
+      }
       return s;
     }
 
@@ -56,16 +57,6 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
         const oldSupporterIds = s.goals[idx].supporterIds;
         const oldStatus = s.goals[idx].status;
         const updates = { ...action.payload.updates };
-        // S4-3: Capture old field values for undo before applying updates
-        const oldGoal = s.goals[idx];
-        const changedKeys = Object.keys(updates).filter(k => (updates as Record<string, unknown>)[k] !== (oldGoal as Record<string, unknown>)[k]);
-        if (changedKeys.length > 0) {
-          const oldValues: Record<string, unknown> = {};
-          const newValues: Record<string, unknown> = {};
-          for (const k of changedKeys) { oldValues[k] = (oldGoal as Record<string, unknown>)[k]; newValues[k] = (updates as Record<string, unknown>)[k]; }
-          const fieldLabel = changedKeys.length === 1 ? goalFieldLabelMap[changedKeys[0]] || changedKeys[0] : `${changedKeys.length}个字段`;
-          pushFieldUndo('UPDATE_GOAL', action.payload.id, oldValues, newValues, `更新目标${fieldLabel}`, (action as Action & { _skipUndo?: boolean })._skipUndo);
-        }
         if (updates.title) updates.title = clampTitle(updates.title) ?? updates.title;
         if (updates.description) updates.description = clampDesc(updates.description) ?? updates.description;
         if ('parentId' in updates) {
@@ -85,20 +76,63 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
           }
         }
         s.goals[idx] = { ...s.goals[idx], ...updates, updatedAt: now };
-        const info = computeGoalProgressInfo(s.goals, action.payload.id);
-        applyGoalProgressInfo(s.goals[idx], info);
-        s.goals[idx].progress = info.progress;
+        s.goals[idx].progress = calcGoalProgress(s.goals, action.payload.id);
         supabaseUpdate('goals', action.payload.id, { ...updates, progress: s.goals[idx].progress, updated_at: now }, oldUpdatedAt);
-        // Cross-slice: ancestor goal progress chain
-        cascadeGoalProgressUpdate(s, action.payload.id, now);
+        // 级联更新父目标进度
+        if (s.goals[idx].parentId) {
+          const pIdx = s.goals.findIndex(g => g.id === s.goals[idx].parentId!);
+          if (pIdx !== -1) {
+            s.goals[pIdx].progress = calcGoalProgress(s.goals, s.goals[idx].parentId!);
+            s.goals[pIdx].updatedAt = now;
+            supabaseUpdate('goals', s.goals[idx].parentId!, { progress: s.goals[pIdx].progress, updated_at: now });
+            // 递归向上更新祖先目标
+            let ancestorId = s.goals[pIdx].parentId;
+            while (ancestorId) {
+              const aIdx = s.goals.findIndex(g => g.id === ancestorId);
+              if (aIdx === -1) break;
+              s.goals[aIdx].progress = calcGoalProgress(s.goals, ancestorId);
+              s.goals[aIdx].updatedAt = now;
+              supabaseUpdate('goals', ancestorId, { progress: s.goals[aIdx].progress, updated_at: now });
+              ancestorId = s.goals[aIdx].parentId;
+            }
+          }
+        }
         if ('leaderId' in updates || 'supporterIds' in updates) {
           const newlyAssigned = diffAssigned(oldLeaderId, oldSupporterIds, updates.leaderId ?? oldLeaderId, updates.supporterIds ?? oldSupporterIds);
           notifyAssigned(s, state.currentUser?.id, newlyAssigned, s.goals[idx].title, s.goals[idx].id, 'goal');
         }
         if (updates.status && updates.status !== oldStatus) {
           fireAutomationRules(s, s.goals[idx].id, 'goal', s.goals[idx].title, 'status_change', updates, s.goals[idx]);
-          // F5: cross-slice cascade to linked projects and tasks
-          cascadeGoalStatusChange(s, action.payload.id, updates.status);
+          // F5: 目标变更联动 — 级联到关联的项目和任务
+          const goalId = action.payload.id;
+          const newStatus = updates.status;
+          if (['done', 'blocked', 'cancelled'].includes(newStatus)) {
+            const cascadeStatus = newStatus === 'done' ? 'done' : newStatus === 'blocked' ? 'blocked' : 'cancelled';
+            // Cascade to projects linked to this goal
+            s.projects.filter(p => p.goalId === goalId && !p.deletedAt).forEach(p => {
+              if (p.status !== cascadeStatus) {
+                const pIdx = s.projects.indexOf(p);
+                s.projects[pIdx] = { ...p, status: cascadeStatus, updatedAt: now };
+                supabaseUpdate('projects', p.id, { status: cascadeStatus, updated_at: now });
+                // Cascade further to tasks in this project
+                s.tasks.filter(t => t.projectId === p.id && !t.deletedAt).forEach(t => {
+                  if (t.status !== cascadeStatus) {
+                    const tIdx = s.tasks.indexOf(t);
+                    s.tasks[tIdx] = { ...t, status: cascadeStatus, updatedAt: now, ...(cascadeStatus === 'done' ? { completedAt: now } : { completedAt: null }) };
+                    supabaseUpdate('tasks', t.id, { status: cascadeStatus, updated_at: now, ...(cascadeStatus === 'done' ? { completed_at: now } : { completed_at: null }) });
+                  }
+                });
+              }
+            });
+            // Also cascade to tasks directly linked to this goal (no project)
+            s.tasks.filter(t => t.goalId === goalId && !t.projectId && !t.deletedAt).forEach(t => {
+              if (t.status !== cascadeStatus) {
+                const tIdx = s.tasks.indexOf(t);
+                s.tasks[tIdx] = { ...t, status: cascadeStatus, updatedAt: now, ...(cascadeStatus === 'done' ? { completedAt: now } : { completedAt: null }) };
+                supabaseUpdate('tasks', t.id, { status: cascadeStatus, updated_at: now, ...(cascadeStatus === 'done' ? { completed_at: now } : { completed_at: null }) });
+              }
+            });
+          }
         }
         if (Object.keys(updates).some(k => k !== 'status')) {
           fireAutomationRules(s, s.goals[idx].id, 'goal', s.goals[idx].title, 'field_change', updates, s.goals[idx]);
@@ -114,10 +148,9 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const now = tsNow();
       const deletedGoal = s.goals.find(g => g.id === gid);
       if (deletedGoal) {
-        const oldUpdatedAt = deletedGoal.updatedAt;
         deletedGoal.deletedAt = now;
         deletedGoal.updatedAt = now;
-        supabaseUpdate('goals', gid, { deleted_at: now, updated_at: now }, oldUpdatedAt);
+        supabaseUpdate('goals', gid, { deleted_at: now, updated_at: now });
       }
       return s;
     }
@@ -126,10 +159,9 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const s = needMutate(state, ['goals']);
       const goal = s.goals.find(g => g.id === gid);
       if (goal) {
-        const oldUpdatedAt = goal.updatedAt;
         goal.deletedAt = undefined;
         goal.updatedAt = tsNow();
-        supabaseUpdate('goals', gid, { deleted_at: null, updated_at: goal.updatedAt }, oldUpdatedAt);
+        supabaseUpdate('goals', gid, { deleted_at: null, updated_at: goal.updatedAt });
       }
       return s;
     }
@@ -140,12 +172,11 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       if (action.payload.newParentId === action.payload.goalId) return state;
       const idx = s.goals.findIndex(g => g.id === action.payload.goalId);
       if (idx !== -1) {
-        const oldUpdatedAt = s.goals[idx].updatedAt;
         s.goals[idx].parentId = action.payload.newParentId;
         s.goals[idx].level = calcGoalLevel(s.goals, action.payload.goalId, action.payload.newParentId);
         s.goals[idx].updatedAt = now;
         function recalcDescendants(parentId: string, visited = new Set<string>()) {
-          if (visited.has(parentId)) return;
+          if (visited.has(parentId)) return; // cycle guard
           visited.add(parentId);
           s.goals.filter(g => g.parentId === parentId).forEach(child => {
             const p = s.goals.find(pp => pp.id === parentId);
@@ -154,7 +185,7 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
           });
         }
         recalcDescendants(action.payload.goalId);
-        supabaseUpdate('goals', action.payload.goalId, { parent_id: action.payload.newParentId, level: s.goals[idx].level, updated_at: now }, oldUpdatedAt);
+        supabaseUpdate('goals', action.payload.goalId, { parent_id: action.payload.newParentId, level: s.goals[idx].level, updated_at: now });
       }
       return s;
     }
@@ -165,15 +196,14 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const idx = s.goals.findIndex(g => g.id === action.payload.goalId);
       if (idx !== -1) {
         const g = s.goals[idx];
-        const oldUpdatedAt = g.updatedAt;
         g.keyResults = g.keyResults.map(kr => kr.id === action.payload.krId ? { ...kr, currentValue: action.payload.value } : kr);
-        const krInfo = computeGoalProgressInfo(s.goals, action.payload.goalId);
-        applyGoalProgressInfo(g, krInfo);
-        g.progress = krInfo.progress;
+        g.progress = calcGoalProgress(s.goals, action.payload.goalId);
         g.updatedAt = now;
-        // Cross-slice: update parent goal progress
-        cascadeGoalProgressUpdate(s, action.payload.goalId, now);
-        supabaseUpdate('goals', action.payload.goalId, { key_results: g.keyResults, progress: g.progress, updated_at: now }, oldUpdatedAt);
+        if (g.parentId) {
+          const pIdx = s.goals.findIndex(p => p.id === g.parentId);
+          if (pIdx !== -1) { s.goals[pIdx].progress = calcGoalProgress(s.goals, g.parentId); s.goals[pIdx].updatedAt = now; }
+        }
+        supabaseUpdate('goals', action.payload.goalId, { key_results: g.keyResults, progress: g.progress, updated_at: now });
       }
       return s;
     }
@@ -183,11 +213,10 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const g = s.goals.find(g => g.id === action.payload);
       if (!g) return state;
       const now = tsNow();
-      const oldUpdatedAt = g.updatedAt;
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'pending', updatedAt: now };
       s.approvalAudits.push({ id: genId('aa'), goalId: g.id, action: 'submit', actorId: s.currentUser?.id ?? '', comment: '', createdAt: now });
-      supabaseUpdate('goals', g.id, { approval_status: 'pending', updated_at: now }, oldUpdatedAt);
+      supabaseUpdate('goals', g.id, { approval_status: 'pending', updated_at: now });
       return s;
     }
 
@@ -196,11 +225,10 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const g = s.goals.find(g => g.id === action.payload.id);
       if (!g || g.approvalStatus !== 'pending') return state;
       const now = tsNow();
-      const oldUpdatedAt = g.updatedAt;
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'approved', updatedAt: now };
       s.approvalAudits.push({ id: genId('aa'), goalId: g.id, action: 'approve', actorId: s.currentUser?.id ?? '', comment: action.payload.comment, createdAt: now });
-      supabaseUpdate('goals', g.id, { approval_status: 'approved', updated_at: now }, oldUpdatedAt);
+      supabaseUpdate('goals', g.id, { approval_status: 'approved', updated_at: now });
       return s;
     }
 
@@ -209,11 +237,10 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const g = s.goals.find(g => g.id === action.payload.id);
       if (!g || g.approvalStatus !== 'pending') return state;
       const now = tsNow();
-      const oldUpdatedAt = g.updatedAt;
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'rejected', updatedAt: now };
       s.approvalAudits.push({ id: genId('aa'), goalId: g.id, action: 'reject', actorId: s.currentUser?.id ?? '', comment: action.payload.comment, createdAt: now });
-      supabaseUpdate('goals', g.id, { approval_status: 'rejected', updated_at: now }, oldUpdatedAt);
+      supabaseUpdate('goals', g.id, { approval_status: 'rejected', updated_at: now });
       return s;
     }
 
@@ -222,11 +249,10 @@ export function goalReducer(state: AppState, action: Action): AppState | null {
       const g = s.goals.find(g => g.id === action.payload);
       if (!g || g.approvalStatus !== 'pending') return state;
       const now = tsNow();
-      const oldUpdatedAt = g.updatedAt;
       const idx = s.goals.indexOf(g);
       s.goals[idx] = { ...g, approvalStatus: 'draft', updatedAt: now };
       s.approvalAudits.push({ id: genId('aa'), goalId: g.id, action: 'recall', actorId: s.currentUser?.id ?? '', comment: '', createdAt: now });
-      supabaseUpdate('goals', g.id, { approval_status: 'draft', updated_at: now }, oldUpdatedAt);
+      supabaseUpdate('goals', g.id, { approval_status: 'draft', updated_at: now });
       return s;
     }
 

@@ -1,198 +1,427 @@
-// Re-export all types from core
-export * from './core';
+// ==================== 团队业务中台 - 类型定义 V4 (Multi-tenant) ====================
 
-// ==================== 以下为扩展类型（从原index.ts拆分） ====================
+export type MemberRole = 'admin' | 'manager' | 'leader' | 'member';
+export type MemberStatus = 'active' | 'inactive';
+export type GoalStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
+export type GoalApprovalStatus = 'draft' | 'pending' | 'approved' | 'rejected';
+export type GoalType = 'okr' | 'kpi' | 'milestone';
+export type PlanTier = 'free' | 'pro' | 'enterprise';
+export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing';
+export type ProjectStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
+export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type ReviewPeriod = 'day' | 'week' | 'month' | 'quarter' | 'year';
+export type RepeatCycle = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+export type ItemType = 'goal' | 'project' | 'task';
 
-// ==================== R3: 绩效与有效性 ====================
-export type ReviewRole = 'self' | 'peer' | 'manager' | 'direct_report';
+// ==================== 模块权限 (V4 矩阵化) ====================
+export type PermissionModule = 'goals' | 'projects' | 'tasks' | 'team' | 'settings' | 'export' | 'knowledge';
+export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'manage';
+export type Permission = `${PermissionModule}_${PermissionAction}`;
 
-export interface ReviewAnswer {
-  reviewerId: string;
-  role: ReviewRole;
-  ratings: Record<string, number>;
-  strengths: string;
-  improvements: string;
-  submittedAt: string;
-}
-
-export interface PerformanceReview {
-  id: string;
-  seasonId: string | null;
-  revieweeId: string;
-  status: 'pending' | 'in_progress' | 'completed';
-  selfReview: ReviewAnswer | null;
-  peerReviews: ReviewAnswer[];
-  managerReview: ReviewAnswer | null;
-  directReportReviews: ReviewAnswer[];
-  aiSummary: string | null;
-  finalScore: number | null;
-  teamId: string;
-  createdAt: string;
-  completedAt: string | null;
-}
-
-export interface SkillRating {
-  memberId: string;
-  skillId: string;
-  level: number; // 0-5
-  updatedAt: string;
-}
-
-export interface SkillDefinition {
+// ==================== 附件 ====================
+export interface Attachment {
   id: string;
   name: string;
-  category: string;
-  targetLevel: number; // team target
+  type: string;
+  size: number;
+  url: string;
+  uploadedBy: string;
+  uploadedAt: string;
 }
 
-export interface EffectivenessMetric {
+// ==================== 跟踪记录 ====================
+export interface TrackingRecord {
   id: string;
-  goalId: string;
-  businessValue: number; // 1-10
-  effortHours: number;
-  impactScore: number; // 1-10
-  roi: number | null;
-  measuredAt: string;
-  teamId: string;
-}
-
-export interface AISuggestion {
-  id: string;
-  sourceType: 'review' | 'dashboard' | 'automation' | 'coaching';
-  sourceId: string | null;
+  date: string;
   content: string;
-  status: 'suggested' | 'adopted' | 'dismissed' | 'partially_adopted';
-  adoptedAt: string | null;
-  outcomeRating: number | null; // 1-5
-  outcomeNote: string | null;
-  teamId: string;
-  createdAt: string;
-}
-
-// ==================== R4: 知识图谱与自动化 ====================
-export interface ReviewKnowledge {
-  id: string;
-  sourceSessionId: string;
-  pattern: string;
-  context: string;
-  relatedPatterns: string[];
-  aiExtracted: boolean;
-  teamId: string;
-  createdAt: string;
-}
-
-export interface OKRScore {
-  goalId: string;
-  seasonId: string;
-  score: number; // 0.0-1.0
-  confidence: number; // 0-100
-  previousConfidence: number | null;
-  scorerId: string;
-  scoredAt: string;
-  deviationNote: string | null;
-}
-
-export interface CapacityPlan {
-  id: string;
-  period: string; // "2026-Q3"
-  availableHours: number;
-  plannedHours: number;
-  forecastHours: number; // AI predicted
-  gap: number;
-  teamId: string;
-  createdAt: string;
-}
-
-export interface DSTEPhase {
-  id: string;
-  seasonId: string;
-  phase: 'strategy' | 'decode' | 'execute' | 'evaluate';
-  status: 'not_started' | 'in_progress' | 'completed';
-  aiAutoProgress: boolean;
-  completedAt: string | null;
-  checklist: { item: string; done: boolean }[];
-  teamId: string;
-}
-
-export interface BusinessValueEntry {
-  id: string;
-  goalId: string;
-  inputCost: number;
-  outputValue: number;
-  roi: number;
-  valueStream: string;
-  measuredAt: string;
-  teamId: string;
-}
-
-// ==================== 预算与成本管理 ====================
-export type BudgetCategory = 'labor' | 'material' | 'outsourcing' | 'travel' | 'other';
-export type BudgetStatus = 'draft' | 'approved' | 'active' | 'closed';
-export type CostEntryStatus = 'pending' | 'approved' | 'rejected';
-
-export interface BudgetItem {
-  id: string;
-  category: BudgetCategory;
-  name: string;
-  plannedAmount: number;
-  actualAmount: number;
-  notes: string | null;
-}
-
-export interface Budget {
-  id: string;
-  projectId: string | null;
-  seasonId: string | null;
-  name: string;
-  totalAmount: number;
-  currency: string;
-  status: BudgetStatus;
-  items: BudgetItem[];
-  approvedBy: string | null;
-  teamId: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CostEntry {
-  id: string;
-  budgetId: string;
-  projectId: string | null;
-  taskId: string | null;
-  category: BudgetCategory;
-  amount: number;
-  description: string;
+  result: string;
   recordedBy: string;
-  recordedAt: string;
-  approvedBy: string | null;
-  status: CostEntryStatus;
-  teamId: string;
   createdAt: string;
 }
 
-// ==================== 复盘行动项 ====================
-export interface ReviewActionItem {
+// ==================== 关键结果（OKR+KPI 双轨融合） ====================
+export type KrTrack = 'okr' | 'kpi' | 'both';
+export type KpiStatus = 'red' | 'yellow' | 'green';
+
+export interface KeyResult {
   id: string;
-  content: string;
-  assigneeId: string | null;
-  dueDate: string | null;
-  linkedTaskId: string | null;
-  status: 'pending' | 'in_progress' | 'completed' | 'verified';
-  verifiedAt: string | null;
+  title: string;
+  targetValue: number;
+  currentValue: number;
+  unit: string;
+  selected: boolean;
+  confidence?: number;
+  // --- KPI 双轨扩展（可选，向后兼容）---
+  track?: KrTrack;
+  weight?: number;
+  kpiBaseline?: number;
+  kpiTarget?: number;
+  kpiScore?: number;
 }
 
-// ==================== OKR周期/Season ====================
-export type SeasonStatus = 'draft' | 'planning' | 'executing' | 'scoring' | 'reviewing' | 'closed';
-export type SeasonType = 'quarter' | 'annual' | 'custom';
+export interface DualTrackSummary {
+  okr: {
+    progress: number;
+    avgConfidence: number;
+    stretchRate: number | null;
+  };
+  kpi: {
+    weightedScore: number;
+    overallStatus: KpiStatus;
+    redCount: number;
+    yellowCount: number;
+    greenCount: number;
+  };
+}
 
-export interface OKRSeason {
+// ==================== 成员 ====================
+export interface Member {
   id: string;
   name: string;
-  type: SeasonType;
+  nickname: string;
+  wechatId: string;
+  phone: string;
+  email: string;
+  role: MemberRole;
+  department: string;
+  avatar: string;
+  status: MemberStatus;
+  joinDate: string;
+  permissions: Permission[];
+  teamId: string;
+}
+
+// ==================== 目标 ====================
+export interface Goal {
+  id: string;
+  title: string;
+  description: string;
+  type: GoalType;
+  status: GoalStatus;
+  approvalStatus?: GoalApprovalStatus;
+  priority: TaskPriority;
+  parentId: string | null;
+  level: number;
+  category: string;
+  /** 应用类型：personal=智简协作(TBH), enterprise=智企中台(TBH-Next) */
+  appType: AppType;
   startDate: string;
   endDate: string;
-  status: SeasonStatus;
+  leaderId: string;
+  supporterIds: string[];
+  tags: string[];
+  keyResults: KeyResult[];
+  selectedKRIds: string[];
+  attachments: Attachment[];
+  trackingRecords: TrackingRecord[];
+  repeatCycle: RepeatCycle;
+  progress: number;
+  dualTrack?: DualTrackSummary;
+  canvasX?: number;
+  canvasY?: number;
+  discussionThreadId: string | null;
+  summary: string;
   teamId: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+// ==================== 项目 ====================
+export interface Project {
+  id: string;
+  title: string;
+  description: string;
+  goalId: string | null;
+  parentId: string | null;
+  status: ProjectStatus;
+  priority: TaskPriority;
+  startDate: string;
+  endDate: string;
+  leaderId: string;
+  supporterIds: string[];
+  tags: string[];
+  category: string;
+  /** 应用类型：personal=智简协作(TBH), enterprise=智企中台(TBH-Next) */
+  appType: AppType;
+  attachments: Attachment[];
+  trackingRecords: TrackingRecord[];
+  repeatCycle: RepeatCycle;
+  taskCount: number;
+  progress: number;
+  canvasX?: number;
+  canvasY?: number;
+  discussionThreadId: string | null;
+  summary: string;
+  teamId: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+// ==================== 子任务 ====================
+export interface SubTask {
+  id: string;
+  title: string;
+  completed: boolean;
+  priority: TaskPriority;
+  dueDate: string | null;
+  reminderDate: string | null;
+  leaderId: string;
+  supporterIds: string[];
+  tags: string[];
+  attachments: Attachment[];
+  trackingRecords: TrackingRecord[];
+  repeatCycle: RepeatCycle;
+  createdAt: string;
+}
+
+// ==================== 讨论/评论 ====================
+export interface Comment {
+  id: string;
+  itemId: string;
+  itemType: ItemType;
+  memberId: string;
+  memberName: string;
+  content: string;
+  mentionedMemberIds: string[];
+  isRead: boolean;
+  followUpRequired: boolean;
+  followUpStatus: 'none' | 'pending' | 'completed';
+  createdAt: string;
+}
+
+// ==================== 应用类型 ====================
+export type AppType = 'personal' | 'enterprise';
+
+// ==================== 任务 ====================
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  projectId: string | null;
+  goalId: string | null;
+  parentId: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  leaderId: string;
+  supporterIds: string[];
+  tags: string[];
+  category: string;
+  /** 应用类型：personal=智简协作(TBH), enterprise=智企中台(TBH-Next) */
+  appType: AppType;
+  startDate: string | null;
+  dueDate: string | null;
+  reminderDate: string | null;
+  completedAt: string | null;
+  subtasks: SubTask[];
+  attachments: Attachment[];
+  trackingRecords: TrackingRecord[];
+  repeatCycle: RepeatCycle;
+  blockedBy: string[]; // IDs of prerequisite tasks that must be completed first
+  sprintId: string | null; // ID of the associated sprint
+  krId?: string; // 关联的关键结果ID（任务完成时自动更新该KR的currentValue）
+  teamId: string;
+  canvasX?: number;
+  canvasY?: number;
+  discussionThreadId: string | null;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+// ==================== 关联/通知/活动/标签 ====================
+export interface ItemLink {
+  id: string;
+  sourceId: string;
+  sourceType: ItemType;
+  targetId: string;
+  targetType: ItemType;
+  label?: string;
+  createdAt: string;
+}
+
+export interface Notification {
+  id: string;
+  type: 'reminder' | 'overdue' | 'assigned' | 'mentioned' | 'sync' | 'error';
+  title: string;
+  message: string;
+  relatedId: string;
+  relatedType: ItemType;
+  memberId: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface BatchOperation {
+  id: string;
+  itemType: ItemType;
+  operation: 'delete' | 'update_status' | 'move' | 'assign';
+  targetIds: string[];
+  updates?: Record<string, any>;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface Activity {
+  id: string;
+  memberId: string;
+  action: string;
+  targetType: ItemType;
+  targetId: string;
+  targetTitle: string;
+  details: string;
+  createdAt: string;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+// (Permission defined above as template literal type)
+
+// ==================== 团队 ====================
+export interface Team {
+  id: string;
+  name: string;
+  description: string;
+  avatar: string;
+  inviteCode: string;
+  ownerId: string;
+  settings: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==================== 团队成员关系 ====================
+export interface TeamMember {
+  id: string;
+  teamId: string;
+  memberId: string;
+  role: MemberRole;
+  permissions: Permission[];
+  joinedAt: string;
+}
+
+// ==================== 自定义分类 ====================
+export interface Category {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+  appliesTo: ItemType[];
+  createdAt: string;
+}
+
+// ==================== 模板/工具库 ====================
+export interface Template {
+  id: string;
+  title: string;
+  description: string;
+  type: 'goal' | 'project' | 'task' | 'document';
+  content: string;
+  createdBy: string;
+  updatedBy: string;
+  isPublic: boolean;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==================== 日程 ====================
+export interface ScheduleEvent {
+  id: string;
+  title: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  allDay: boolean;
+  color: string;
+  linkedItemId: string | null;
+  linkedItemType: ItemType | null;
+  memberId: string;
+  repeatCycle: RepeatCycle;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==================== 常用网址 ====================
+export interface Bookmark {
+  id: string;
+  title: string;
+  url: string;
+  category: string;
+  icon: string;
+  order: number;
+  memberId?: string;
+  createdAt: string;
+}
+
+// ==================== 个人知识库 ====================
+export interface Knowledge {
+  id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  memberId: string;
+  relatedItems: { itemId: string; itemType: 'goal' | 'project' | 'task' }[];
+  color?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==================== 记事本 ====================
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  folder: string;
+  color: string;
+  isPinned: boolean;
+  category: string;
+  tags: string[];
+  linkedItemId: string | null;
+  linkedItemType: ItemType | null;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==================== 状态流转规则 ====================
+export interface StatusFlowRule {
+  id: string;
+  itemType: ItemType;
+  fromStatus: string;
+  toStatus: string;
+  allowedRoles: MemberRole[]; // empty = all roles
+  autoActions?: StatusFlowAutoAction[];
+  enabled?: boolean;
+  name?: string;
+}
+
+export interface StatusFlowAutoAction {
+  type: 'notify' | 'set_field' | 'create_subtask' | 'assign';
+  config: Record<string, string>;  // e.g. { field: 'priority', value: 'high' } or { title: 'Follow-up task' }
+}
+
+// ==================== 自动化规则 ====================
+export type AutomationTrigger = 'status_change' | 'due_arrive' | 'item_created' | 'field_change' | 'kr_lag' | 'overdue';
+export type AutomationAction = 'notify' | 'set_field' | 'create_subtask' | 'assign' | 'escalation' | 'ai_action';
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  itemType: ItemType;
+  trigger: AutomationTrigger;
+  condition: { field: string; operator: 'eq' | 'neq' | 'contains' | 'empty' | 'not_empty' | 'gt' | 'lt'; value: string };
+  actions: { type: AutomationAction; config: Record<string, string> }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -261,7 +490,6 @@ export interface BackupData {
   projects: Project[];
   tasks: Task[];
   notifications: Notification[];
-  notificationPreferences: NotificationPreference[];
   activities: Activity[];
   itemLinks: ItemLink[];
   tags: Tag[];
@@ -315,14 +543,6 @@ export interface Subscription {
   updatedAt: string;
 }
 
-export interface InstalledAgent {
-  id: string;
-  agentId: string;
-  teamId: string;
-  memberId: string;
-  installedAt: string;
-}
-
 export interface ApprovalAudit {
   id: string;
   goalId: string;
@@ -332,56 +552,6 @@ export interface ApprovalAudit {
   createdAt: string;
 }
 
-// ==================== Outlook 集成 ====================
-
-export interface OutlookCalendarEvent {
-  id: string;                       // Graph event ID
-  memberId: string;
-  subject: string;
-  bodyPreview: string;
-  startTime: string;                // ISO 8601
-  endTime: string;                  // ISO 8601
-  isAllDay: boolean;
-  location: string;
-  isRecurring: boolean;
-  seriesMasterId: string | null;
-  sensitivity: 'normal' | 'personal' | 'private' | 'confidential';
-  outlookLink: string | null;
-  linkedItemId: string | null;      // 关联的 TBH 任务/目标/项目 ID
-  linkedItemType: 'task' | 'goal' | 'project' | null;
-  etag: string | null;              // 增量同步用
-  lastSyncedAt: string;
-  createdAt: string;
-}
-
-export interface OutlookMailSummary {
-  id: string;                       // Graph message ID
-  memberId: string;
-  subject: string;
-  senderName: string;
-  senderEmail: string;
-  receivedAt: string;               // ISO 8601
-  isRead: boolean;
-  importance: 'low' | 'normal' | 'high';
-  hasAttachments: boolean;
-  outlookLink: string | null;
-  linkedItemId: string | null;
-  linkedItemType: 'task' | 'goal' | 'project' | null;
-  etag: string | null;
-  lastSyncedAt: string;
-}
-
-export interface OutlookTokenData {
-  provider: 'microsoft';
-  connectionMethod: 'manual' | 'oauth';  // 手动 token 输入 vs OAuth 流程
-  accessToken: string;
-  refreshToken: string | null;
-  expiresAt: string;                // ISO 8601
-  scope: string;
-  providerAccountId: string | null; // 微软用户 OID
-  connectedEmail: string | null;
-}
-
 // ==================== 应用状态 ====================
 export interface AppState {
   members: Member[];
@@ -389,7 +559,6 @@ export interface AppState {
   projects: Project[];
   tasks: Task[];
   notifications: Notification[];
-  notificationPreferences: NotificationPreference[];
   activities: Activity[];
   itemLinks: ItemLink[];
   tags: Tag[];
@@ -406,26 +575,10 @@ export interface AppState {
   statusFlowRules: StatusFlowRule[];
   automationRules: AutomationRule[];
   sprints: Sprint[];
-  seasons: OKRSeason[];
-  reviewSessions: ReviewSession[];
-  budgets: Budget[];
-  costEntries: CostEntry[];
-  performanceReviews: PerformanceReview[];
-  skillRatings: SkillRating[];
-  effectivenessMetrics: EffectivenessMetric[];
-  aiSuggestions: AISuggestion[];
-  reviewKnowledge: ReviewKnowledge[];
-  okrScores: OKRScore[];
-  capacityPlans: CapacityPlan[];
-  dstePhases: DSTEPhase[];
-  businessValues: BusinessValueEntry[];
   teams: Team[];
   teamMembers: TeamMember[];
   subscriptions: Subscription[];
-  installedAgents: InstalledAgent[];
   approvalAudits: ApprovalAudit[];
-  outlookCalendarEvents: OutlookCalendarEvent[];
-  outlookMailSummary: OutlookMailSummary[];
   currentUser: Member | null;
   viewingMemberId: string | null;
   currentTeamId: string | null;

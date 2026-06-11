@@ -15,7 +15,7 @@ let _queue: Array<{
   eventType: string;
   entityType?: string;
   entityId?: string;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, any>;
 }> = [];
 let _flushTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -45,11 +45,11 @@ function enqueue(event: typeof _queue[0]) {
 }
 
 // Action → 行为事件映射
-const ACTION_BEHAVIOR_MAP: Record<string, (action: Action) => {
+const ACTION_BEHAVIOR_MAP: Record<string, (action: any) => {
   eventType: string;
   entityType?: string;
   entityId?: string;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, any>;
 } | null> = {
   // 任务行为
   ADD_TASK: (a) => ({
@@ -210,5 +210,29 @@ export function trackAISuggestion(suggestionId: string, accepted: boolean) {
     entityType: 'ai_suggestion',
     entityId: suggestionId,
     metadata: {},
+  });
+}
+
+// AI 意图解析追踪 — Week1 P0 新增
+export function trackAIIntent(intentType: string, actionId: string | undefined, confidence: number, source: 'llm' | 'keyword', fallback: boolean) {
+  if (!_currentUserId) return;
+  enqueue({
+    userId: _currentUserId,
+    eventType: 'ai.intent_parsed',
+    entityType: 'ai_intent',
+    entityId: actionId || 'unknown',
+    metadata: { intentType, confidence, source, fallback },
+  });
+}
+
+// AI 对话追踪 — Week1 P0 新增
+export function trackAIChat(messageLength: number, responseType: 'action' | 'query' | 'chat' | 'error') {
+  if (!_currentUserId) return;
+  enqueue({
+    userId: _currentUserId,
+    eventType: 'ai.chat_interaction',
+    entityType: 'ai_chat',
+    entityId: '',
+    metadata: { messageLength, responseType },
   });
 }

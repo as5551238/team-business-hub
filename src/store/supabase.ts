@@ -1,8 +1,7 @@
-import { handleError } from '@/lib/errorHandler';
 import type { AppState, Goal, Project, Task, Member, SubTask } from '@/types';
 import { getSupabaseClient } from '@/supabase/client';
 import { STORAGE_KEY, CURRENT_USER_KEY, ensureAppStateDefaults, toCamel, toSnake } from './types';
-import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge, NotificationPreference, OKRSeason, Budget, CostEntry, PerformanceReview, EffectivenessMetric, AISuggestion, Subscription, InstalledAgent } from '@/types';
+import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge } from '@/types';
 import { initFactoryRulesIfNeeded } from './shared';
 
 export function saveLocalStateImmediate(state: AppState) {
@@ -18,7 +17,7 @@ export function saveLocalStateImmediate(state: AppState) {
     }
     localStorage.setItem(CURRENT_USER_KEY, state.currentUser?.id || '');
   } catch (e) {
-    handleError(e, { module: 'store', operation: 'LS_WRITE_STATE', severity: 'debug' });
+    console.error('[saveLocalState] localStorage write failed (possibly full):', e);
   }
 }
 
@@ -31,14 +30,14 @@ export function loadLocalState(): AppState {
         localStorage.setItem(STORAGE_KEY, legacy);
         localStorage.removeItem('team-business-hub-data');
       }
-    } catch (e) { handleError(e, { module: 'store', operation: 'LS_MIGRATE_LEGACY', severity: 'debug' }); }
+    } catch (e) { console.warn('[loadLocalState] legacy key migration failed:', e); }
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed && typeof parsed === 'object') return ensureAppStateDefaults(parsed);
     }
   } catch (e) {
-    handleError(e, { module: 'store', operation: 'LS_LOAD_STATE', severity: 'debug' });
+    console.error('[loadLocalState] failed to load state:', e);
   }
   // 首次初始化：生成空数据（不生成示例数据）
   const emptyState = ensureAppStateDefaults({
@@ -74,7 +73,7 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
   if (!sb) return null;
   const tid = teamId || _currentTeamId || '__default__';
   try {
-    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes, notifPrefsRes, seasonsRes, budgetsRes, costEntriesRes, perfReviewsRes, effMetricsRes, aiSuggRes, subscriptionsRes, installedAgentsRes] = await Promise.allSettled([
+    const [membersRes, goalsRes, projectsRes, tasksRes, notifsRes, actsRes, linksRes, reviewsRes, categoriesRes, templatesRes, scheduleRes, notesRes, commentsRes, tagsRes, bookmarksRes, savedViewsRes, statusFlowRulesRes, automationRulesRes, sprintsRes, knowledgeRes, teamsRes, teamMembersRes] = await Promise.allSettled([
       sb.from('members').select('*').eq('status', 'active').order('join_date'),
       sb.from('goals').select('*').eq('team_id', tid).order('level'),
       sb.from('projects').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
@@ -97,29 +96,20 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       sb.from('knowledge').select('*').eq('team_id', tid).order('updated_at', { ascending: false }),
       sb.from('teams').select('*').order('created_at'),
       sb.from('team_members').select('*'),
-      sb.from('notification_preferences').select('*').eq('team_id', tid),
-      sb.from('okr_seasons').select('*').eq('team_id', tid).order('start_date', { ascending: false }),
-      sb.from('budgets').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
-      sb.from('cost_entries').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
-      sb.from('performance_reviews').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
-      sb.from('effectiveness_metrics').select('*').eq('team_id', tid).order('measured_at', { ascending: false }),
-      sb.from('ai_suggestions').select('*').eq('team_id', tid).order('created_at', { ascending: false }),
-      sb.from('subscriptions').select('*').order('created_at', { ascending: false }),
-      sb.from('installed_agents').select('*').eq('team_id', tid).order('installed_at', { ascending: false }),
     ]);
-    const val = (r: PromiseSettledResult<unknown>) => r.status === 'fulfilled' ? r.value : null;
-    const data = (r: { data?: unknown } | null) => Array.isArray(r?.data) ? r.data : [];
+    const val = (r: PromiseSettledResult<any>) => r.status === 'fulfilled' ? r.value : null;
+    const data = (r: any) => Array.isArray(r?.data) ? r.data : [];
     const membersRes0 = val(membersRes);
     if (membersRes0?.error) { console.error('Supabase fetch error [members]:', membersRes0.error); return null; }
 
     // Filter members to those in the current team
     const allMembers = data(membersRes0).map(toCamel) as Member[];
     const teamMemberLinks = data(val(teamMembersRes)).map(toCamel);
-    const memberIdsInTeam = new Set(teamMemberLinks.filter((tm: { teamId: string }) => tm.teamId === tid).map((tm: { memberId: string }) => tm.memberId));
+    const memberIdsInTeam = new Set(teamMemberLinks.filter((tm: any) => tm.teamId === tid).map((tm: any) => tm.memberId));
     const teamMembers = allMembers.filter(m => memberIdsInTeam.has(m.id) || m.teamId === tid);
 
     let savedUserId: string | null = null;
-    try { savedUserId = localStorage.getItem(CURRENT_USER_KEY); } catch (e) { handleError(e, { module: 'store', operation: 'LS_READ_USER', severity: 'debug' }); }
+    try { savedUserId = localStorage.getItem(CURRENT_USER_KEY); } catch {}
     const savedUser = savedUserId ? teamMembers.find(m => m.id === savedUserId) : null;
 
     return ensureAppStateDefaults({
@@ -136,7 +126,6 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       scheduleEvents: data(val(scheduleRes)).map(toCamel) as ScheduleEvent[],
       notes: data(val(notesRes)).map(toCamel) as Note[],
       comments: data(val(commentsRes)).map(toCamel) as Comment[],
-      notificationPreferences: data(val(notifPrefsRes)).map(toCamel) as NotificationPreference[],
       currentUser: savedUser || null,
       tags: data(val(tagsRes)).map(toCamel),
       bookmarks: data(val(bookmarksRes)).map(toCamel) as Bookmark[],
@@ -145,73 +134,31 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
       automationRules: initFactoryRulesIfNeeded(data(val(automationRulesRes)).map(toCamel)),
       sprints: data(val(sprintsRes)).map(toCamel),
       knowledge: data(val(knowledgeRes)).map(toCamel) as Knowledge[],
-      seasons: data(val(seasonsRes)).map(toCamel) as OKRSeason[],
-      budgets: (data(val(budgetsRes)).map(toCamel) as (Budget & Record<string, unknown>)[]).map(b => ({
-        ...b, items: typeof b.items === 'string' ? JSON.parse(b.items) : (Array.isArray(b.items) ? b.items : []),
-      })),
-      costEntries: data(val(costEntriesRes)).map(toCamel) as CostEntry[],
-      performanceReviews: (data(val(perfReviewsRes)).map(toCamel) as (PerformanceReview & Record<string, unknown>)[]).map(r => ({
-        ...r, status: r.status ?? 'pending', selfReview: typeof r.selfReview === 'string' ? JSON.parse(r.selfReview) : r.selfReview ?? null,
-        peerReviews: typeof r.peerReviews === 'string' ? JSON.parse(r.peerReviews) : Array.isArray(r.peerReviews) ? r.peerReviews : [],
-        managerReview: typeof r.managerReview === 'string' ? JSON.parse(r.managerReview) : r.managerReview ?? null,
-        directReportReviews: typeof r.directReportReviews === 'string' ? JSON.parse(r.directReportReviews) : Array.isArray(r.directReportReviews) ? r.directReportReviews : [],
-        aiSummary: r.aiSummary ?? null, finalScore: r.finalScore ?? null, completedAt: r.completedAt ?? null,
-      })),
-      effectivenessMetrics: data(val(effMetricsRes)).map(toCamel) as EffectivenessMetric[],
-      aiSuggestions: data(val(aiSuggRes)).map(toCamel) as AISuggestion[],
-      subscriptions: data(val(subscriptionsRes)).map(toCamel) as Subscription[],
-      installedAgents: data(val(installedAgentsRes)).map(toCamel) as InstalledAgent[],
       teams: data(val(teamsRes)).map(toCamel),
       teamMembers: teamMemberLinks,
       currentTeamId: tid,
     });
-  } catch (e) { handleError(e, { module: 'store', operation: 'DB_FETCH_ALL', severity: 'error' }); return null; }
+  } catch (e) { console.error('Supabase fetch failed:', e); return null; }
 }
 
 // Module-level write error callback — set by StoreProvider to dispatch ADD_NOTIFICATION
 let _onWriteError: ((msg: string) => void) | null = null;
 export function setOnWriteError(cb: (msg: string) => void) { _onWriteError = cb; }
 
-// S3-1a: Conflict callback — set by StoreProvider to fetch latest & dispatch REALTIME_UPSERT
-let _onConflict: ((table: string, id: string) => void) | null = null;
-export function setOnConflict(cb: (table: string, id: string) => void) { _onConflict = cb; }
-
 // Failed write queue — persisted to localStorage so tab close doesn't lose data.
-// S3-1c: SerializedWriteOp for cross-page replay
-interface SerializedWriteOp {
-  op: 'update' | 'insert' | 'delete' | 'upsert';
-  table: string;
-  id?: string;           // for update/delete
-  data?: Record<string, unknown>;  // for update/insert
-  dataArray?: Record<string, unknown>[];  // for upsert (batch)
-  oldUpdatedAt?: string;  // for optimistic lock replay
-}
-interface PendingWrite { fn: () => Promise<unknown>; label: string; addedAt: number; version: number; serialized?: SerializedWriteOp; }
+interface PendingWrite { fn: () => Promise<any>; label: string; addedAt: number; version: number; serialized?: string; }
 const failedWrites: PendingWrite[] = [];
 const PENDING_WRITES_KEY = 'tbh-pending-writes';
 const MAX_PENDING_WRITES = 100;
 let _writeVersion = 0;
 export function bumpWriteVersion() { _writeVersion++; }
 
-// S3-1c: Auto-retry interval (30s)
-let _retryIntervalId: ReturnType<typeof setInterval> | null = null;
-export function startAutoRetry() {
-  if (_retryIntervalId) return;
-  _retryIntervalId = setInterval(() => {
-    if (failedWrites.length > 0) replayFailedWrites();
-  }, 30000);
-}
-export function stopAutoRetry() {
-  if (_retryIntervalId) { clearInterval(_retryIntervalId); _retryIntervalId = null; }
-}
-
 // Persist pending writes metadata to localStorage (for crash/tab-close resilience)
-// S3-1c: includes serialized op for cross-page replay
 function persistPendingMeta() {
   try {
     const meta = failedWrites.map(w => ({ label: w.label, addedAt: w.addedAt, version: w.version, serialized: w.serialized }));
     localStorage.setItem(PENDING_WRITES_KEY, JSON.stringify(meta));
-  } catch (e) { handleError(e, { module: 'store', operation: 'LS_WRITE_PENDING', severity: 'debug' }); }
+  } catch {}
 }
 function loadPendingMeta() {
   try {
@@ -219,65 +166,26 @@ function loadPendingMeta() {
     if (!raw) return;
     const meta = JSON.parse(raw);
     if (!Array.isArray(meta)) return;
-    // S3-1c: Reconstruct fn from serialized op for cross-page replay
+    // Note: fn callbacks can't be serialized — these are informational only
+    // Actual replay only works within the same session; persisted items serve as audit trail
     for (const m of meta) {
-      if (failedWrites.length >= MAX_PENDING_WRITES) break;
-      const fn = reconstructFn(m.serialized);
-      failedWrites.push({ fn, label: m.label || 'unknown', addedAt: m.addedAt || Date.now(), version: m.version || 0, serialized: m.serialized });
+      if (failedWrites.length < MAX_PENDING_WRITES) {
+        failedWrites.push({ fn: async () => {}, label: m.label, addedAt: m.addedAt, version: m.version, serialized: m.serialized });
+      }
     }
-    // Auto-start retry if there are pending writes
-    if (failedWrites.length > 0) startAutoRetry();
-  } catch (e) { handleError(e, { module: 'store', operation: 'LS_LOAD_PENDING', severity: 'debug' }); }
-}
-
-/** S3-1c: Reconstruct a Supabase write function from a serialized operation */
-function reconstructFn(sop: SerializedWriteOp | undefined): () => Promise<unknown> {
-  if (!sop) return async () => {};
-  const sb = getSupabaseClient();
-  if (!sb) return async () => {};
-  switch (sop.op) {
-    case 'update':
-      return async () => {
-        let q = sb.from(sop.table).update(filterColumns(sop.table, sop.data || {}), { count: 'exact' }).eq('id', sop.id || '');
-        if (sop.oldUpdatedAt) q = q.eq('updated_at', sop.oldUpdatedAt);
-        const res = await q;
-        if (res.error) throw res.error;
-      };
-    case 'insert':
-      return async () => {
-        const res = await sb.from(sop.table).upsert(filterColumns(sop.table, toSnake(sop.data || {})), { onConflict: 'id' });
-        if (res.error) throw res.error;
-      };
-    case 'delete':
-      return async () => {
-        const res = await sb.from(sop.table).delete().eq('id', sop.id || '');
-        if (res.error) throw res.error;
-      };
-    case 'upsert':
-      return async () => {
-        const snakeData = (sop.dataArray || []).map(d => filterColumns(sop.table, toSnake(d)));
-        for (let i = 0; i < snakeData.length; i += 100) {
-          const res = await sb.from(sop.table).upsert(snakeData.slice(i, i + 100), { onConflict: 'id' });
-          if (res.error) throw res.error;
-        }
-      };
-    default:
-      return async () => {};
-  }
+  } catch {}
 }
 loadPendingMeta();
 
-async function withRetry(fn: () => Promise<unknown>, retries = 2, label = 'write', serialized?: SerializedWriteOp): Promise<void> {
+async function withRetry(fn: () => Promise<any>, retries = 2, label = 'write'): Promise<void> {
   for (let i = 0; i <= retries; i++) {
     try { await fn(); _writeVersion++; return; } catch (e: unknown) {
       if (i === retries) {
-        handleError(e, { module: 'store', operation: `DB_WRITE_${label.toUpperCase()}` as 'DB_WRITE_GOALS', severity: 'error' });
+        console.error(`Supabase ${label} failed after retries:`, e);
         // Queue for replay on reconnect instead of silently losing data
         if (failedWrites.length < MAX_PENDING_WRITES) {
-          failedWrites.push({ fn, label, addedAt: Date.now(), version: _writeVersion, serialized });
+          failedWrites.push({ fn, label, addedAt: Date.now(), version: _writeVersion });
           persistPendingMeta();
-          // S3-1c: auto-start retry timer
-          startAutoRetry();
         }
         _onWriteError?.('数据同步失败，已自动重试。请检查网络后刷新页面。');
         return;
@@ -287,76 +195,64 @@ async function withRetry(fn: () => Promise<unknown>, retries = 2, label = 'write
   }
 }
 
-/** Replay all queued failed writes — called when connection is restored or by auto-retry timer */
+/** Replay all queued failed writes — called when connection is restored */
 export async function replayFailedWrites(): Promise<void> {
   if (failedWrites.length === 0) return;
   const batch = failedWrites.splice(0, failedWrites.length);
   persistPendingMeta(); // Clear persisted list since we're replaying
+  if (import.meta.env.DEV) console.log(`[Supabase] Replaying ${batch.length} queued writes...`);
   for (const pw of batch) {
     // Skip writes from stale versions — newer writes may have already made this obsolete
-    if (pw.version < _writeVersion) {continue;
+    if (pw.version < _writeVersion) {
+      if (import.meta.env.DEV) console.log(`[Supabase] Skipping stale write for ${pw.label} (v${pw.version} < v${_writeVersion})`);
+      continue;
     }
-    try { await pw.fn(); _writeVersion++; } catch (e) {
-      handleError(e, { module: 'store', operation: 'DB_WRITE_REPLAY', severity: 'error' });
+    try { await pw.fn(); } catch (e) {
+      console.error(`[Supabase] Replay failed for ${pw.label}:`, e);
       if (failedWrites.length < MAX_PENDING_WRITES) {
         failedWrites.push({ ...pw, addedAt: Date.now(), version: _writeVersion });
         persistPendingMeta();
       }
     }
   }
-  // S3-1c: stop auto-retry if queue is now empty
-  if (failedWrites.length === 0) stopAutoRetry();
 }
 
 /** Whitelist of DB columns per table — prevents sending unknown columns that cause 400 errors */
 const TABLE_COLUMNS: Record<string, Set<string> | null> = {
-  goals: new Set(['id','title','description','type','status','parent_id','level','start_date','end_date','owner_id','key_results','progress','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','selected_kr_ids','team_id','deleted_at','season_id','strategy_level','approval_status']),
-  projects: new Set(['id','title','description','goal_id','status','start_date','end_date','owner_id','member_ids','task_count','progress','created_at','updated_at','leader_id','supporter_ids','parent_id','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','team_id','deleted_at']),
-  tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','start_date','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','blocked_by','sprint_id','story_points','team_id','deleted_at']),
+  goals: new Set(['id','title','description','type','status','parent_id','level','start_date','end_date','owner_id','key_results','progress','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','selected_kr_ids','team_id','deleted_at','app_type']),
+  projects: new Set(['id','title','description','goal_id','status','start_date','end_date','owner_id','member_ids','task_count','progress','created_at','updated_at','leader_id','supporter_ids','parent_id','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','team_id','deleted_at','app_type']),
+  tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','start_date','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','blocked_by','sprint_id','team_id','deleted_at','app_type']),
   members: new Set(['id','name','role','department','avatar','email','status','join_date','created_at','updated_at','nickname','phone','wechat_id','permissions','team_id']),
-  notifications: new Set(['id','type','title','message','related_id','related_type','member_id','read','created_at','team_id','level']),
-  notification_preferences: new Set(['id','member_id','item_id','item_type','muted','created_at','team_id']),
+  notifications: new Set(['id','type','title','message','related_id','related_type','member_id','read','created_at','team_id']),
   activities: new Set(['id','member_id','action','target_type','target_id','target_title','details','created_at','team_id']),
   behavior_events: new Set(['id','user_id','event_type','entity_type','entity_id','metadata','created_at']),
   item_links: new Set(['id','source_id','source_type','target_id','target_type','label','created_at','team_id']),
   reviews: new Set(['id','period','period_start','period_end','member_id','content','improvements','metrics','created_at','updated_at','team_id']),
-  categories: new Set(['id','name','color','icon','applies_to','created_at','updated_at','team_id']),
+  categories: new Set(['id','name','color','icon','applies_to','created_at','team_id']),
   tags: new Set(['id','name','color','created_at','updated_at','team_id']),
   templates: new Set(['id','title','description','type','content','created_by','updated_by','is_public','category','created_at','updated_at','team_id']),
   schedule_events: new Set(['id','title','description','start_date','end_date','all_day','color','linked_item_id','linked_item_type','member_id','repeat_cycle','created_at','updated_at','team_id']),
   notes: new Set(['id','title','content','folder','color','is_pinned','linked_item_id','linked_item_type','created_by','updated_by','created_at','updated_at','category','tags','team_id']),
-  comments: new Set(['id','item_id','item_type','member_id','member_name','content','created_at','mentioned_member_ids','is_read','follow_up_required','follow_up_status','team_id','parent_id','attachments']),
-  bookmarks: new Set(['id','title','url','category','icon','order','member_id','created_at','updated_at','team_id']),
+  comments: new Set(['id','item_id','item_type','member_id','member_name','content','created_at','mentioned_member_ids','is_read','follow_up_required','follow_up_status','team_id']),
+  bookmarks: new Set(['id','title','url','category','icon','order','member_id','created_at','team_id']),
   saved_views: new Set(['id','name','type','filters','filter_logic','member_id','updated_at','created_at','team_id']),
   status_flow_rules: new Set(['id','from_status','to_status','allowed_roles','auto_actions','created_at','updated_at','team_id']),
   automation_rules: new Set(['id','name','enabled','item_type','trigger','condition','actions','created_at','updated_at','team_id']),
   sprints: new Set(['id','name','start_date','end_date','goal_ids','status','created_at','updated_at','team_id']),
-  knowledge: new Set(['id','title','content','tags','member_id','related_items','created_at','updated_at','team_id','color']),
+  knowledge: new Set(['id','title','content','tags','member_id','related_items','created_at','updated_at','team_id']),
   teams: new Set(['id','name','description','avatar','invite_code','owner_id','settings','created_at','updated_at']),
   team_members: new Set(['id','team_id','member_id','role','permissions','joined_at']),
-  okr_seasons: new Set(['id','name','type','start_date','end_date','status','team_id','created_at','updated_at']),
-  budgets: new Set(['id','project_id','season_id','name','total_amount','currency','status','items','approved_by','team_id','created_at','updated_at']),
-  cost_entries: new Set(['id','budget_id','project_id','task_id','category','amount','description','recorded_by','recorded_at','approved_by','status','team_id','created_at']),
-  performance_reviews: new Set(['id','season_id','reviewee_id','status','self_review','peer_reviews','manager_review','direct_report_reviews','ai_summary','final_score','team_id','created_at','completed_at']),
-  effectiveness_metrics: new Set(['id','goal_id','business_value','effort_hours','impact_score','roi','measured_at','team_id']),
-  ai_suggestions: new Set(['id','source_type','source_id','content','status','adopted_at','outcome_rating','outcome_note','team_id','created_at']),
-  review_knowledge: new Set(['id','source_session_id','pattern','context','related_patterns','ai_extracted','team_id','created_at']),
-  capacity_plans: new Set(['id','period','available_hours','planned_hours','forecast_hours','gap','team_id','created_at']),
-  dste_phases: new Set(['id','season_id','phase','status','ai_auto_progress','completed_at','checklist','team_id']),
-  business_values: new Set(['id','goal_id','input_cost','output_value','roi','value_stream','measured_at','team_id']),
-  subscriptions: new Set(['id','team_id','tier','status','stripe_customer_id','stripe_subscription_id','current_period_start','current_period_end','trial_ends_at','created_at','updated_at']),
-  installed_agents: new Set(['id','agent_id','team_id','member_id','installed_at']),
 };
 
 /** Columns that reference other tables via FK — empty strings must become null */
-const FK_COLUMNS = new Set(['owner_id','leader_id','supporter_ids','assignee_id','parent_id','goal_id','project_id','member_id','linked_item_id','source_id','target_id','related_id','item_id','created_by','updated_by','season_id','budget_id','task_id','approved_by','recorded_by']);
+const FK_COLUMNS = new Set(['owner_id','leader_id','supporter_ids','assignee_id','parent_id','goal_id','project_id','member_id','linked_item_id','source_id','target_id','related_id','item_id','created_by','updated_by']);
 
 /** Remove keys not present in DB table schema to avoid PostgREST 400 errors.
  *  Converts empty strings to null only for FK columns (Postgres treats '' as non-null). */
-function filterColumns(table: string, snakeData: Record<string, unknown>): Record<string, unknown> {
+function filterColumns(table: string, snakeData: Record<string, any>): Record<string, any> {
   const allowed = TABLE_COLUMNS[table];
   if (!allowed) return snakeData; // unknown table — pass through (e.g. bookmarks/saved_views)
-  const filtered: Record<string, unknown> = {};
+  const filtered: Record<string, any> = {};
   for (const [k, v] of Object.entries(snakeData)) {
     if (!allowed.has(k)) continue;
     filtered[k] = (v === '' && FK_COLUMNS.has(k)) ? null : v;
@@ -364,26 +260,22 @@ function filterColumns(table: string, snakeData: Record<string, unknown>): Recor
   return filtered;
 }
 
-export async function supabaseUpsert(table: string, data: Record<string, unknown> | Record<string, unknown>[]) {
+export async function supabaseUpsert(table: string, data: Record<string, any> | Record<string, any>[]) {
   const sb = getSupabaseClient();
   if (!sb) return;
   const arr = Array.isArray(data) ? data : [data];
   const snakeData = arr.map(d => filterColumns(table, toSnake(d)));
-  // S3-1c: serialize write intent for cross-page replay
-  const serialized: SerializedWriteOp = { op: 'upsert', table, dataArray: arr };
   await withRetry(async () => {
     for (let i = 0; i < snakeData.length; i += 100) {
       const res = await sb.from(table).upsert(snakeData.slice(i, i + 100), { onConflict: 'id' });
       if (res.error) throw res.error;
     }
-  }, 2, `upsert_${table}`, serialized);
+  });
 }
 
-export async function supabaseUpdate(table: string, id: string, data: Record<string, unknown>, oldUpdatedAt?: string) {
+export async function supabaseUpdate(table: string, id: string, data: Record<string, any>, oldUpdatedAt?: string) {
   const sb = getSupabaseClient();
   if (!sb) return;
-  // S3-1c: serialize write intent for cross-page replay
-  const serialized: SerializedWriteOp = { op: 'update', table, id, data, oldUpdatedAt };
   await withRetry(async () => {
     let q = sb.from(table).update(filterColumns(table, toSnake(data)), { count: 'exact' }).eq('id', id);
     // Optimistic locking (DAT-01): only apply if record hasn't changed since last read
@@ -393,33 +285,27 @@ export async function supabaseUpdate(table: string, id: string, data: Record<str
     // If optimistic lock was specified but no rows affected, data was modified elsewhere
     if (oldUpdatedAt && res.count === 0) {
       console.warn(`[supabaseUpdate] optimistic lock conflict: ${table}/${id}`);
-      _onWriteError?.('数据已被其他人修改，正在刷新最新数据…');
-      // S3-1a: Auto-rollback — fetch latest version and notify store
-      _onConflict?.(table, id);
+      _onWriteError?.('数据已被其他人修改，请刷新页面后重试。');
     }
-  }, 2, `update_${table}`, serialized);
+  });
 }
 
-export async function supabaseInsert(table: string, data: Record<string, unknown>) {
+export async function supabaseInsert(table: string, data: Record<string, any>) {
   const sb = getSupabaseClient();
   if (!sb) return;
-  // S3-1c: serialize write intent for cross-page replay
-  const serialized: SerializedWriteOp = { op: 'insert', table, data };
   await withRetry(async () => {
     const res = await sb.from(table).upsert(filterColumns(table, toSnake(data)), { onConflict: 'id' });
     if (res.error) throw res.error;
-  }, 2, `insert_${table}`, serialized);
+  });
 }
 
 export async function supabaseDelete(table: string, id: string) {
   const sb = getSupabaseClient();
   if (!sb) return;
-  // S3-1c: serialize write intent for cross-page replay
-  const serialized: SerializedWriteOp = { op: 'delete', table, id };
   await withRetry(async () => {
     const res = await sb.from(table).delete().eq('id', id);
     if (res.error) throw res.error;
-  }, 2, `delete_${table}`, serialized);
+  });
 }
 
 /** Audit log: fire-and-forget write to activities table (SEC-06).
@@ -437,5 +323,5 @@ export function logActivity(params: { memberId?: string; action: string; targetT
       target_title: params.targetTitle.slice(0, 200),
       details: (params.details || '').slice(0, 500),
     }).catch(() => {});
-  } catch (e) { handleError(e, { module: 'store', operation: 'LOG_ACTIVITY', severity: 'debug' }); }
+  } catch {}
 }
