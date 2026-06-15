@@ -19,10 +19,10 @@ export function H5Layout({ children }: H5LayoutProps) {
 
   const userId = state.currentUser?.id;
   const today = new Date().toISOString().slice(0, 10);
-  const myTasks = state.tasks.filter(t =>
-    (t.leaderId === userId || (t.supporterIds ?? []).includes(userId || '')) &&
+  const myTasks = userId ? state.tasks.filter(t =>
+    (t.leaderId === userId || (t.supporterIds ?? []).includes(userId)) &&
     t.status !== 'done' && t.status !== 'cancelled'
-  );
+  ) : [];
   const dueToday = myTasks.filter(t => t.dueDate === today);
   const overdue = myTasks.filter(t => t.dueDate && t.dueDate < today);
 
@@ -32,8 +32,6 @@ export function H5Layout({ children }: H5LayoutProps) {
     { key: 'goals', label: '目标', icon: Target },
     { key: 'me', label: '我的', icon: User },
   ];
-
-  if (children) return <>{children}</>;
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -56,9 +54,9 @@ export function H5Layout({ children }: H5LayoutProps) {
           <H5TaskList tasks={myTasks} />
         )}
         {activeTab === 'goals' && (
-          <H5GoalList goals={state.goals.filter(g =>
-            g.leaderId === userId || (g.supporterIds ?? []).includes(userId || '')
-          )} />
+          <H5GoalList goals={userId ? state.goals.filter(g =>
+            g.leaderId === userId || (g.supporterIds ?? []).includes(userId)
+          ) : []} />
         )}
         {activeTab === 'me' && (
           <H5MeView />

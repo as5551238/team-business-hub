@@ -22,6 +22,7 @@ export default defineConfig({
         name: '团队业务中台',
         short_name: 'TBH',
         description: '中小团队AI目标中台',
+        lang: 'zh-CN',
         theme_color: '#1E40AF',
         background_color: '#ffffff',
         display: 'standalone',

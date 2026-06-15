@@ -186,6 +186,42 @@ const ACTION_BEHAVIOR_MAP: Record<string, (action: any) => {
     entityId: a.payload?.predictionType,
     metadata: {},
   }),
+
+  // W2: 项目行为
+  ADD_PROJECT: (a) => ({
+    eventType: 'project.created',
+    entityType: 'project',
+    entityId: a.payload?.id,
+    metadata: { priority: a.payload?.priority, hasGoal: !!a.payload?.goalId },
+  }),
+  UPDATE_PROJECT: (a) => {
+    const p = a.payload;
+    if (!p) return null;
+    if (p.changes?.status === 'done' || p.changes?.status === 'completed') {
+      return { eventType: 'project.completed', entityType: 'project', entityId: p.id, metadata: {} };
+    }
+    return null;
+  },
+
+  // W2: AI报告查看
+  VIEW_MORNING_BRIEFING: () => ({
+    eventType: 'ai.morning_briefing_viewed',
+    entityType: 'ai_report',
+    entityId: 'morning_briefing',
+    metadata: {},
+  }),
+  VIEW_WEEKLY_REPORT: () => ({
+    eventType: 'ai.weekly_report_viewed',
+    entityType: 'ai_report',
+    entityId: 'weekly_report',
+    metadata: {},
+  }),
+  VIEW_RISK_REPORT: () => ({
+    eventType: 'ai.risk_report_viewed',
+    entityType: 'ai_report',
+    entityId: 'risk_report',
+    metadata: {},
+  }),
 };
 
 // 核心入口：在 trackedDispatch 的 dispatch(action) 之后调用
@@ -234,5 +270,29 @@ export function trackAIChat(messageLength: number, responseType: 'action' | 'que
     entityType: 'ai_chat',
     entityId: '',
     metadata: { messageLength, responseType },
+  });
+}
+
+// MCP 工具调用追踪 — W2 新增
+export function trackMCPToolCall(toolName: string, success: boolean, durationMs: number) {
+  if (!_currentUserId) return;
+  enqueue({
+    userId: _currentUserId,
+    eventType: success ? 'mcp.tool_succeeded' : 'mcp.tool_failed',
+    entityType: 'mcp_tool',
+    entityId: toolName,
+    metadata: { durationMs },
+  });
+}
+
+// AI 报告生成追踪 — W2 新增
+export function trackAIReportGeneration(reportType: 'morning_briefing' | 'weekly_report' | 'risk_report', useLLM: boolean, success: boolean) {
+  if (!_currentUserId) return;
+  enqueue({
+    userId: _currentUserId,
+    eventType: 'ai.report_generated',
+    entityType: 'ai_report',
+    entityId: reportType,
+    metadata: { useLLM, success },
   });
 }

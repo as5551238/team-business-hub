@@ -10,10 +10,11 @@
  * - 分析: KPI评分、双轨汇总、瓶颈摘要
  */
 import { getApiTokens, validateToolAccess, type ApiToken } from './api';
+import { trackMCPToolCall } from '@/store/behaviorTracking';
 
 // ===== 权限校验 =====
 
-export type ToolPermission = 'goals:read' | 'goals:write' | 'projects:read' | 'projects:write' | 'tasks:read' | 'tasks:write' | 'members:read' | 'analytics:read';
+export type ToolPermission = 'goals:read' | 'goals:write' | 'projects:read' | 'projects:write' | 'tasks:read' | 'tasks:write' | 'members:read' | 'analytics:read' | 'calendar:read' | 'calendar:write' | 'push:read' | 'push:write' | 'ai:read';
 
 const TOOL_PERMISSIONS: Record<string, ToolPermission[]> = {
   list_goals: ['goals:read'],
@@ -36,6 +37,14 @@ const TOOL_PERMISSIONS: Record<string, ToolPermission[]> = {
   calc_kpi_score: ['analytics:read'],
   resource_bottleneck: ['analytics:read'],
   recommend_assignee: ['analytics:read'],
+  list_calendar_events: ['calendar:read'],
+  create_calendar_event: ['calendar:write'],
+  detect_schedule_conflicts: ['calendar:read'],
+  list_push_notifications: ['push:read'],
+  mark_push_notification_read: ['push:write'],
+  generate_morning_briefing: ['ai:read'],
+  generate_weekly_report: ['ai:read'],
+  generate_risk_report: ['ai:read'],
 };
 
 // ===== MCP Tool 定义 =====
@@ -137,6 +146,98 @@ export const mcpTools: MCPTool[] = [
   { name: 'list_members', description: '获取团队成员列表', inputSchema: { type: 'object', properties: { role: { type: 'string' } } },
     execute: async (args) => { const q = args.role ? { role: `eq.${args.role}`, status: 'eq.active' } : { status: 'eq.active' }; const data = await restGet('members', q); return { success: true, data: data || [] }; } },
 
+  // ---- 日历集成（MCP Calendar Server） ----
+  // 框架优先，暂用 mock 数据，后续接入 Google/Outlook Calendar API
+  { name: 'list_calendar_events', description: '获取日历事件列表（当前为框架模式，返回模拟数据）', inputSchema: { type: 'object', properties: { start_date: { type: 'string', description: '开始日期 YYYY-MM-DD' }, end_date: { type: 'string', description: '结束日期 YYYY-MM-DD' }, limit: { type: 'number', default: 20 } } },
+    execute: async (args) => {
+      // Mock: 返回未来7天的模拟日历事件
+      const today = new Date();
+      const events = [];
+      for (let i = 0; i < 5; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        events.push({ id: `mock-cal-${i}`, title: ['团队站会', 'OKR复盘', '产品评审', '1on1沟通', '迭代规划'][i], start: `${d.toISOString().split('T')[0]}T${9 + i}:00:00`, end: `${d.toISOString().split('T')[0]}T${10 + i}:00:00`, source: 'mock', attendees: ['张三', '李四'] });
+      }
+      return { success: true, data: events.slice(0, args.limit || 20), _meta: { note: 'Calendar MCP in mock mode. Connect Google/Outlook API for real data.' } };
+    } },
+  { name: 'create_calendar_event', description: '创建日历事件（当前为框架模式，返回模拟结果）', inputSchema: { type: 'object', required: ['title', 'start'], properties: { title: { type: 'string' }, start: { type: 'string', description: '开始时间 ISO格式' }, end: { type: 'string', description: '结束时间 ISO格式' }, description: { type: 'string' }, attendees: { type: 'array', items: { type: 'string' } } } },
+    execute: async (args) => {
+      return { success: true, data: { id: `mock-cal-${Date.now()}`, title: args.title, start: args.start, end: args.end || '', description: args.description || '', attendees: args.attendees || [], source: 'mock' }, _meta: { note: 'Calendar MCP in mock mode.' } };
+    } },
+  { name: 'detect_schedule_conflicts', description: '检测日历冲突（比较任务截止日期与日历事件）', inputSchema: { type: 'object', properties: { task_ids: { type: 'array', items: { type: 'string' }, description: '要检测的任务ID列表' } } },
+    execute: async (args) => {
+      const tasks = await restGet('tasks');
+      const targetTasks = args.task_ids ? tasks.filter((t: any) => args.task_ids.includes(t.id)) : tasks.filter((t: any) => t.status === 'in-progress' || t.status === 'todo');
+      const conflicts = targetTasks.slice(0, 10).map((t: any) => ({
+        taskId: t.id, taskTitle: t.title, dueDate: t.due_date, conflictType: t.due_date ? 'deadline-approaching' : 'no-deadline', severity: t.priority === 'urgent' || t.priority === 'S' ? 'high' : 'medium',
+      }));
+      return { success: true, data: conflicts, _meta: { note: 'Calendar MCP in mock mode. Full conflict detection requires real calendar data.' } };
+    } },
+
+  // ---- 推送通知 ----
+  { name: 'list_push_notifications', description: '获取AI推送通知列表', inputSchema: { type: 'object', properties: { unread_only: { type: 'boolean', default: true }, limit: { type: 'number', default: 20 } } },
+    execute: async (args) => {
+      const q: Record<string, string> = { order: 'created_at.desc', limit: String(args.limit || 20) };
+      if (args.unread_only) q.read = 'eq.false';
+      const data = await restGet('push_notifications', q);
+      return { success: true, data: data || [] };
+    } },
+  { name: 'mark_push_notification_read', description: '标记推送通知为已读', inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+    execute: async (args) => {
+      await restPatch('push_notifications', args.id, { read: true });
+      return { success: true };
+    } },
+
+  // ---- AI 报告 ----
+  { name: 'generate_morning_briefing', description: '生成晨间聚焦简报', inputSchema: { type: 'object', properties: { use_llm: { type: 'boolean', default: false, description: '是否使用LLM增强' } } },
+    execute: async (args) => {
+      try {
+        const { generateMorningBriefingLocal, generateMorningBriefingDeep } = await import('@/lib/ai/aiMorningBriefing');
+        const store = (window as any).__TBH_STORE__ as any;
+        if (!store) return { success: false, error: 'Store not available' };
+        if (args.use_llm) {
+          const result = await generateMorningBriefingDeep(store);
+          return { success: true, data: result };
+        }
+        const result = generateMorningBriefingLocal(store);
+        return { success: true, data: result };
+      } catch (e: unknown) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    } },
+  { name: 'generate_weekly_report', description: '生成周报', inputSchema: { type: 'object', properties: { use_llm: { type: 'boolean', default: false, description: '是否使用LLM增强' } } },
+    execute: async (args) => {
+      try {
+        const { generateWeeklyReportLocal, generateWeeklyReportDeep } = await import('@/lib/ai/aiWeeklyReport');
+        const store = (window as any).__TBH_STORE__ as any;
+        if (!store) return { success: false, error: 'Store not available' };
+        if (args.use_llm) {
+          const result = await generateWeeklyReportDeep(store);
+          return { success: true, data: result };
+        }
+        const result = generateWeeklyReportLocal(store);
+        return { success: true, data: result };
+      } catch (e: unknown) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    } },
+  { name: 'generate_risk_report', description: '生成风险报告', inputSchema: { type: 'object', properties: { use_llm: { type: 'boolean', default: false, description: '是否使用LLM增强' } } },
+    execute: async (args) => {
+      try {
+        const { generateRiskReportLocal, generateRiskReportDeep } = await import('@/lib/ai/aiRiskReport');
+        const store = (window as any).__TBH_STORE__ as any;
+        if (!store) return { success: false, error: 'Store not available' };
+        if (args.use_llm) {
+          const result = await generateRiskReportDeep(store);
+          return { success: true, data: result };
+        }
+        const result = generateRiskReportLocal(store);
+        return { success: true, data: result };
+      } catch (e: unknown) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    } },
+
   // ---- 智能分析 ----
   { name: 'get_critical_path', description: '计算任务集的关键路径（需要传入任务ID列表）', inputSchema: { type: 'object', required: ['task_ids'], properties: { task_ids: { type: 'array', items: { type: 'string' }, description: '任务ID列表' } } },
     execute: async (args) => { const tasks = await restGet('tasks'); const filtered = tasks.filter((t: any) => args.task_ids.includes(t.id)); const { calculateCriticalPath } = await import('@/lib/gantt/cpm'); const result = calculateCriticalPath(filtered); return { success: true, data: { criticalPath: result.criticalPath, projectDuration: result.projectDuration, criticalTaskIds: [...result.criticalTaskIds] } }; } },
@@ -173,8 +274,12 @@ export async function callMCPTool(
   };
 
   try {
-    return await tool.execute(args, context);
+    const start = Date.now();
+    const result = await tool.execute(args, context);
+    trackMCPToolCall(toolName, result.success, Date.now() - start);
+    return result;
   } catch (e: unknown) {
+    trackMCPToolCall(toolName, false, 0);
     return { success: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

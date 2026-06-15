@@ -16,6 +16,7 @@ import { inputCls, loadEmailConfig, saveEmailConfig } from './constants';
 import type { EmailConfig } from './constants';
 import { sendTestEmail, isEmailEnabled, getLastEmailError, setLastEmailError } from '@/supabase/email';
 import { AISettingsSection } from './AISettingsSection';
+import { PushSettingsPanel } from '@/components/PushSettingsPanel';
 
 function SupabaseSection() {
   const store = useStore();
@@ -448,6 +449,9 @@ export function SettingsTab() {
       <EmailSection />
       <div className="bg-card rounded-xl border border-border shadow-sm p-5">
         <AISettingsSection />
+      </div>
+      <div className="bg-card rounded-xl border border-border shadow-sm p-5">
+        <PushSettingsPanel />
       </div>
       <TagsCategoriesSection />
       <DataStatsSection />

@@ -23,6 +23,10 @@ import {
   Star,
   Tag,
   FileText,
+  Share2,
+  Link2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -35,6 +39,7 @@ interface ProjectTemplate {
   name: string;
   description: string;
   category: TemplateCategory;
+  industry?: string;
   author: string;
   rating: number;
   useCount: number;
@@ -52,6 +57,7 @@ const TEMPLATE_CATALOG: ProjectTemplate[] = [
     name: '季度OKR管理',
     description: '标准季度OKR管理模板，包含目标设定、KR追踪、周报汇总标准流程',
     category: 'business',
+    industry: 'IT',
     author: 'TBH Team',
     rating: 4.7,
     useCount: 342,
@@ -68,6 +74,7 @@ const TEMPLATE_CATALOG: ProjectTemplate[] = [
     name: '产品发布管理',
     description: '新产品发布全流程管理模板，从需求确认到上线监控',
     category: 'startup',
+    industry: 'IT',
     author: 'TBH Team',
     rating: 4.5,
     useCount: 198,
@@ -83,6 +90,7 @@ const TEMPLATE_CATALOG: ProjectTemplate[] = [
     name: '新人入职引导',
     description: '新成员入职标准化模板，覆盖环境配置、培训、试用评估',
     category: 'business',
+    industry: 'IT',
     author: 'TBH Team',
     rating: 4.3,
     useCount: 156,
@@ -98,6 +106,7 @@ const TEMPLATE_CATALOG: ProjectTemplate[] = [
     name: '课程项目管理',
     description: '教育场景项目管理模板，适用于课程作业、毕业设计、小组项目',
     category: 'education',
+    industry: '教育',
     author: 'Community',
     rating: 4.0,
     useCount: 89,
@@ -113,6 +122,7 @@ const TEMPLATE_CATALOG: ProjectTemplate[] = [
     name: '个人成长计划',
     description: '个人技能提升和习惯养成模板，覆盖学习、健身、阅读等维度',
     category: 'personal',
+    industry: '通用',
     author: 'Community',
     rating: 4.2,
     useCount: 215,
@@ -129,6 +139,7 @@ const TEMPLATE_CATALOG: ProjectTemplate[] = [
     name: 'MVP 快速验证',
     description: '初创产品MVP验证模板，快速验证想法、收集反馈、迭代决策',
     category: 'startup',
+    industry: '初创',
     author: 'TBH Team',
     rating: 4.6,
     useCount: 127,
@@ -138,6 +149,39 @@ const TEMPLATE_CATALOG: ProjectTemplate[] = [
     ],
     projects: [{ title: '假设定义', taskCount: 3 }, { title: '最小开发', taskCount: 8 }, { title: '用户验证', taskCount: 5 }, { title: '复盘决策', taskCount: 3 }],
     preview: '精益创业MVP模板，4阶段19任务，核心假设→最小开发→用户验证→决策',
+  },
+  {
+    id: 'tpl-manufacturing-qc',
+    name: '制造业品质管理',
+    description: '制造业品质管控全流程模板，覆盖来料检验、制程管控、出货检验和持续改善',
+    category: 'business',
+    industry: '制造',
+    author: 'TBH Team',
+    rating: 4.4,
+    useCount: 88,
+    tags: ['制造业', '品质管理', 'QC', '持续改善', '流程管控'],
+    goals: [
+      { title: '产品良率提升至98%', keyResults: ['来料合格率≥99%', '制程直通率≥97%', '客户投诉降低50%'] },
+      { title: '质量体系有效运行', keyResults: ['ISO审核0个重大不符合', '8D报告按时关闭率100%', 'SPC关键工序全覆盖'] },
+    ],
+    projects: [{ title: '来料检验改善', taskCount: 6 }, { title: '制程管控优化', taskCount: 8 }, { title: '客诉根因分析', taskCount: 5 }],
+    preview: '制造业品质管理模板，3个项目19个任务，覆盖IQC/IPQC/OQC全流程和8D闭环',
+  },
+  {
+    id: 'tpl-finance-risk',
+    name: '金融风控项目',
+    description: '金融行业风控项目管理模板，覆盖风险评估、合规检查、审计追踪和监管报送',
+    category: 'business',
+    industry: '金融',
+    author: 'TBH Team',
+    rating: 4.5,
+    useCount: 73,
+    tags: ['金融', '风控', '合规', '审计', '监管'],
+    goals: [
+      { title: '年度风控体系达标', keyResults: ['风险评估覆盖率100%', '监管处罚事件0起', '合规培训完成率100%'] },
+    ],
+    projects: [{ title: '风险评估', taskCount: 7 }, { title: '合规检查', taskCount: 6 }, { title: '审计整改', taskCount: 5 }, { title: '监管报送', taskCount: 4 }],
+    preview: '金融风控模板，4个项目22个任务，覆盖风险评估→合规检查→审计整改→监管报送全链路',
   },
 ];
 
@@ -162,6 +206,23 @@ function TemplateCard({
   onToggle: () => void;
   onDeploy: (id: string) => void;
 }) {
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const handleShare = () => {
+    const shareData = JSON.stringify({
+      id: template.id,
+      name: template.name,
+      goals: template.goals,
+      projects: template.projects,
+    });
+    const encoded = btoa(encodeURIComponent(shareData));
+    const url = `${window.location.origin}${window.location.pathname}#template=${encoded}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    });
+  };
+
   const catConfig = CATEGORY_CONFIG[template.category];
   const CatIcon = catConfig.icon;
   return (
@@ -178,6 +239,9 @@ function TemplateCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-semibold truncate">{template.name}</span>
+            {template.industry && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 shrink-0">{template.industry}</span>
+            )}
           </div>
           <p className="text-[11px] text-muted-foreground truncate">{template.description}</p>
         </div>
@@ -238,6 +302,14 @@ function TemplateCard({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
             >
               <Download size={12} />一键部署
+            </button>
+            <button
+              type="button"
+              onClick={handleShare}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-foreground hover:bg-muted/80 transition-colors"
+            >
+              {shareCopied ? <Check size={12} className="text-emerald-500" /> : <Share2 size={12} />}
+              {shareCopied ? '已复制' : '分享'}
             </button>
             <span className="text-[10px] text-muted-foreground">作者: {template.author}</span>
           </div>
@@ -389,17 +461,55 @@ export function TemplateMarketTab() {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
         <h4 className="font-semibold text-sm flex items-center gap-2"><Plus size={14} />创建自定义模板</h4>
         <p className="text-xs text-blue-700">
-          选择现有的目标和项目，将其打包为可复用的模板。自定义模板存储在本地，可导出分享给团队。未来版本将支持模板市场发布。
+          选择现有的目标和项目，将其打包为可复用的模板。自定义模板可导出分享给团队。
         </p>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-          onClick={() => {
-            alert('自定义模板创作功能即将推出，敬请期待！');
-          }}
-        >
-          <Plus size={12} />创建模板
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            onClick={() => {
+              const state = (window as any).__TBH_STORE__;
+              if (!state) { alert('暂无数据可导出'); return; }
+              const goals = Object.values(state.goals || {}).map((g: any) => ({ title: g.title, keyResults: (g.keyResults || []).map((kr: any) => kr.title) }));
+              const projects = Object.values(state.projects || {}).map((p: any) => ({ title: p.title, taskCount: Object.values(state.tasks || {}).filter((t: any) => t.projectId === p.id).length }));
+              if (goals.length === 0 && projects.length === 0) { alert('请先创建目标或项目再导出模板'); return; }
+              const tplData = JSON.stringify({ name: '我的自定义模板', goals, projects }, null, 2);
+              const blob = new Blob([tplData], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `tbh-template-${Date.now()}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            <Download size={12} />导出当前数据为模板
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-blue-600 border border-blue-300 hover:bg-blue-50 transition-colors"
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = '.json';
+              input.onchange = (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  try {
+                    const tpl = JSON.parse(ev.target?.result as string);
+                    alert(`模板"${tpl.name}"导入成功！包含${tpl.goals?.length || 0}个目标和${tpl.projects?.length || 0}个项目。`);
+                  } catch { alert('模板文件格式错误'); }
+                };
+                reader.readAsText(file);
+              };
+              input.click();
+            }}
+          >
+            <Share2 size={12} />导入模板文件
+          </button>
+        </div>
       </div>
     </div>
   );

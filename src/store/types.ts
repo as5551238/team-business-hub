@@ -95,6 +95,9 @@ export type Action =
   | { type: 'REJECT_GOAL'; payload: { id: string; comment: string } }
   | { type: 'RECALL_GOAL_APPROVAL'; payload: string }
   | { type: 'UPDATE_SUBSCRIPTION'; payload: { teamId: string; updates: Partial<Subscription> } }
+  | { type: 'VIEW_MORNING_BRIEFING' }
+  | { type: 'VIEW_WEEKLY_REPORT' }
+  | { type: 'VIEW_RISK_REPORT' }
   | { type: 'REALTIME_UPSERT'; payload: { table: string; item: Record<string, unknown> } }
   | { type: 'REALTIME_DELETE'; payload: { table: string; id: string } };
 

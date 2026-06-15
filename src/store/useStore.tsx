@@ -338,6 +338,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_links', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('item_links', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('tags', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sprints', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('sprints', p))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'push_notifications' }, (p) => {
+        const { new: newRow } = p;
+        if (!newRow) return;
+        const payload = newRow.payload;
+        if (payload) {
+          try {
+            const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+            const msg = data.message || '您有新的AI推送通知';
+            window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: msg, type: 'ai-push' } }));
+          } catch {}
+        }
+      })
       .subscribe();
 
     // --- Fallback REST polling (120s) for missed Realtime events ---

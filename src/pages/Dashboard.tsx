@@ -10,7 +10,7 @@ import { ItemDetailPanel } from '@/components/ItemDetailPanel';
 import { GanttModal } from '@/components/GanttModal';
 import { TabErrorBoundary, TabLoader } from '@/components/TabErrorBoundary';
 import ViewModeSwitch from '@/components/ViewModeSwitch';
-import { TrendingUp, AlertTriangle, Calendar, BarChart3, Settings, CheckCircle2, X, Rocket, UserPlus, Sparkles, Target, Zap, ListTodo, Sun } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Calendar, BarChart3, Settings, CheckCircle2, X, Rocket, UserPlus, Sparkles, Target, Zap, ListTodo, Sun, MessageSquare } from 'lucide-react';
 
 // ── 懒加载 Tab 组件 ──
 const MyTodayTab = lazy(() => import('./dashboard/MyTodayTab'));
@@ -19,11 +19,13 @@ const RiskAITab = lazy(() => import('./dashboard/RiskAITab'));
 const PlansTab = lazy(() => import('./dashboard/PlansTab'));
 const GanttTab = lazy(() => import('./dashboard/GanttTab'));
 const OtherTab = lazy(() => import('./dashboard/OtherTab'));
+const ConversationalDashboard = lazy(() => import('@/components/ConversationalDashboard'));
 
 // ── Tab 类型 & 配置 ──
-type DashboardTab = 'myToday' | 'business' | 'riskAI' | 'plans' | 'gantt' | 'other';
+type DashboardTab = 'conversational' | 'myToday' | 'business' | 'riskAI' | 'plans' | 'gantt' | 'other';
 
 const tabItems: { key: DashboardTab; label: string; icon: typeof TrendingUp }[] = [
+  { key: 'conversational', label: 'AI对话', icon: MessageSquare },
   { key: 'myToday', label: '我的今日', icon: Sun },
   { key: 'business', label: '业务现况', icon: TrendingUp },
   { key: 'riskAI', label: '风险智能', icon: AlertTriangle },
@@ -33,7 +35,7 @@ const tabItems: { key: DashboardTab; label: string; icon: typeof TrendingUp }[] 
 ];
 
 const TAB_LABELS: Record<DashboardTab, string> = {
-  myToday: '我的今日', business: '业务现况', riskAI: '风险智能', plans: '后续计划', gantt: '甘特图', other: '其他',
+  conversational: 'AI对话', myToday: '我的今日', business: '业务现况', riskAI: '风险智能', plans: '后续计划', gantt: '甘特图', other: '其他',
 };
 
 // ── 新手引导模板 ──
@@ -52,9 +54,8 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
   const { state, dispatch } = useStore();
   const { isTeamView, viewingMember } = useViewingMember();
 
-  // 非管理员默认"我的今日"，管理员/经理默认"业务现况"
-  const userRole = state.currentUser?.role;
-  const defaultTab: DashboardTab = (userRole === 'admin' || userRole === 'manager' || userRole === 'leader') ? 'business' : 'myToday';
+  // 对话式首页作为默认 Tab（所有角色）
+  const defaultTab: DashboardTab = 'conversational';
   const [tab, setTab] = useState<DashboardTab>(defaultTab);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedItemType, setSelectedItemType] = useState<'goal' | 'project' | 'task' | null>(null);
@@ -191,6 +192,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
         </div>
       ) : (
         <div key={tab} className="animate-fade-in">
+          {tab === 'conversational' && <TabErrorBoundary key="conversational" name={TAB_LABELS.conversational}><Suspense fallback={<TabLoader />}><ConversationalDashboard /></Suspense></TabErrorBoundary>}
           {tab === 'myToday' && <TabErrorBoundary key="myToday" name={TAB_LABELS.myToday}><Suspense fallback={<TabLoader />}><MyTodayTab onOpenDetail={openDetail} onPageChange={onPageChange} /></Suspense></TabErrorBoundary>}
           {tab === 'business' && <TabErrorBoundary key="business" name={TAB_LABELS.business}><Suspense fallback={<TabLoader />}><BusinessTab {...tabCallbacks} /></Suspense></TabErrorBoundary>}
           {tab === 'riskAI' && <TabErrorBoundary key="riskAI" name={TAB_LABELS.riskAI}><Suspense fallback={<TabLoader />}><RiskAITab {...tabCallbacks} /></Suspense></TabErrorBoundary>}
