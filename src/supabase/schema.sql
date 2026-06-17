@@ -13,7 +13,7 @@ create extension if not exists "pgcrypto";  -- 用于字段加密
 /** 获取当前请求的团队ID (由前端通过 set_config 设置) */
 create or replace function app_current_team_id()
 returns text as $$
-  select current_setting('app.current_team_id', true);
+  select current_setting('app.current_team', true);
 $$ language sql stable;
 
 /** 获取当前请求的用户ID (由前端通过 set_config 设置) */
@@ -1374,10 +1374,16 @@ create policy "Allow authenticated delete on attachments" on storage.objects
 
 -- ==================== 设置当前用户上下文的RPC ====================
 
-/** 前端登录后调用此函数设置当前用户的团队和身份上下文 */
+/** 前端登录后调用此函数设置当前用户的团队和身份上下文
+ *  设置 app.current_team 和 app.current_user（RLS策略引用的配置名）
+ *  同时保留 _id 后缀版本用于向后兼容
+ */
 create or replace function set_app_context(p_team_id text, p_user_id text)
 returns void as $$
 begin
+  perform set_config('app.current_team', p_team_id, false);
+  perform set_config('app.current_user', p_user_id, false);
+  -- backward compat
   perform set_config('app.current_team_id', p_team_id, false);
   perform set_config('app.current_user_id', p_user_id, false);
 end;
