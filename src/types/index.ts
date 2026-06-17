@@ -505,11 +505,11 @@ export interface BackupData {
   statusFlowRules: StatusFlowRule[];
   automationRules: AutomationRule[];
   sprints: Sprint[];
-  batchOperations?: BatchOperation[];
-  teams?: Team[];
-  teamMembers?: TeamMember[];
-  subscriptions?: Subscription[];
-  approvalAudits?: ApprovalAudit[];
+  batchOperations: BatchOperation[];
+  teams: Team[];
+  teamMembers: TeamMember[];
+  subscriptions: Subscription[];
+  approvalAudits: ApprovalAudit[];
 }
 
 // ==================== 定价与订阅 ====================

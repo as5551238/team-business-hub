@@ -12,8 +12,6 @@
  * - advanced: + 知识库、管理中心高级Tab、甘特图、AI主动推送
  */
 
-import { handleError } from '@/lib/errorHandler';
-
 export type UserLevel = 'beginner' | 'intermediate' | 'advanced';
 
 const LEVEL_KEY = 'tbh-user-level';
@@ -26,14 +24,14 @@ const LEVEL_THRESHOLDS = {
 } as const;
 
 /** 获取首次使用日期（不存在则设为今天） */
-function getFirstSeenDate(): string {
+export function getFirstSeenDate(): string {
   try {
     const stored = localStorage.getItem(FIRST_SEEN_KEY);
     if (stored) return stored;
     const today = new Date().toISOString().split('T')[0];
     localStorage.setItem(FIRST_SEEN_KEY, today);
     return today;
-  } catch (e) { handleError(e, { module: 'progressiveDisclosure', operation: 'GET_FIRST_SEEN', severity: 'debug' });
+  } catch {
     return new Date().toISOString().split('T')[0];
   }
 }
@@ -43,7 +41,7 @@ export function recordAction(): void {
   try {
     const count = parseInt(localStorage.getItem(ACTION_COUNT_KEY) || '0', 10);
     localStorage.setItem(ACTION_COUNT_KEY, String(count + 1));
-  } catch (e) { handleError(e, { module: 'progressiveDisclosure', operation: 'RECORD_ACTION', severity: 'debug' }); }
+  } catch {}
 }
 
 /** 计算使用天数 */
@@ -58,7 +56,8 @@ function getDaysSinceFirstSeen(): number {
 function getActionCount(): number {
   try {
     return parseInt(localStorage.getItem(ACTION_COUNT_KEY) || '0', 10);
-  } catch (e) { handleError(e, { module: 'progressiveDisclosure', operation: 'GET_ACTION_COUNT', severity: 'debug' });
+  } catch {
+    return 0;
   }
 }
 
@@ -70,7 +69,7 @@ export function computeUserLevel(): UserLevel {
     if (manual === 'advanced' || manual === 'intermediate' || manual === 'beginner') {
       return manual;
     }
-  } catch (e) { handleError(e, { module: 'progressiveDisclosure', operation: 'COMPUTE_LEVEL', severity: 'debug' }); }
+  } catch {}
 
   const days = getDaysSinceFirstSeen();
   const actions = getActionCount();
@@ -88,26 +87,26 @@ export function computeUserLevel(): UserLevel {
 export function setUserLevel(level: UserLevel): void {
   try {
     localStorage.setItem(LEVEL_KEY, level);
-  } catch (e) { handleError(e, { module: 'progressiveDisclosure', operation: 'SET_USER_LEVEL', severity: 'debug' }); }
+  } catch {}
 }
 
 /** 检查功能是否对当前等级可见 */
 export function isFeatureVisible(feature: string, level?: UserLevel): boolean {
   const userLevel = level || computeUserLevel();
   const featureLevels: Record<string, UserLevel> = {
-    // Beginner: 核心功能
+    // Beginner: 核心功能 — 所有顶层导航模块始终可见
     'dashboard': 'beginner',
     'tasks': 'beginner',
     'goals_basic': 'beginner',
     'quick_create': 'beginner',
-    // Intermediate: 增强功能
-    'projects': 'intermediate',
-    'insight': 'intermediate',
+    'projects': 'beginner',
+    'insight': 'beginner',
+    'knowledge': 'beginner',
+    // Intermediate: 模块内增强功能
     'charts': 'intermediate',
     'goal_key_results': 'intermediate',
     'comment_ai': 'intermediate',
     // Advanced: 高级功能
-    'knowledge': 'intermediate',
     'admin_advanced': 'advanced',
     'gantt': 'advanced',
     'ai_push_events': 'advanced',
@@ -141,8 +140,6 @@ export function filterViewModes(page: string, modes: string[], level?: UserLevel
       list: 'beginner',
       matrix: 'intermediate',
       okr: 'advanced',
-      strategy: 'intermediate',
-      cascade: 'intermediate',
     },
   };
 

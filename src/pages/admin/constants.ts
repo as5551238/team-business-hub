@@ -1,32 +1,22 @@
-import type { Member, Template } from '@/types';
-import { handleError } from '@/lib/errorHandler';
+export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates' | 'privacy';
 
-export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'okrseason' | 'review' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates' | 'privacy' | 'budget' | 'performance' | 'skillmatrix' | 'effectiveness' | 'dste';
-
-export const tabItems: { key: AdminTab; label: string; icon: string }[] = [
-  { key: 'team', label: '团队', icon: 'Users' },
-  { key: 'flow', label: '流程配置', icon: 'GitBranch' },
-  { key: 'automation', label: '自动化', icon: 'Zap' },
-  { key: 'kpi', label: 'KPI', icon: 'Target' },
-  { key: 'okrseason', label: 'OKR赛季', icon: 'Trophy' },
-  { key: 'review', label: '复盘中心', icon: 'BookOpen' },
-  { key: 'riskradar', label: '风险雷达', icon: 'Shield' },
-  { key: 'agent', label: 'Agent审计', icon: 'Bot' },
-  { key: 'integrations', label: '集成', icon: 'Globe' },
-  { key: 'mcptools', label: 'MCP&Agent', icon: 'Bot' },
-  { key: 'marketplace', label: 'Agent市场', icon: 'Store' },
-  { key: 'compliance', label: '等保合规', icon: 'ShieldCheck' },
-  { key: 'collab', label: '实时协作', icon: 'Radio' },
-  { key: 'templates', label: '模板市场', icon: 'LayoutTemplate' },
-  { key: 'deploy', label: '部署', icon: 'Server' },
-  { key: 'budget', label: '预算管理', icon: 'CreditCard' },
-  { key: 'performance', label: '绩效评估', icon: 'Award' },
-  { key: 'skillmatrix', label: '技能矩阵', icon: 'LayoutGrid' },
-  { key: 'effectiveness', label: '有效性度量', icon: 'Activity' },
-  { key: 'dste', label: 'DSTE闭环', icon: 'RefreshCw' },
-  { key: 'toolbox', label: '工具箱', icon: 'Wrench' },
-  { key: 'schedule', label: '日程', icon: 'Calendar' },
-  { key: 'settings', label: '设置', icon: 'SettingsIcon' },
+export const tabItems: { key: AdminTab; label: string; icon: any }[] = [
+  { key: 'team', label: '团队', icon: 'Users' as any },
+  { key: 'flow', label: '流程配置', icon: 'GitBranch' as any },
+  { key: 'automation', label: '自动化', icon: 'Zap' as any },
+  { key: 'kpi', label: 'KPI', icon: 'Target' as any },
+  { key: 'riskradar', label: '风险雷达', icon: 'Shield' as any },
+  { key: 'agent', label: 'Agent审计', icon: 'Bot' as any },
+  { key: 'integrations', label: '集成', icon: 'Globe' as any },
+  { key: 'mcptools', label: 'MCP&Agent', icon: 'Bot' as any },
+  { key: 'marketplace', label: 'Agent市场', icon: 'Store' as any },
+  { key: 'compliance', label: '等保合规', icon: 'ShieldCheck' as any },
+  { key: 'collab', label: '实时协作', icon: 'Radio' as any },
+  { key: 'templates', label: '模板市场', icon: 'LayoutTemplate' as any },
+  { key: 'deploy', label: '部署', icon: 'Server' as any },
+  { key: 'toolbox', label: '工具箱', icon: 'Wrench' as any },
+  { key: 'schedule', label: '日程', icon: 'Calendar' as any },
+  { key: 'settings', label: '设置', icon: 'SettingsIcon' as any },
 ];
 
 export const roleLabels: Record<string, string> = { admin: '管理员', manager: '负责人', leader: '组长', member: '成员' };
@@ -37,16 +27,7 @@ export const permLabels: Record<string, string> = { goals_view: '查看目标', 
 export const typeLabels: Record<string, string> = { goal: '目标', project: '项目', task: '任务', document: '文档' };
 export const typeColors: Record<string, string> = { goal: 'bg-red-100 text-red-700', project: 'bg-blue-100 text-blue-700', task: 'bg-green-100 text-green-700', document: 'bg-purple-100 text-purple-700' };
 export const PRESET_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'];
-export const NOTE_COLORS = [
-  // 暖色系
-  '#ffffff', '#fef3c7', '#ffedd5', '#fee2e2', '#fce7f3', '#fda4af',
-  // 冷色系
-  '#dbeafe', '#e0f2fe', '#ccfbf1', '#dcfce7', '#d9f99d', '#bae6fd',
-  // 紫色系
-  '#f3e8ff', '#e9d5ff', '#ddd6fe', '#c7d2fe',
-  // 中性色
-  '#e2e8f0', '#f5f5f4', '#fef9c3', '#d1fae5',
-];
+export const NOTE_COLORS = ['#ffffff', '#fef3c7', '#dbeafe', '#dcfce7', '#fce7f3', '#f3e8ff', '#ffedd5', '#e2e8f0'];
 export const repeatLabels: Record<string, string> = { none: '不重复', daily: '每天', weekly: '每周', biweekly: '每两周', monthly: '每月', quarterly: '每季度', yearly: '每年' };
 export const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 export const FOLDERS = ['全部', '工作', '个人', '学习', '其他'];
@@ -64,11 +45,11 @@ export function getRoleDefaultPermission(role: string, permission: string): bool
 }
 
 export interface EditForm { name: string; nickname: string; wechatId: string; phone: string; email: string; role: string; department: string; status: string; }
-export function memberToEditForm(m: Member): EditForm { return { name: m.name || '', nickname: m.nickname || '', wechatId: m.wechatId || '', phone: m.phone || '', email: m.email || '', role: m.role || 'member', department: m.department || '', status: m.status || 'active' }; }
+export function memberToEditForm(m: any): EditForm { return { name: m.name || '', nickname: m.nickname || '', wechatId: m.wechatId || '', phone: m.phone || '', email: m.email || '', role: m.role || 'member', department: m.department || '', status: m.status || 'active' }; }
 
 export interface TForm { title: string; description: string; type: 'goal' | 'project' | 'task' | 'document'; content: string; category: string; isPublic: boolean; }
 export const emptyForm: TForm = { title: '', description: '', type: 'task', content: '', category: '', isPublic: false };
-export function formFromTemplate(t: Template): TForm { return { title: t.title, description: t.description, type: t.type, content: t.content, category: t.category, isPublic: t.isPublic }; }
+export function formFromTemplate(t: any): TForm { return { title: t.title, description: t.description, type: t.type, content: t.content, category: t.category, isPublic: t.isPublic }; }
 
 export interface EvtForm { title: string; description: string; startDate: string; endDate: string; allDay: boolean; color: string; linkedItemId: string; linkedItemType: 'goal' | 'project' | 'task' | null; repeatCycle: string; memberId: string; }
 export const emptyEvtForm: EvtForm = { title: '', description: '', startDate: '', endDate: '', allDay: true, color: '#3b82f6', linkedItemId: '', linkedItemType: null, repeatCycle: 'none', memberId: '' };
@@ -104,28 +85,12 @@ export function getCalendarDays(year: number, month: number): CalendarDay[] {
 }
 
 export interface EmailConfig { enabled: boolean; resendApiKey: string; fromEmail: string; }
-export async function loadEmailConfig(): Promise<EmailConfig> {
-  // DB-first: try Supabase, then fall back to localStorage
-  try {
-    const { getSupabaseClient } = await import('@/supabase/client');
-    const sb = getSupabaseClient();
-    if (sb) {
-      const { data } = await sb.from('email_settings').select('*').eq('id', 1).maybeSingle();
-      if (data) return { enabled: data.enabled || false, resendApiKey: data.resend_api_key || '', fromEmail: data.from_email || '' };
-    }
-  } catch (e) { handleError(e, { module: 'constants', operation: 'LOAD_EMAIL_CONFIG_DB', severity: 'debug' }); }
-  // Fallback: localStorage
-  try { const s = localStorage.getItem('tbh-email-config'); if (s) { const c = JSON.parse(s); return { enabled: c.enabled || false, resendApiKey: c.resendApiKey || c.smtpUser || '', fromEmail: c.fromEmail || '' }; } } catch (e) { handleError(e, { module: 'constants', operation: 'LOAD_EMAIL_CONFIG_LS', severity: 'debug' }); }
-  return { enabled: false, resendApiKey: '', fromEmail: '' };
-}
-
-/** Synchronous version for contexts that cannot await */
-export function loadEmailConfigSync(): EmailConfig {
-  try { const s = localStorage.getItem('tbh-email-config'); if (s) { const c = JSON.parse(s); return { enabled: c.enabled || false, resendApiKey: c.resendApiKey || c.smtpUser || '', fromEmail: c.fromEmail || '' }; } } catch (e) { handleError(e, { module: 'constants', operation: 'LOAD_EMAIL_CONFIG_SYNC', severity: 'debug' }); }
+export function loadEmailConfig(): EmailConfig {
+  try { const s = localStorage.getItem('tbh-email-config'); if (s) { const c = JSON.parse(s); return { enabled: c.enabled || false, resendApiKey: c.resendApiKey || c.smtpUser || '', fromEmail: c.fromEmail || '' }; } } catch {}
   return { enabled: false, resendApiKey: '', fromEmail: '' };
 }
 export function saveEmailConfig(c: EmailConfig) {
-  try { localStorage.setItem('tbh-email-config', JSON.stringify(c)); } catch (e) { handleError(e, { module: 'constants', operation: 'SAVE_EMAIL_CONFIG', severity: 'debug' }); }
+  try { localStorage.setItem('tbh-email-config', JSON.stringify(c)); } catch {}
   // Async sync to database for cron jobs - fire and forget
   syncEmailConfigToDb(c);
 }
@@ -138,5 +103,5 @@ async function syncEmailConfigToDb(c: EmailConfig) {
         id: 1, enabled: c.enabled, resend_api_key: c.resendApiKey, from_email: c.fromEmail, updated_at: new Date().toISOString()
       });
     }
-  } catch (e) { handleError(e, { module: 'constants', operation: 'SYNC_EMAIL_DB', severity: 'warn' }); }
+  } catch {}
 }
