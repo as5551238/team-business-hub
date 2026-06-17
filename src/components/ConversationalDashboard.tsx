@@ -14,6 +14,7 @@ import React, { useState, useCallback, Suspense, lazy } from 'react';
 import { cn } from '@/lib/utils';
 import { AiHomepageChat } from '@/components/AiHomepageChat';
 import { LayoutDashboard, Grid3X3, Clock, BarChart3, Shield } from 'lucide-react';
+import { useStore } from '@/store/useStore';
 
 // ===== 面板类型 =====
 
@@ -98,14 +99,11 @@ export function ConversationalDashboard() {
 // ===== 内联面板组件 =====
 
 function TodayOverviewPanel() {
-  // 简化版今日概览 — 复用 MyTodayTab 的数据逻辑
-  const { state } = (() => {
-    try { return { state: (window as any).__TBH_STORE__ || { tasks: {}, goals: {}, members: [] } }; }
-    catch { return { state: { tasks: {}, goals: {}, members: [] } }; }
-  })();
+  // 使用 React store 获取数据，而非 window.__TBH_STORE__
+  const { state } = useStore();
 
   const today = new Date().toISOString().split('T')[0];
-  const allTasks = Object.values(state.tasks || {});
+  const allTasks = Array.isArray(state.tasks) ? state.tasks : [];
   const overdue = allTasks.filter((t: any) =>
     t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today
   );

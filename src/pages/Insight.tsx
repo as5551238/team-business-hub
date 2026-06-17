@@ -10,7 +10,7 @@ import ViewModeSwitch from '@/components/ViewModeSwitch';
 import type { ReviewPeriod, ReviewMetrics } from '@/types';
 
 const AIAnalysisTab = lazy(() => import('@/pages/admin/AIAnalysisTab'));
-const AIReviewPanel = lazy(() => import('@/components/AIReviewPanel').then(m => ({ default: m.AIReviewPanel })));
+const AIReviewPanel = lazy(() => import('@/components/AIReviewPanel'));
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 

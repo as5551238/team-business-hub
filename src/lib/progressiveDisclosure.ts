@@ -94,19 +94,19 @@ export function setUserLevel(level: UserLevel): void {
 export function isFeatureVisible(feature: string, level?: UserLevel): boolean {
   const userLevel = level || computeUserLevel();
   const featureLevels: Record<string, UserLevel> = {
-    // Beginner: 核心功能
+    // Beginner: 核心功能 — 所有顶层导航模块始终可见
     'dashboard': 'beginner',
     'tasks': 'beginner',
     'goals_basic': 'beginner',
     'quick_create': 'beginner',
-    // Intermediate: 增强功能
-    'projects': 'intermediate',
-    'insight': 'intermediate',
+    'projects': 'beginner',
+    'insight': 'beginner',
+    'knowledge': 'beginner',
+    // Intermediate: 模块内增强功能
     'charts': 'intermediate',
     'goal_key_results': 'intermediate',
     'comment_ai': 'intermediate',
     // Advanced: 高级功能
-    'knowledge': 'advanced',
     'admin_advanced': 'advanced',
     'gantt': 'advanced',
     'ai_push_events': 'advanced',

@@ -35,9 +35,9 @@ import {
   LayoutDashboard, Target, FolderKanban, CheckSquare, StickyNote,
   BarChart3, Users, Bell, Search, Menu, X, ChevronDown,
   Settings, Cloud, CloudOff, Loader2, FileText, Eye, Users2,
-  LogOut, BookOpen, Building2, Shield, PanelLeftClose, PanelLeft,
+  LogOut, BookOpen, Building2, PanelLeftClose, PanelLeft,
   ChevronsLeft, ChevronsRight, Plus, Minus, Maximize2, Edit2, Trash2, Check,
-  Moon, Sun, Monitor, Sparkles, MessageSquare, MoreHorizontal
+  Moon, Sun, Monitor, Sparkles, MessageSquare
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CURRENT_USER_KEY } from '@/store/types';
@@ -58,16 +58,11 @@ interface LayoutProps {
 const navItems: { page: Page; label: string; icon: React.ReactNode; requirePermission?: Permission }[] = [
   { page: 'dashboard', label: '对话', icon: <MessageSquare size={20} /> },
   { page: 'goals', label: '目标', icon: <Target size={20} /> },
-  { page: 'insight', label: '报告', icon: <BarChart3 size={20} /> },
-];
-
-/** 次要导航（收纳在"更多"菜单中） */
-const secondaryNavItems: { page: Page; label: string; icon: React.ReactNode; requirePermission?: Permission }[] = [
   { page: 'projects', label: '项目中心', icon: <FolderKanban size={20} /> },
   { page: 'tasks', label: '任务中心', icon: <CheckSquare size={20} /> },
   { page: 'knowledge', label: '知识库', icon: <BookOpen size={20} /> },
-  { page: 'admin', label: '管理中心', icon: <Settings size={20} />, requirePermission: 'settings_manage' },
-  { page: 'privacy', label: '隐私政策', icon: <Shield size={20} /> },
+  { page: 'insight', label: '报告', icon: <BarChart3 size={20} /> },
+  { page: 'admin', label: '管理中心', icon: <Settings size={20} /> },
 ];
 
 // --- Extracted React.memo sub-components ---
@@ -204,7 +199,6 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const memberLookup = useMemberLookup();
   const { activeMembers } = useActiveMembers();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showMoreNav, setShowMoreNav] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<'wide' | 'narrow' | 'hidden'>(() => {
     try { const s = localStorage.getItem('tbh-sidebar-mode'); if (s === 'wide' || s === 'narrow' || s === 'hidden') return s; } catch {}
     // 小屏默认收起，大屏默认展开
@@ -622,8 +616,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
 
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {navItems.filter(item => {
-            if (item.requirePermission && (!user || (!isAdminRole(user.role) && !hasPermission(state, user.id, item.requirePermission)))) return false;
-            const featureMap: Record<string, string> = { dashboard: 'dashboard', goals: 'goals_basic', insight: 'insight' };
+            const featureMap: Record<string, string> = { dashboard: 'dashboard', goals: 'goals_basic', projects: 'projects', tasks: 'tasks', knowledge: 'knowledge', insight: 'insight', admin: 'dashboard' };
             return isFeatureVisible(featureMap[item.page] || item.page);
           }).map((item, idx) => (
             <button key={item.page} onClick={() => handlePageClick(item.page)}
@@ -637,6 +630,12 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
               {!sidebarNarrow && !sidebarCollapsed && item.page === 'dashboard' && unreadCount > 0 && (
                 <span className="ml-auto bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{unreadCount}</span>
               )}
+              {!sidebarNarrow && !sidebarCollapsed && item.page === 'tasks' && overdueCount > 0 && (
+                <span className="ml-auto bg-destructive text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{overdueCount}</span>
+              )}
+              {!sidebarNarrow && !sidebarCollapsed && item.page === 'projects' && activeProjectsCount > 0 && (
+                <span className="ml-auto bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{activeProjectsCount}</span>
+              )}
               {sidebarNarrow && item.page === 'dashboard' && unreadCount > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
               )}
@@ -645,39 +644,6 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
               )}
             </button>
           ))}
-
-          {/* 次要导航：更多菜单 */}
-          <div className="relative">
-            <button
-              onClick={() => setShowMoreNav(!showMoreNav)}
-              title={sidebarNarrow ? '更多' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 text-left text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white ${sidebarNarrow ? 'justify-center px-0' : ''}`}
-            >
-              <MoreHorizontal size={20} />
-              {!sidebarNarrow && !sidebarCollapsed && '更多'}
-            </button>
-            {showMoreNav && (
-              <div className="absolute left-full bottom-0 ml-2 w-48 bg-popover border border-border rounded-lg shadow-xl z-50 py-1">
-                {secondaryNavItems.filter(item => {
-                  if (item.requirePermission && (!user || (!isAdminRole(user.role) && !hasPermission(state, user.id, item.requirePermission)))) return false;
-                  const featureMap: Record<string, string> = { projects: 'projects', tasks: 'tasks', knowledge: 'knowledge', admin: 'dashboard', privacy: 'dashboard' };
-                  return isFeatureVisible(featureMap[item.page] || item.page);
-                }).map(item => (
-                  <button key={item.page} onClick={() => { handlePageClick(item.page); setShowMoreNav(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors text-left ${currentPage === item.page ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted'}`}>
-                    {item.icon}
-                    {item.label}
-                    {item.page === 'tasks' && overdueCount > 0 && (
-                      <span className="ml-auto bg-destructive text-white text-[10px] px-1.5 py-0.5 rounded-full">{overdueCount}</span>
-                    )}
-                    {item.page === 'projects' && activeProjectsCount > 0 && (
-                      <span className="ml-auto bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{activeProjectsCount}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         </nav>
 
         <div className={`px-3 py-3 border-t border-white/10 space-y-1 ${sidebarNarrow ? 'flex flex-col items-center' : ''}`}>
@@ -841,8 +807,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
       {/* Mobile bottom navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border flex items-center justify-around h-14 px-1" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         {navItems.filter(item => {
-            if (item.requirePermission && (!user || (!isAdminRole(user.role) && !hasPermission(state, user.id, item.requirePermission)))) return false;
-          const featureMap: Record<string, string> = { dashboard: 'dashboard', goals: 'goals_basic', projects: 'projects', tasks: 'tasks', insight: 'insight', knowledge: 'knowledge', admin: 'dashboard', privacy: 'dashboard' };
+          const featureMap: Record<string, string> = { dashboard: 'dashboard', goals: 'goals_basic', projects: 'projects', tasks: 'tasks', insight: 'insight', knowledge: 'knowledge', admin: 'dashboard' };
           return isFeatureVisible(featureMap[item.page] || item.page);
         }).filter(item => ['dashboard', 'goals', 'projects', 'tasks'].includes(item.page)).map(item => (
           <button key={item.page} onClick={() => handlePageClick(item.page)}
@@ -859,13 +824,12 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
         <button onClick={() => handlePageClick('insight')}
           className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${currentPage === 'insight' ? 'text-primary' : 'text-muted-foreground'}`}>
           <BarChart3 size={20} />
-          <span className="text-[10px] mt-0.5">洞察</span>
+          <span className="text-[10px] mt-0.5">报告</span>
         </button>
-        {/* More button: opens sidebar overlay for admin/privacy */}
-        <button onClick={() => setSidebarOpen(true)}
-          className="flex flex-col items-center justify-center flex-1 h-full text-muted-foreground">
-          <Menu size={20} />
-          <span className="text-[10px] mt-0.5">更多</span>
+        <button onClick={() => handlePageClick('admin')}
+          className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${currentPage === 'admin' ? 'text-primary' : 'text-muted-foreground'}`}>
+          <Settings size={20} />
+          <span className="text-[10px] mt-0.5">管理</span>
         </button>
       </nav>
 

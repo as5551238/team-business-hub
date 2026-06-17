@@ -185,13 +185,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       cleanupRealtime();
       initSupabase(url, anonKey);
+      // BUG FIX: Set teamId BEFORE fetching data to prevent empty queries with '__default__'
+      const preTeamId = (() => { try { return localStorage.getItem('tbh-current-team'); } catch { return null; } })();
+      if (preTeamId) setCurrentTeamId(preTeamId);
       const data = await withTimeout(fetchAllFromSupabase(), 15000, '数据加载');
       if (connectSeqRef.current !== mySeq) return false;
       if (data) {
         // Set current team from localStorage or data
-        const savedTeamId = (() => { try { return localStorage.getItem('tbh-current-team'); } catch { return null; } })();
+        const savedTeamId = preTeamId;
         const teamId = savedTeamId || data.currentTeamId || null;
-        if (teamId) setCurrentTeamId(teamId);
+        if (teamId && teamId !== preTeamId) setCurrentTeamId(teamId);
         // Set RLS context for subsequent queries
         const savedUserId = (() => { try { return localStorage.getItem(CURRENT_USER_KEY); } catch { return null; } })();
         if (teamId && savedUserId) setRLSContext(teamId, savedUserId);

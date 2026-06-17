@@ -19,7 +19,7 @@ const RiskAITab = lazy(() => import('./dashboard/RiskAITab'));
 const PlansTab = lazy(() => import('./dashboard/PlansTab'));
 const GanttTab = lazy(() => import('./dashboard/GanttTab'));
 const OtherTab = lazy(() => import('./dashboard/OtherTab'));
-const ConversationalDashboard = lazy(() => import('@/components/ConversationalDashboard'));
+const ConversationalDashboard = lazy(() => import('@/components/ConversationalDashboard').then(m => ({ default: m.ConversationalDashboard })));
 
 // ── Tab 类型 & 配置 ──
 type DashboardTab = 'conversational' | 'myToday' | 'business' | 'riskAI' | 'plans' | 'gantt' | 'other';
@@ -124,7 +124,7 @@ export default function Dashboard({ onPageChange }: DashboardProps) {
       {/* 可滚动内容区域 — 移动端额外底部留白避免被底栏遮挡 */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pb-20 md:pb-4">
       {/* 新手引导 OR Tab 内容 */}
-      {isNewUser ? (
+      {isNewUser && (tab === 'conversational' || tab === 'myToday') ? (
         <div className="bg-gradient-to-br from-primary/5 via-white to-primary/10 rounded-2xl border border-primary/20 shadow-sm p-6 md:p-8 space-y-6 animate-fade-in">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
