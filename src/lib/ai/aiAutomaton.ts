@@ -91,7 +91,7 @@ export const BUILTIN_AUTOMATON_RULES: AutomatonRule[] = [
       const result = aiAction.execute(state, {
         title: `跟进：${goal.title} 进度更新`,
         goalId: goal.id,
-        priority: 'B',
+        priority: 'medium',
       });
       if (result && !('error' in result)) return result as Action;
       return null;

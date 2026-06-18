@@ -30,7 +30,7 @@ const createTask: AiActionDef = {
     { key: 'title', type: 'string', required: true, description: 'Task title' },
     { key: 'goalId', type: 'string', required: false, description: 'Parent goal ID' },
     { key: 'projectId', type: 'string', required: false, description: 'Parent project ID' },
-    { key: 'priority', type: 'enum', required: false, enum: ['S', 'A', 'B', 'C'], description: 'Priority' },
+    { key: 'priority', type: 'enum', required: false, enum: ['urgent', 'high', 'medium', 'low'], description: 'Priority' },
     { key: 'leaderId', type: 'string', required: false, description: 'Assignee member ID' },
     { key: 'dueDate', type: 'string', required: false, description: 'Due date ISO string' },
     { key: 'tags', type: 'string', required: false, description: 'Comma-separated tag names' },
@@ -49,7 +49,7 @@ const createGoal: AiActionDef = {
   params: [
     { key: 'title', type: 'string', required: true, description: 'Goal title' },
     { key: 'type', type: 'enum', required: false, enum: ['strategic', 'operational', 'personal'], description: 'Goal type' },
-    { key: 'priority', type: 'enum', required: false, enum: ['S', 'A', 'B', 'C'], description: 'Priority' },
+    { key: 'priority', type: 'enum', required: false, enum: ['urgent', 'high', 'medium', 'low'], description: 'Priority' },
     { key: 'leaderId', type: 'string', required: false, description: 'Goal owner ID' },
     { key: 'startDate', type: 'string', required: false, description: 'Start date' },
     { key: 'endDate', type: 'string', required: false, description: 'End date' },
@@ -101,7 +101,7 @@ const updateTaskPriority: AiActionDef = {
   category: 'update',
   params: [
     { key: 'taskId', type: 'string', required: true, description: 'Task ID' },
-    { key: 'priority', type: 'enum', required: true, enum: ['S', 'A', 'B', 'C'], description: 'New priority' },
+    { key: 'priority', type: 'enum', required: true, enum: ['urgent', 'high', 'medium', 'low'], description: 'New priority' },
   ],
   execute: (state, p) => {
     return { type: 'UPDATE_TASK', payload: { id: p.taskId, updates: { priority: p.priority } } };

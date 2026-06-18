@@ -621,7 +621,7 @@ function App() {
         // Convert SW URL to hash-based route: /task/xxx -> #tasks, /goal/xxx -> #goals
         const page = url.includes('/goal') ? 'goals' : url.includes('/project') ? 'projects' : url.includes('/task') ? 'tasks' : null;
         if (page) {
-          window.location.hash = page;
+          window.location.hash = `#/${page}`;
           // Dispatch item navigation after a short delay for page to load
           const itemId = url.split('/').pop();
           if (itemId) {

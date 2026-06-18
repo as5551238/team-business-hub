@@ -61,7 +61,7 @@ export default function Projects() {
   }, [state.comments]);
 
   const filteredProjects = useMemo(() => {
-    let result = state.projects;
+    let result = state.projects.filter(p => !p.deletedAt);
     if (selectedStatuses.size > 0) result = result.filter(p => selectedStatuses.has(p.status));
     if (selectedPriorities.size > 0) result = result.filter(p => selectedPriorities.has(p.priority));
     if (selectedLevels.size > 0) result = result.filter(p => { const bp = bpOptions.find(o => o.value !== 'all' && priorityFromBp(o.value) === p.priority)?.value; return bp && selectedLevels.has(bp); });

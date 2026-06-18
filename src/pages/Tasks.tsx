@@ -81,7 +81,7 @@ export default function Tasks() {
 
   // filteredTasks MUST be declared before useEffect that references it (TDZ fix)
   const filteredTasks = useMemo(() => {
-    let list = state.tasks;
+    let list = state.tasks.filter(t => !t.deletedAt);
     if (!isTeamView && viewingMember) list = list.filter(t => t.leaderId === viewingMember.id || (t.supporterIds || []).includes(viewingMember.id));
     if (selectedStatuses.size > 0) list = list.filter(t => selectedStatuses.has(t.status));
     if (selectedPriorities.size > 0) list = list.filter(t => selectedPriorities.has(t.priority));
@@ -116,7 +116,7 @@ export default function Tasks() {
     const onNavUp = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : 0; setFocusedId(ids[Math.max(idx - 1, 0)]); };
     const onEdit = () => { if (focusedId) setDetailItem({ type: 'task', id: focusedId }); };
     const onOpen = () => { if (focusedId) setDetailItem({ type: 'task', id: focusedId }); };
-    const onDelete = () => { if (focusedId && can('task_delete')) dispatch({ type: 'DELETE_TASK', payload: focusedId }); };
+    const onDelete = () => { if (focusedId && can('tasks_delete')) dispatch({ type: 'DELETE_TASK', payload: focusedId }); };
     const onComplete = () => { if (focusedId) { const task = state.tasks.find(t => t.id === focusedId); if (task) { const oldStatus = task.status; const newStatus = task.status === 'done' ? 'todo' : 'done'; dispatch({ type: 'UPDATE_TASK', payload: { id: focusedId, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'task', entityId: focusedId, field: 'status', oldValue: oldStatus, newValue: newStatus }); } } };
     const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
     const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (mode === 'table' || mode === 'board' || mode === 'list' || mode === 'timeline' || mode === 'matrix') setViewMode(mode as ViewMode); };
@@ -206,7 +206,7 @@ export default function Tasks() {
   }
 
   const handleDropToQuadrant = useCallback((taskId: string, quadrant: string) => {
-    if (!can('edit_tasks')) return;
+    if (!can('tasks_edit')) return;
     let np: TaskPriority = 'low';
     if (quadrant === '紧急重要') np = 'urgent'; else if (quadrant === '重要不紧急') np = 'high'; else if (quadrant === '紧急不重要') np = 'medium';
     dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { priority: np } } });
@@ -265,7 +265,7 @@ export default function Tasks() {
           {cols.map(col => {
             const items = getItems(col.key);
             return (
-              <div key={col.key} className={`w-[260px] sm:w-[300px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={(e: React.DragEvent) => e.preventDefault()}               onDrop={(e: React.DragEvent) => { e.preventDefault(); const taskId = e.dataTransfer.getData('text/plain'); if (!taskId || !can('edit_tasks')) return; if (onDropCustom) { onDropCustom(taskId, col.key); return; } if (enableDrag) { const validStatuses: Record<string, TaskStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done', blocked: 'blocked', cancelled: 'cancelled' }; const newStatus = validStatuses[col.key]; if (newStatus) { const t = state.tasks.find(x => x.id === taskId); dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'task', entityId: taskId, field: 'status', oldValue: t?.status || '', newValue: newStatus }); } } }}>
+              <div key={col.key} className={`w-[260px] sm:w-[300px] flex-shrink-0 bg-muted/30 rounded-xl border border-border pt-3`} onDragOver={(e: React.DragEvent) => e.preventDefault()}               onDrop={(e: React.DragEvent) => { e.preventDefault(); const taskId = e.dataTransfer.getData('text/plain'); if (!taskId || !can('tasks_edit')) return; if (onDropCustom) { onDropCustom(taskId, col.key); return; } if (enableDrag) { const validStatuses: Record<string, TaskStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done', blocked: 'blocked', cancelled: 'cancelled' }; const newStatus = validStatuses[col.key]; if (newStatus) { const t = state.tasks.find(x => x.id === taskId); dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'task', entityId: taskId, field: 'status', oldValue: t?.status || '', newValue: newStatus }); } } }}>
                 <div className={`flex items-center gap-2 px-4 pb-2 border-b-2 mx-3 mb-3 ${col.color || 'border-t-gray-400'}`}><span className="font-semibold text-sm">{col.label}</span><span className="text-xs text-muted-foreground ml-auto">{items.length}</span></div>
                 <div className="px-3 pb-3 space-y-2 max-h-[calc(100vh-320px)] overflow-y-auto">{items.length === 0 && <EmptyState title="暂无任务" compact />}{items.map(task => <TaskCard key={task.id} task={task} compact tags={tags} commentCounts={commentCounts} batchProps={batchProps} onOpenDetail={onOpenDetail} getName={getName} getAvatar={getAvatar} enableDrag={!!enableDrag || !!onDropCustom} />)}</div>
               </div>
@@ -398,7 +398,7 @@ export default function Tasks() {
     const onOpenDetail = (task: Task) => setDetailItem({ type: 'task', id: task.id });
     const onToggleExpand = (id: string) => setExpandedTask(prev => prev === id ? null : id);
     const onToggleSubtask = (taskId: string, subtaskId: string) => dispatch({ type: 'TOGGLE_SUBTASK', payload: { taskId, subtaskId } });
-    const onUpdateStatus = (taskId: string, status: TaskStatus) => { if (!can('edit_tasks')) return; dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status } } }); };
+    const onUpdateStatus = (taskId: string, status: TaskStatus) => { if (!can('tasks_edit')) return; dispatch({ type: 'UPDATE_TASK', payload: { id: taskId, updates: { status } } }); };
     const allShownTaskIds = topTasks.filter(t => !shownIds || shownIds.has(t.id)).map(t => t.id);
     const allSelected = allShownTaskIds.length > 0 && allShownTaskIds.every(id => selectedIds.has(id));
     const someSelected = allShownTaskIds.some(id => selectedIds.has(id));
@@ -487,8 +487,8 @@ export default function Tasks() {
   }, [selectedIds.size, filteredTasks]);
 
   const batchDelete = useCallback(() => { if (!can('delete_tasks')) return; if (!confirm(`确认删除选中的 ${selectedIds.size} 个任务？`)) return; const c = selectedIds.size; selectedIds.forEach(id => dispatch({ type: 'DELETE_TASK', payload: id })); setSelectedIds(new Set()); setBatchMode(false); try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已删除 ${c} 个任务`, type: 'success' } })); } catch {} }, [selectedIds, dispatch]);
-  const batchUpdateStatus = useCallback((status: string) => { if (!can('edit_tasks')) return; if (!status) return; const c = selectedIds.size; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${c} 个任务状态`, type: 'success' } })); } catch {} }, [selectedIds, dispatch]);
-  const batchAssign = useCallback((leaderId: string) => { if (!can('edit_tasks')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
+  const batchUpdateStatus = useCallback((status: string) => { if (!can('tasks_edit')) return; if (!status) return; const c = selectedIds.size; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { status: status as TaskStatus } } })); setSelectedIds(new Set()); setBatchStatus(''); try { window.dispatchEvent(new CustomEvent('tbh-toast', { detail: { message: `已更新 ${c} 个任务状态`, type: 'success' } })); } catch {} }, [selectedIds, dispatch]);
+  const batchAssign = useCallback((leaderId: string) => { if (!can('tasks_edit')) return; if (!leaderId) return; selectedIds.forEach(id => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: { leaderId } } })); setSelectedIds(new Set()); setBatchLeader(''); }, [selectedIds, dispatch]);
 
   function closeCreateDialog() { setShowCreateDialog(false); setFromTemplate(false); setSelectedTemplate(''); setNewTags(new Set()); setNewSupporters(new Set()); }
 

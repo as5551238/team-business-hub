@@ -76,10 +76,10 @@ export function AiHomepageChat({ onPanelChange, activePanel, className }: AiHome
 
   // 全局上下文（不绑定特定 item）
   const globalContext = useMemo(() => {
-    const taskCount = Object.keys(state.tasks).length;
-    const goalCount = Object.keys(state.goals).length;
-    const projectCount = Object.keys(state.projects).length;
-    const overdueTasks = Object.values(state.tasks).filter(t =>
+    const taskCount = state.tasks.length;
+    const goalCount = state.goals.length;
+    const projectCount = state.projects.length;
+    const overdueTasks = state.tasks.filter(t =>
       t.status !== 'done' && t.status !== 'cancelled' &&
       t.dueDate && t.dueDate < new Date().toISOString().split('T')[0]
     ).length;

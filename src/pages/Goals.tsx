@@ -64,7 +64,7 @@ export default function Goals() {
 
   // filteredGoals MUST be declared before useEffect that references it (TDZ fix)
   const filteredGoals = useMemo(() => {
-    let result = [...state.goals];
+    let result = state.goals.filter(g => !g.deletedAt);
     if (selectedStatuses.size > 0) result = result.filter(g => selectedStatuses.has(g.status));
     if (selectedPriorities.size > 0) result = result.filter(g => selectedPriorities.has(g.priority));
     if (selectedLevels.size > 0) { const bpOf = (p: TaskPriority) => p === 'urgent' ? 'S' : p === 'high' ? 'A' : p === 'medium' ? 'B' : 'C'; result = result.filter(g => selectedLevels.has(bpOf(g.priority))); }
@@ -111,7 +111,7 @@ export default function Goals() {
     const onNavUp = () => { const ids = getFilteredIds(); if (ids.length === 0) return; const idx = focusedId ? ids.indexOf(focusedId) : 0; setFocusedId(ids[Math.max(idx - 1, 0)]); };
     const onEdit = () => { if (focusedId) setDetailItem({ type: 'goal', id: focusedId }); };
     const onOpen = () => { if (focusedId) setDetailItem({ type: 'goal', id: focusedId }); };
-    const onDelete = () => { if (focusedId && can('goal_delete')) dispatch({ type: 'DELETE_GOAL', payload: focusedId }); };
+    const onDelete = () => { if (focusedId && can('goals_delete')) dispatch({ type: 'DELETE_GOAL', payload: focusedId }); };
     const onComplete = () => { const id = focusedId; if (id) { const goal = state.goals.find(g => g.id === id); if (goal) { const oldStatus = goal.status; const newStatus = goal.status === 'done' ? 'in_progress' : 'done'; dispatch({ type: 'UPDATE_GOAL', payload: { id, updates: { status: newStatus } } }); broadcastOp({ type: 'update', entity: 'goal', entityId: id, field: 'status', oldValue: oldStatus, newValue: newStatus }); } } };
     const onFilter = () => { const input = document.querySelector<HTMLInputElement>('input[data-search-input]'); if (input) { input.focus(); } };
     const onViewSwitch = (e: Event) => { const mode = (e as CustomEvent).detail; if (VALID_VIEW_MODES.includes(mode as ViewMode)) setViewMode(mode as ViewMode); };

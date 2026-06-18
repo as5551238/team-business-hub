@@ -139,7 +139,7 @@ export function reducer(state: AppState, action: Action): AppState {
         const desc = conflictCount <= 3 ? conflictNames.join('、') : `${conflictNames.slice(0, 2).join('、')} 等${conflictCount}项`;
       // P3#3 fix: map state key to entity type instead of hardcoding 'task'
       const keyToEntityType: Record<string, string> = { goals: 'goal', projects: 'project', tasks: 'task', members: 'member', notifications: 'notification', activities: 'activity', comments: 'comment', tags: 'tag' };
-      const conflictType = keyToEntityType[conflictNames.length > 0 ? (Object.keys(payload).find(k => Array.isArray((payload as any)[k])) || 'tasks') : 'tasks'] || 'task';
+      const conflictType = keyToEntityType[conflictNames[0]] || 'task';
       s.notifications.unshift({ id: `sync-${Date.now()}-conflict`, type: 'sync', title: '数据同步更新', message: `${desc} 已被其他设备更新`, read: false, createdAt: new Date().toISOString(), relatedId: '', relatedType: conflictType, memberId: s.currentUser?.id || '' });
       }
       return ensureAppStateDefaults(s as Partial<AppState> & { members: Member[] });
@@ -258,6 +258,18 @@ export function reducer(state: AppState, action: Action): AppState {
       const MAX_ITEMS = 10000;
       for (const key of requiredArrays) {
         if (backup[key].length > MAX_ITEMS) return state;
+      }
+      // Item-level validation: ensure each item has required fields (id, title)
+      const validateItems = (items: any[], name: string): boolean => {
+        for (const item of items) {
+          if (!item || typeof item !== 'object') return false;
+          if (!item.id || typeof item.id !== 'string') return false;
+          if (!item.title || typeof item.title !== 'string') return false;
+        }
+        return true;
+      };
+      for (const key of requiredArrays) {
+        if (!validateItems(backup[key], key)) return state;
       }
       const imported: AppState = {
         members: backup.members,

@@ -235,12 +235,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setBehaviorUserId(resolvedUser?.id || null);
         try { localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey })); } catch {}
         setConnectionMode('supabase');
-        setupRealtime();
+        // setupRealtime is triggered by the useEffect on [state.currentTeamId, connectionMode]
+        // Do NOT call setupRealtime() here to avoid double subscription
         return true;
       } else {
         try { localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url, anonKey })); } catch {}
         setConnectionMode('supabase');
-        setupRealtime();
+        // setupRealtime is triggered by the useEffect on [state.currentTeamId, connectionMode]
         return true;
       }
     } catch (e: unknown) {
@@ -259,24 +260,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       setConnectionMode('loading');
       const data = generateAllData();
-      await sb.from('notes').delete().neq('id', '___never___');
-      await sb.from('schedule_events').delete().neq('id', '___never___');
-      await sb.from('templates').delete().neq('id', '___never___');
-      await sb.from('categories').delete().neq('id', '___never___');
-      await sb.from('reviews').delete().neq('id', '___never___');
-      await sb.from('activities').delete().neq('id', '___never___');
-      await sb.from('notifications').delete().neq('id', '___never___');
-      await sb.from('item_links').delete().neq('id', '___never___');
-      await sb.from('tasks').delete().neq('id', '___never___');
-      await sb.from('projects').delete().neq('id', '___never___');
-      await sb.from('goals').delete().neq('id', '___never___');
-      await sb.from('members').delete().neq('id', '___never___');
-      await supabaseUpsert('members', data.members);
-      await supabaseUpsert('goals', data.goals);
-      await supabaseUpsert('projects', data.projects);
-      await supabaseUpsert('tasks', data.tasks);
-      await supabaseUpsert('notifications', data.notifications);
-      await supabaseUpsert('activities', data.activities);
+      // Safety: upsert first (idempotent), THEN delete stale rows not in new data.
+      // This avoids data loss if upsert fails partway — old data still exists.
+      // Collect upsert errors but continue; only fail if ALL upserts fail.
+      let upsertErrors = 0;
+      const upserts = [
+        ['members', data.members],
+        ['goals', data.goals],
+        ['projects', data.projects],
+        ['tasks', data.tasks],
+        ['notifications', data.notifications],
+        ['activities', data.activities],
+      ] as const;
+      for (const [table, rows] of upserts) {
+        try {
+          await supabaseUpsert(table, rows);
+        } catch {
+          upsertErrors++;
+        }
+      }
+      if (upsertErrors === upserts.length) {
+        throw new Error('所有数据写入失败，已中止初始化');
+      }
+      // Delete ancillary tables that are fully replaced (low risk)
+      const ancillary = ['notes', 'schedule_events', 'templates', 'categories', 'reviews', 'item_links'];
+      for (const t of ancillary) {
+        try { await sb.from(t).delete().neq('id', '___never___'); } catch { /* non-critical */ }
+      }
       const fresh = await fetchAllFromSupabase();
       if (fresh) {
         const curState = stateRef.current;
