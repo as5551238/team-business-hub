@@ -236,7 +236,12 @@ export async function chatWithLLM(
     const raw = await callLLM(fullPrompt, { ...config, costRouting: true }, 'simple');
     return raw || '抱歉，我暂时无法回应，请稍后再试。';
   } catch (err) {
-    console.error('[IntentParser] Chat LLM failed:', err instanceof Error ? err.message : String(err));
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[IntentParser] Chat LLM failed:', errMsg);
+    // 透传具体错误（如"余额不足"），而非统一的"网络请求失败"
+    if (errMsg.includes('余额不足') || errMsg.includes('402')) return 'AI 服务余额不足，请前往 DeepSeek 充值或在管理中心更换 API Key。';
+    if (errMsg.includes('认证失败') || errMsg.includes('401') || errMsg.includes('403')) return 'AI 服务认证失败，API Key 无效或已过期，请在管理中心更新。';
+    if (errMsg.includes('频繁') || errMsg.includes('429')) return '请求过于频繁，请稍后再试。';
     return '网络请求失败，请检查 AI 设置或稍后重试。';
   }
 }
