@@ -12,7 +12,7 @@ export const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; i
   in_progress: { label: '进行中', color: 'bg-blue-100 text-blue-700', icon: Clock },
   done: { label: '已完成', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
   blocked: { label: '已阻塞', color: 'bg-red-100 text-red-700', icon: AlertCircle },
-  cancelled: { label: '已删除', color: 'bg-slate-100 text-slate-500', icon: Ban },
+  cancelled: { label: '已取消', color: 'bg-slate-100 text-slate-500', icon: Ban },
 };
 
 export const URGENCY_CONFIG: Record<TaskPriority, { label: string; color: string }> = {

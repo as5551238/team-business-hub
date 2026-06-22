@@ -51,8 +51,8 @@ const ProjectCard = React.memo(function ProjectCard({ project, members, expanded
                 <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
                 <div className="absolute right-0 top-full mt-1 w-36 bg-card rounded-lg shadow-lg border border-border z-50 py-1">
                   <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); onClick(); setShowMenu(false); }}><Edit2 size={14} /> 编辑</button>
-                  {can('edit_projects') && project.status !== 'done' && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, updates: { status: 'done' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 完成</button>}
-                  {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除</button>}
+                  {can('projects_edit') && project.status !== 'done' && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left" onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_PROJECT', payload: { id: project.id, updates: { status: 'done' } } }); setShowMenu(false); }}><CheckCircle2 size={14} /> 完成</button>}
+                  {can('projects_delete') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenu(false); }}><Trash2 size={14} /> 删除</button>}
                 </div>
               </div>
             )}
@@ -159,7 +159,7 @@ export function ProjectListView({ projects, members, setDetailItem, commentCount
               <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
               <div className="absolute right-0 top-full mt-1 w-32 bg-card rounded-lg shadow-lg border border-border z-50 py-1">
                 <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); setShowMenuId(null); }}><Edit2 size={12} /> 编辑</button>
-                {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
+                {can('projects_delete') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
               </div>
             </div>
           )}
@@ -253,7 +253,7 @@ export function ProjectTableView({ projects, members, setDetailItem, commentCoun
                         <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setShowMenuId(null); }} />
                         <div className="absolute right-0 top-full mt-1 w-32 bg-card rounded-lg shadow-lg border border-border z-50 py-1">
                           <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left" onClick={e => { e.stopPropagation(); setDetailItem({ type: 'project', id: project.id }); setShowMenuId(null); }}><Edit2 size={12} /> 编辑</button>
-                          {can('delete_projects') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
+                          {can('projects_delete') && <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left text-destructive" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); setShowMenuId(null); }}><Trash2 size={12} /> 删除</button>}
                         </div>
                       </div>
                     )}
@@ -486,7 +486,7 @@ const MatrixQuadrantCard = React.memo(function MatrixQuadrantCard({ project, mem
         {batchProps.batchMode && <span onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(project.id)} className="rounded" onChange={() => batchProps.onToggleSelect(project.id)} /></span>}
         <span className="text-xs font-medium truncate flex-1">{project.title}</span>
         <div className="relative flex-shrink-0">
-          {can('delete_projects') && <button className="p-0.5 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); }}><Trash2 size={12} className="text-destructive" /></button>}
+          {can('projects_delete') && <button className="p-0.5 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); if (!confirm('确认删除此项目？')) return; dispatch({ type: 'DELETE_PROJECT', payload: project.id }); }}><Trash2 size={12} className="text-destructive" /></button>}
         </div>
       </div>
       <div className="flex items-center gap-2 mb-1.5">
@@ -582,7 +582,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
     if (dragRef.current) {
       if (dragRef.current.el) dragRef.current.el.classList.remove('opacity-30', 'scale-95');
       const targetQ = hoverQRef.current;
-      if (targetQ && quadrants[targetQ] && can('edit_projects')) {
+      if (targetQ && quadrants[targetQ] && can('projects_edit')) {
         dispatch({ type: 'UPDATE_PROJECT', payload: { id: dragRef.current.id, updates: { priority: quadrants[targetQ].dropPriority } } });
       }
       // Delay reset so onClick can check dragMovedRef before hoverQ is cleared
@@ -717,7 +717,7 @@ export function ProjectCanvasView({ projects, members, setDetailItem, batchProps
         const d = itemDragRef.current;
         const newLeft = d.origLeft + (lastCX - d.startX);
         const newTop = d.origTop + (lastCY - d.startY);
-        if (can('edit_projects')) {
+        if (can('projects_edit')) {
           dispatch({ type: 'UPDATE_PROJECT', payload: { id: d.id, updates: { canvasX: newLeft, canvasY: newTop } as Partial<Project> } });
         }        itemDragRef.current = null;
       }
