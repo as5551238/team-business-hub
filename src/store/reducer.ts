@@ -111,7 +111,7 @@ export function reducer(state: AppState, action: Action): AppState {
               const locAge = Date.now() - localUpdated.getTime();
               if (locAge < 300000) { logActivity({ memberId: s.currentUser?.id, action: 'sync_overwrite', targetType: key as string, targetId: remoteItem.id as string, targetTitle: (remoteItem.title as string) || (remoteItem.name as string) || '数据', details: '数据已被其他设备更新' }); conflictCount++; if (conflictNames.length < 3) conflictNames.push((remoteItem.title as string) || (remoteItem.name as string) || '数据'); }
             }
-            merged.push(remoteUpdated > localUpdated ? { ...localItem, ...remoteItem } : localItem);
+            merged.push(remoteUpdated > localUpdated ? { ...localItem, ...remoteItem } : { ...localItem, deletedAt: remoteItem.deletedAt ?? localItem.deletedAt });
           } else {
             merged.push(remoteItem);
           }
