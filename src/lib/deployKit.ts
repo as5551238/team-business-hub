@@ -191,7 +191,7 @@ export interface ExportData {
   teamMembers: any[];
 }
 
-/** 导出全部数据到 JSON */
+/** 导出全部数据到 JSON（含人员姓名解析） */
 export function exportAllData(state: {
   goals: any[];
   projects: any[];
@@ -200,12 +200,25 @@ export function exportAllData(state: {
   teams: any[];
   teamMembers: any[];
 }): ExportData {
+  const memberNameMap = new Map<string, string>();
+  for (const m of state.members) memberNameMap.set(m.id, m.name || m.nickname || '未知');
+
+  const resolveName = (id: string | null | undefined) => id ? (memberNameMap.get(id) || '未知') : '未分配';
+  const resolveNames = (ids: string[] | null | undefined) => {
+    if (!ids || ids.length === 0) return [];
+    return ids.map(id => memberNameMap.get(id) || '未知');
+  };
+
+  const goals = state.goals.map(g => ({ ...g, leaderName: resolveName(g.leaderId), supporterNames: resolveNames(g.supporterIds) }));
+  const projects = state.projects.map(p => ({ ...p, leaderName: resolveName(p.leaderId), supporterNames: resolveNames(p.supporterIds) }));
+  const tasks = state.tasks.map(t => ({ ...t, leaderName: resolveName(t.leaderId), supporterNames: resolveNames(t.supporterIds) }));
+
   return {
-    version: '1.0.0',
+    version: '1.1.0',
     exportedAt: new Date().toISOString(),
-    goals: state.goals,
-    projects: state.projects,
-    tasks: state.tasks,
+    goals,
+    projects,
+    tasks,
     members: state.members,
     teams: state.teams,
     teamMembers: state.teamMembers,

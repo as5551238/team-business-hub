@@ -2,9 +2,9 @@ import * as XLSX from '@giszhc/xlsx/dist/xlsx.mini.min';
 import type { BackupData, Member, Goal, Project, Task, Notification, Activity, ItemLink, Tag, Category, Template, ScheduleEvent, Note, ReviewEntry, Comment, Bookmark, SavedView } from '@/types';
 
 interface FlatMember extends Omit<Member, 'permissions'> { permissions: string; }
-interface FlatGoal extends Omit<Goal, 'keyResults' | 'tags' | 'supporterIds' | 'attachments' | 'trackingRecords' | 'selectedKRIds'> { keyResults: string; tags: string; supporterIds: string; attachments: string; trackingRecords: string; selectedKRIds: string; }
-interface FlatProject extends Omit<Project, 'tags' | 'supporterIds' | 'attachments' | 'trackingRecords'> { tags: string; supporterIds: string; attachments: string; trackingRecords: string; }
-interface FlatTask extends Omit<Task, 'tags' | 'subtasks' | 'supporterIds' | 'attachments' | 'trackingRecords'> { tags: string; subtasks: string; supporterIds: string; attachments: string; trackingRecords: string; }
+interface FlatGoal extends Omit<Goal, 'keyResults' | 'tags' | 'supporterIds' | 'attachments' | 'trackingRecords' | 'selectedKRIds'> { keyResults: string; tags: string; supporterIds: string; supporterNames: string; attachments: string; trackingRecords: string; selectedKRIds: string; leaderName: string; }
+interface FlatProject extends Omit<Project, 'tags' | 'supporterIds' | 'attachments' | 'trackingRecords'> { tags: string; supporterIds: string; supporterNames: string; attachments: string; trackingRecords: string; leaderName: string; }
+interface FlatTask extends Omit<Task, 'tags' | 'subtasks' | 'supporterIds' | 'attachments' | 'trackingRecords'> { tags: string; subtasks: string; supporterIds: string; supporterNames: string; attachments: string; trackingRecords: string; leaderName: string; }
 
 function arrStr(val: any): string {
   if (!val) return '';
@@ -23,14 +23,24 @@ interface FlatSavedView extends Omit<SavedView, 'filters'> { filters: string; }
 export function exportToExcel(data: BackupData): ArrayBuffer {
   const wb = XLSX.utils.book_new();
 
+  const memberNameMap = new Map<string, string>();
+  for (const m of data.members) memberNameMap.set(m.id, m.name || m.nickname || '未知');
+
+  const resolveName = (id: string | null | undefined) => id ? (memberNameMap.get(id) || '未知') : '未分配';
+  const resolveNames = (ids: string[] | null | undefined) => {
+    if (!ids || ids.length === 0) return '';
+    return ids.map(id => memberNameMap.get(id) || '未知').join(', ');
+  };
+
   const members: FlatMember[] = data.members.map(m => ({ ...m, permissions: JSON.stringify(m.permissions || []) }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(members), '成员');
 
   const goals: FlatGoal[] = data.goals.map(g => ({
     id: g.id, title: g.title, description: g.description || '', status: g.status, priority: g.priority,
-    parentId: g.parentId || '', leaderId: g.leaderId, progress: g.progress,
+    parentId: g.parentId || '', leaderId: g.leaderId, leaderName: resolveName(g.leaderId), progress: g.progress,
     dueDate: g.dueDate || '', startDate: g.startDate || '', category: g.category || '',
     tags: arrStr(g.tags), keyResults: arrStr(g.keyResults), supporterIds: arrStr(g.supporterIds),
+    supporterNames: resolveNames(g.supporterIds),
     attachments: arrStr(g.attachments), trackingRecords: arrStr(g.trackingRecords),
     selectedKRIds: arrStr(g.selectedKRIds), repeatCycle: g.repeatCycle || '',
     discussionThreadId: g.discussionThreadId || '', summary: g.summary || '',
@@ -40,9 +50,10 @@ export function exportToExcel(data: BackupData): ArrayBuffer {
 
   const projects: FlatProject[] = data.projects.map(p => ({
     id: p.id, title: p.title, description: p.description || '', status: p.status, priority: p.priority,
-    goalId: p.goalId || '', leaderId: p.leaderId, progress: p.progress, taskCount: p.taskCount || 0,
+    goalId: p.goalId || '', leaderId: p.leaderId, leaderName: resolveName(p.leaderId), progress: p.progress, taskCount: p.taskCount || 0,
     dueDate: p.dueDate || '', startDate: p.startDate || '', category: p.category || '',
     tags: arrStr(p.tags), supporterIds: arrStr(p.supporterIds),
+    supporterNames: resolveNames(p.supporterIds),
     attachments: arrStr(p.attachments), trackingRecords: arrStr(p.trackingRecords),
     repeatCycle: p.repeatCycle || '', discussionThreadId: p.discussionThreadId || '',
     summary: p.summary || '', createdAt: p.createdAt, updatedAt: p.updatedAt,
@@ -51,9 +62,10 @@ export function exportToExcel(data: BackupData): ArrayBuffer {
 
   const tasks: FlatTask[] = data.tasks.map(t => ({
     id: t.id, title: t.title, description: t.description || '', status: t.status, priority: t.priority,
-    projectId: t.projectId || '', parentId: t.parentId || '', leaderId: t.leaderId,
+    projectId: t.projectId || '', parentId: t.parentId || '', leaderId: t.leaderId, leaderName: resolveName(t.leaderId),
     dueDate: t.dueDate || '', startDate: t.startDate || '', category: t.category || '',
     tags: arrStr(t.tags), subtasks: arrStr(t.subtasks), supporterIds: arrStr(t.supporterIds),
+    supporterNames: resolveNames(t.supporterIds),
     attachments: arrStr(t.attachments), trackingRecords: arrStr(t.trackingRecords),
     repeatCycle: t.repeatCycle || '', discussionThreadId: t.discussionThreadId || '',
     summary: t.summary || '', completedAt: t.completedAt || '', createdAt: t.createdAt, updatedAt: t.updatedAt,
