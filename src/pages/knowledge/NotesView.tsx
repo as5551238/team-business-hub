@@ -2,44 +2,13 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { useNotes } from '@/store/hooks';
 import {
-  Plus, Trash2, Tag, Search, Pin, PinOff, Palette, StickyNote, Eye, Edit3,
-  Bold, Italic, List, ListOrdered, Heading, Code, Quote, Link2, Minus
+  Plus, Trash2, Tag, Search, Pin, PinOff, StickyNote, Share2, Eye
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
-import DOMPurify from 'dompurify';
 import { NOTE_COLORS, FOLDERS } from '../admin/constants';
-import { renderMarkdown } from '../admin/MarkdownDocTab';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { useAutoSave } from '@/hooks/useAutoSave';
-
-/** Markdown 格式工具栏 — 在 textarea 光标位置插入格式标记 */
-function MarkdownToolbar({ onInsert }: { onInsert: (before: string, after: string, placeholder: string) => void }) {
-  const tools: Array<{ icon: React.ReactNode; before: string; after: string; placeholder: string; tip: string }> = [
-    { icon: <Heading size={14} />, before: '## ', after: '', placeholder: '标题', tip: '标题' },
-    { icon: <Bold size={14} />, before: '**', after: '**', placeholder: '粗体', tip: '粗体' },
-    { icon: <Italic size={14} />, before: '*', after: '*', placeholder: '斜体', tip: '斜体' },
-    { icon: <Code size={14} />, before: '`', after: '`', placeholder: '代码', tip: '行内代码' },
-    { icon: <Quote size={14} />, before: '> ', after: '', placeholder: '引用', tip: '引用' },
-    { icon: <List size={14} />, before: '- ', after: '', placeholder: '列表项', tip: '无序列表' },
-    { icon: <ListOrdered size={14} />, before: '1. ', after: '', placeholder: '列表项', tip: '有序列表' },
-    { icon: <Link2 size={14} />, before: '[', after: '](url)', placeholder: '链接文字', tip: '链接' },
-    { icon: <Minus size={14} />, before: '
----
-', after: '', placeholder: '', tip: '分割线' },
-  ];
-  return (
-    <div className="flex items-center gap-0.5">
-      {tools.map((t, i) => (
-        <Tooltip key={i}><TooltipTrigger asChild><button
-          type="button"
-          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-          onClick={() => onInsert(t.before, t.after, t.placeholder)}
-        >{t.icon}</button></TooltipTrigger><TooltipContent>{t.tip}</TooltipContent></Tooltip>
-      ))}
-    </div>
-  );
-}
+import RichTextEditor from '@/components/RichTextEditor';
+import { sendWeChatMessage, isWeChatEnabled } from '@/supabase/wechat';
 
 export function NotesView() {
   const { state } = useStore();
@@ -53,51 +22,9 @@ export function NotesView() {
   const [editingContent, setEditingContent] = useState('');
   const [editingColor, setEditingColor] = useState(NOTE_COLORS[0]);
   const [editingCategory, setEditingCategory] = useState('');
-  const [markdownPreview, setMarkdownPreview] = useState(false);
-  const lastSavedContentRef = useRef('');
-  const lastSavedTitleRef = useRef('');
-
-  // Auto-save content with useAutoSave (replaces hand-rolled debounce)
-  const { flush: flushContent } = useAutoSave(editingContent, {
-    delay: 800,
-    enabled: !!selectedNoteId && editingContent !== lastSavedContentRef.current,
-    onSave: (val) => {
-      if (!selectedNoteId || val === lastSavedContentRef.current) return;
-      lastSavedContentRef.current = val;
-      updateNote(selectedNoteId, { content: val });
-    },
-  });
-
-  // Auto-save title with useAutoSave
-  const { flush: flushTitle } = useAutoSave(editingTitle, {
-    delay: 800,
-    enabled: !!selectedNoteId && editingTitle !== lastSavedTitleRef.current,
-    onSave: (val) => {
-      if (!selectedNoteId || val === lastSavedTitleRef.current) return;
-      lastSavedTitleRef.current = val;
-      updateNote(selectedNoteId, { title: val.trim() || '无标题' });
-    },
-  });
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  /** 在 textarea 光标位置插入 Markdown 格式 */
-  const insertMarkdown = (before: string, after: string, placeholder: string) => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.focus();
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const selected = editingContent.slice(start, end);
-    const insert = selected || placeholder;
-    const newContent = editingContent.slice(0, start) + before + insert + after + editingContent.slice(end);
-    setEditingContent(newContent);
-    // Set cursor position after the inserted text
-    requestAnimationFrame(() => {
-      ta.selectionStart = start + before.length;
-      ta.selectionEnd = start + before.length + insert.length;
-    });
-  };
+  const [showPreview, setShowPreview] = useState(false);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const noteCategories = useMemo(() => { const cats = new Set<string>(); notes.forEach(n => { if (n.category) cats.add(n.category); }); return Array.from(cats); }, [notes]);
   const filteredNotes = useMemo(() => {
@@ -111,13 +38,42 @@ export function NotesView() {
   const sortedNotes = useMemo(() => [...filteredNotes].sort((a, b) => { if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1; return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(); }), [filteredNotes]);
   const selectedNote = selectedNoteId ? notes.find(n => n.id === selectedNoteId) : null;
 
-  useEffect(() => { if (selectedNote) { flushContent(); flushTitle(); setEditingTitle(selectedNote.title); setEditingContent(selectedNote.content); setEditingColor(selectedNote.color); setEditingCategory(selectedNote.category || ''); lastSavedTitleRef.current = selectedNote.title; lastSavedContentRef.current = selectedNote.content; } }, [selectedNote?.id]);
+  useEffect(() => { if (selectedNote) { setEditingTitle(selectedNote.title); setEditingContent(selectedNote.content); setEditingColor(selectedNote.color); setEditingCategory(selectedNote.category || ''); } }, [selectedNote?.id]);
+  function handleNoteSave() { if (!selectedNoteId || !selectedNote) return; if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => { updateNote(selectedNoteId, { title: editingTitle.trim() || '无标题', content: editingContent, color: editingColor, category: editingCategory }); }, 500); }
+  useEffect(() => { return () => { if (debounceRef.current) clearTimeout(debounceRef.current); }; }, []);
 
   function handleNewNote() { const folder = folderFilter === '全部' ? '工作' : folderFilter; const memberId = currentUser?.id || ''; addNote({ title: '新建笔记', content: '', folder, color: NOTE_COLORS[0], isPinned: false, linkedItemId: null, linkedItemType: null, createdBy: memberId, updatedBy: memberId }); }
   function handleDeleteNote(id: string, title: string) { if (!confirm(`确定要删除笔记「${title}」吗？`)) return; deleteNote(id); if (selectedNoteId === id) setSelectedNoteId(null); }
   function togglePin(id: string, current: boolean) { updateNote(id, { isPinned: !current }); }
   function handleFolderSelect(val: string) { if (val === '__new__') { const name = prompt('输入新文件夹名称：'); if (name && name.trim()) { setFolderFilter(name.trim()); } return; } setFolderFilter(val); setSelectedNoteId(null); }
   function formatTime(iso: string) { const d = new Date(iso); const now = new Date(); const diff = now.getTime() - d.getTime(); if (diff < 60000) return '刚刚'; if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`; if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`; return `${d.getMonth() + 1}/${d.getDate()}`; }
+
+  // WeChat share
+  async function handleShareWechat() {
+    if (!selectedNote) return;
+    setShareStatus('发送中...');
+    try {
+      // Strip HTML tags for plain text preview
+      const textContent = selectedNote.content.replace(/<[^>]*>/g, '').slice(0, 500);
+      const message = `📝 ${selectedNote.title}\n\n${textContent}${selectedNote.content.length > 500 ? '...' : ''}\n\n——来自团队业务中台·笔记`;
+      const ok = await sendWeChatMessage(message);
+      setShareStatus(ok ? '✓ 发送成功' : '✗ 发送失败');
+    } catch {
+      setShareStatus('✗ 发送失败');
+    }
+    setTimeout(() => setShareStatus(null), 3000);
+  }
+
+  // Share via WeChat personal (URL scheme)
+  function handleSharePersonal() {
+    if (!selectedNote) return;
+    const textContent = selectedNote.content.replace(/<[^>]*>/g, '').slice(0, 500);
+    const text = encodeURIComponent(`📝 ${selectedNote.title}\n\n${textContent}${selectedNote.content.length > 500 ? '...' : ''}\n\n——来自团队业务中台·笔记`);
+    // WeChat share URL scheme (works on mobile)
+    window.open(`weixin://dl/business/?t=${text}`, '_blank');
+    setShareStatus('已尝试打开微信，请在微信中选择联系人');
+    setTimeout(() => setShareStatus(null), 4000);
+  }
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -136,7 +92,7 @@ export function NotesView() {
           {sortedNotes.map(note => (
             <div key={note.id} className={`px-3 py-2.5 cursor-pointer border-b border-border/50 hover:bg-muted/30 transition-colors ${selectedNoteId === note.id ? 'bg-primary/5 border-l-[3px] border-l-primary' : note.color !== '#ffffff' ? 'border-l-[3px]' : ''}`} onClick={() => setSelectedNoteId(note.id)} style={{ borderLeftColor: selectedNoteId === note.id ? undefined : (note.color !== '#ffffff' ? note.color : undefined) }}>
               <div className="flex items-center gap-1.5 mb-0.5"><div className="w-3 h-3 rounded flex-shrink-0 border border-gray-200" style={{ backgroundColor: note.color === '#ffffff' ? '#fff' : note.color }} /><span className={`text-sm truncate flex-1 ${note.isPinned ? 'font-bold' : 'font-medium'}`}>{note.isPinned && <Pin size={10} className="inline mr-1 text-primary" />}{note.title || '无标题'}</span></div>
-              <div className="text-xs text-muted-foreground truncate">{note.content.slice(0, 30) || '空内容'}</div>
+              <div className="text-xs text-muted-foreground truncate">{note.content.replace(/<[^>]*>/g, '').slice(0, 30) || '空内容'}</div>
               <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">{note.category && <span className="px-1 py-0.5 bg-primary/10 text-primary rounded">{note.category}</span>}<span className="px-1 py-0.5 bg-muted rounded">{note.folder}</span><span>{formatTime(note.updatedAt)}</span></div>
             </div>
           ))}
@@ -145,19 +101,44 @@ export function NotesView() {
           {selectedNote ? (
             <>
               <div className="flex items-center gap-2 p-3 border-b border-border flex-shrink-0">
-                <input className="flex-1 text-base font-semibold border-none outline-none bg-transparent" placeholder="笔记标题" value={editingTitle} onChange={e => setEditingTitle(e.target.value)} onBlur={() => flushTitle()} />
-                <Tooltip><TooltipTrigger asChild><button className={`p-1.5 rounded-lg hover:bg-muted ${markdownPreview ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`} onClick={() => setMarkdownPreview(!markdownPreview)}>{markdownPreview ? <Edit3 size={16} /> : <Eye size={16} />}</button></TooltipTrigger><TooltipContent>{markdownPreview ? '编辑模式' : 'Markdown预览'}</TooltipContent></Tooltip>
+                <input className="flex-1 text-base font-semibold border-none outline-none bg-transparent" placeholder="笔记标题" value={editingTitle} onChange={e => { setEditingTitle(e.target.value); handleNoteSave(); }} onBlur={handleNoteSave} />
+                <button className={`p-1.5 rounded-lg hover:bg-muted ${showPreview ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`} onClick={() => setShowPreview(!showPreview)} title={showPreview ? '编辑模式' : '只读预览'}><Eye size={16} /></button>
                 <button className="p-1.5 rounded-lg hover:bg-muted" onClick={() => togglePin(selectedNote.id, selectedNote.isPinned)}>{selectedNote.isPinned ? <PinOff size={16} className="text-primary" /> : <Pin size={16} className="text-muted-foreground" />}</button>
+                {/* WeChat share button */}
+                <div className="relative group">
+                  <button className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground" title="分享到微信"><Share2 size={16} /></button>
+                  <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-50 hidden group-hover:block min-w-[160px]">
+                    <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2" onClick={handleShareWechat}>
+                      <Share2 size={13} /> 分享到企业微信群
+                    </button>
+                    <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2" onClick={handleSharePersonal}>
+                      <Share2 size={13} /> 分享到微信好友
+                    </button>
+                    <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2" onClick={() => {
+                      if (!selectedNote) return;
+                      const textContent = selectedNote.content.replace(/<[^>]*>/g, '');
+                      navigator.clipboard.writeText(`📝 ${selectedNote.title}\n\n${textContent}`).then(() => { setShareStatus('✓ 已复制到剪贴板'); setTimeout(() => setShareStatus(null), 2000); });
+                    }}>
+                      <Tag size={13} /> 复制内容
+                    </button>
+                  </div>
+                </div>
+                {shareStatus && <span className="text-xs text-muted-foreground">{shareStatus}</span>}
                 <button className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600" onClick={() => handleDeleteNote(selectedNote.id, selectedNote.title)}><Trash2 size={16} /></button>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-border/50 flex-shrink-0">
                 <Palette size={14} className="text-muted-foreground" />{NOTE_COLORS.map(c => <button key={c} className={cn('w-6 h-6 rounded-full border-2 transition-transform hover:scale-110', editingColor === c ? 'border-primary ring-2 ring-primary/30 scale-110' : 'border-gray-300')} style={{ backgroundColor: c }} onClick={() => { setEditingColor(c); updateNote(selectedNote.id, { color: c }); }} />)}<span className="mx-1 text-border">|</span>
-                <Tag size={12} className="text-muted-foreground flex-shrink-0" /><input className="text-xs border border-border rounded px-1.5 py-0.5 w-20 focus:outline-none focus:ring-1 focus:ring-primary/20" placeholder="分类" value={editingCategory} onChange={e => setEditingCategory(e.target.value)} onBlur={() => { if (selectedNoteId && editingCategory !== (selectedNote?.category || '')) updateNote(selectedNoteId, { category: editingCategory }); }} />
+                <Tag size={12} className="text-muted-foreground flex-shrink-0" /><input className="text-xs border border-border rounded px-1.5 py-0.5 w-20 focus:outline-none focus:ring-1 focus:ring-primary/20" placeholder="分类" value={editingCategory} onChange={e => { setEditingCategory(e.target.value); handleNoteSave(); }} onBlur={handleNoteSave} />
               </div>
-              {markdownPreview ? (
-                <div className="flex-1 w-full p-4 text-sm overflow-y-auto prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: renderMarkdown(editingContent) }} />
+              {showPreview ? (
+                <div className="flex-1 w-full p-4 text-sm overflow-y-auto prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: editingContent }} />
               ) : (
-                <MarkdownToolbar onInsert={insertMarkdown} /><textarea ref={textareaRef} className="flex-1 w-full p-4 text-sm border-none outline-none resize-none bg-transparent" placeholder="开始书写... (支持Markdown)" value={editingContent} onChange={e => setEditingContent(e.target.value)} onBlur={() => flushContent()} />
+                <RichTextEditor
+                  key={selectedNoteId}
+                  initialContent={editingContent}
+                  onChange={(html) => { setEditingContent(html); handleNoteSave(); }}
+                  placeholder="开始书写..."
+                />
               )}
             </>
           ) : <div className="flex-1 flex items-center justify-center text-muted-foreground"><div className="text-center"><StickyNote size={48} className="mx-auto mb-2 opacity-30" /><p className="text-sm">选择或新建一条笔记</p></div></div>}
