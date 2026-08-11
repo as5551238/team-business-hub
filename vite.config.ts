@@ -22,6 +22,7 @@ export default defineConfig({
         name: '团队业务中台',
         short_name: 'TBH',
         description: '中小团队AI目标中台',
+        lang: 'zh-CN',
         theme_color: '#1E40AF',
         background_color: '#ffffff',
         display: 'standalone',
@@ -76,7 +77,10 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('recharts')) return 'charts';
+            // 注意：不得将 recharts 单独拆包。recharts 顶层即调用 React.forwardRef，
+            // 若独立成 charts chunk 会与 vendor(React) 形成循环依赖，导致初始化时
+            // React 为 undefined 而白屏崩溃（见 Circular chunk: charts -> vendor -> charts）。
+            // 因此 recharts 随其消费方（Dashboard 等）自然分包，由 Rollup 默认处理。
             if (id.includes('@supabase/supabase-js') || id.includes('@supabase/postgrest-js') || id.includes('@supabase/realtime-js') || id.includes('@supabase/storage-js') || id.includes('@supabase/functions-js')) return 'supabase';
             if (id.includes('xlsx')) return 'xlsx';
             if (id.includes('@sentry')) return 'sentry';
