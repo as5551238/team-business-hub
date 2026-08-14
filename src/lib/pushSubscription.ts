@@ -116,13 +116,33 @@ async function syncSubscriptionToServer(subscription: PushSubscription): Promise
       updated_at: new Date().toISOString(),
     };
 
-    // Store to localStorage as backup (Supabase sync requires auth context)
+    // Store to localStorage as backup
     try {
       localStorage.setItem('tbh-push-subscription', JSON.stringify(payload));
     } catch {}
 
-    // Attempt Supabase upsert (may fail if not authenticated)
-    // This will be called from the App context where Supabase client is available
+    // Direct Supabase upsert (preferred over postMessage)
+    try {
+      const { getSupabaseClient, isSupabaseConfigured } = await import('@/supabase/client');
+      if (isSupabaseConfigured()) {
+        const sb = getSupabaseClient();
+        if (sb) {
+          await sb.from('push_subscriptions').upsert({
+            endpoint: payload.endpoint,
+            p256dh: payload.p256dh,
+            auth: payload.auth,
+            user_agent: payload.user_agent,
+            updated_at: payload.updated_at,
+          }, { onConflict: 'endpoint' });
+          console.log('[Push] Subscription synced to Supabase');
+          return; // success, skip postMessage fallback
+        }
+      }
+    } catch (err) {
+      console.warn('[Push] Supabase sync failed, trying postMessage fallback:', err);
+    }
+
+    // Fallback: postMessage to SW
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
         type: 'SYNC_SUBSCRIPTION',

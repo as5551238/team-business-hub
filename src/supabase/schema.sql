@@ -198,7 +198,7 @@ create table if not exists notifications (
   title text not null,
   message text not null,
   related_id text not null,
-  related_type text not null check (related_type in ('task', 'goal', 'project')),
+  related_type text not null check (related_type in ('task', 'goal', 'project', 'note', 'knowledge')),
   member_id text references members(id),
   read boolean not null default false,
   created_at timestamptz default now(),
@@ -405,9 +405,17 @@ create table if not exists knowledge (
   id text primary key default gen_random_uuid()::text,
   title text not null,
   content text,
+  category text default '',
   tags jsonb default '[]'::jsonb,
+  status text default 'active' check (status in ('active', 'draft', 'archived')),
+  assignee_id text,
+  priority text default 'medium' check (priority in ('low', 'medium', 'high', 'urgent')),
+  due_date timestamptz,
+  metadata jsonb default '{}'::jsonb,
+  visibility text default 'team' check (visibility in ('personal', 'team', 'team_editable')),
   member_id text references members(id),
   related_items jsonb default '[]'::jsonb,
+  color text default '',
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   team_id text not null
@@ -709,6 +717,12 @@ create policy "Reviews: owner or admin can update" on reviews
     and (member_id = app_current_user_id() or is_team_admin(team_id))
   );
 
+create policy "Reviews: owner or admin can delete" on reviews
+  for delete using (
+    team_id = app_current_team_id()
+    and (member_id = app_current_user_id() or is_team_admin(team_id))
+  );
+
 -- === categories 表 ===
 alter table categories enable row level security;
 
@@ -774,6 +788,12 @@ create policy "Templates: owner or admin can update" on templates
     and (created_by = app_current_user_id() or is_team_admin(team_id))
   );
 
+create policy "Templates: owner or admin can delete" on templates
+  for delete using (
+    team_id = app_current_team_id()
+    and (created_by = app_current_user_id() or is_team_admin(team_id))
+  );
+
 -- === schedule_events 表 ===
 alter table schedule_events enable row level security;
 
@@ -817,6 +837,12 @@ create policy "Notes: owner or admin can update" on notes
     and (created_by = app_current_user_id() or is_team_admin(team_id))
   );
 
+create policy "Notes: owner or admin can delete" on notes
+  for delete using (
+    team_id = app_current_team_id()
+    and (created_by = app_current_user_id() or is_team_admin(team_id))
+  );
+
 -- === comments 表 ===
 alter table comments enable row level security;
 
@@ -832,6 +858,12 @@ create policy "Comments: team members can insert" on comments
 
 create policy "Comments: author or admin can update" on comments
   for update using (
+    team_id = app_current_team_id()
+    and (member_id = app_current_user_id() or is_team_admin(team_id))
+  );
+
+create policy "Comments: author or admin can delete" on comments
+  for delete using (
     team_id = app_current_team_id()
     and (member_id = app_current_user_id() or is_team_admin(team_id))
   );
@@ -855,6 +887,12 @@ create policy "Bookmarks: owner or admin can update" on bookmarks
     and (member_id = app_current_user_id() or is_team_admin(team_id))
   );
 
+create policy "Bookmarks: owner or admin can delete" on bookmarks
+  for delete using (
+    team_id = app_current_team_id()
+    and (member_id = app_current_user_id() or is_team_admin(team_id))
+  );
+
 -- === saved_views 表 ===
 alter table saved_views enable row level security;
 
@@ -870,6 +908,12 @@ create policy "Saved views: team members can insert" on saved_views
 
 create policy "Saved views: owner or admin can update" on saved_views
   for update using (
+    team_id = app_current_team_id()
+    and (member_id = app_current_user_id() or is_team_admin(team_id))
+  );
+
+create policy "Saved views: owner or admin can delete" on saved_views
+  for delete using (
     team_id = app_current_team_id()
     and (member_id = app_current_user_id() or is_team_admin(team_id))
   );
@@ -962,6 +1006,12 @@ create policy "Knowledge: owner or admin can update" on knowledge
     and (member_id = app_current_user_id() or is_team_admin(team_id))
   );
 
+create policy "Knowledge: owner or admin can delete" on knowledge
+  for delete using (
+    team_id = app_current_team_id()
+    and (member_id = app_current_user_id() or is_team_admin(team_id))
+  );
+
 -- ==================== 审计触发器 ====================
 
 /** 通用审计日志触发器函数 */
@@ -1027,6 +1077,9 @@ alter publication supabase_realtime add table tasks;
 alter publication supabase_realtime add table notifications;
 alter publication supabase_realtime add table activities;
 alter publication supabase_realtime add table comments;
+alter publication supabase_realtime add table item_links;
+alter publication supabase_realtime add table knowledge;
+alter publication supabase_realtime add table notes;
 
 -- ==================== 附件存储桶 ====================
 insert into storage.buckets (id, name, public) values ('attachments', 'attachments', true) on conflict (id) do nothing;
@@ -1092,3 +1145,49 @@ select
   end as phone,
   wechat_id
 from members;
+
+-- ==================== Push 订阅表 ====================
+
+/** Web Push 订阅信息 — 用于服务端推送通知 */
+create table if not exists push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  endpoint text not null unique,   -- Push 订阅端点 URL
+  p256dh text,                      -- 客户端公钥
+  auth text,                        -- 客户端认证密钥
+  user_id text,                     -- 关联用户 (可选, 未登录时为空)
+  user_agent text,                  -- 浏览器 UA (用于调试)
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- RLS 策略: 已登录用户可管理自己的订阅, 匿名用户可插入
+alter table push_subscriptions enable row level security;
+
+create policy "Anyone can insert push subscription"
+  on push_subscriptions for insert
+  with check (true);
+
+create policy "Users can read own push subscriptions"
+  on push_subscriptions for select
+  using (user_id = auth.uid()::text or user_id is null);
+
+create policy "Users can delete own push subscriptions"
+  on push_subscriptions for delete
+  using (user_id = auth.uid()::text or user_id is null);
+
+-- 更新触发器
+create or replace function update_push_subscription_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger push_subscriptions_updated_at
+  before update on push_subscriptions
+  for each row execute function update_push_subscription_updated_at();
+
+-- 索引
+create index if not exists idx_push_subscriptions_user_id on push_subscriptions(user_id);
+create index if not exists idx_push_subscriptions_endpoint on push_subscriptions(endpoint);
