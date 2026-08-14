@@ -91,7 +91,9 @@ export default function MemberProfileCard({ memberId }: { memberId: string }) {
       if (!error && data) {
         setProfile(data as ProfileData);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to fetch behavior profile:', e);
+    }
     setLoading(false);
   }, [memberId]);
 

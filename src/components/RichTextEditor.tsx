@@ -1,16 +1,24 @@
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Highlight } from '@tiptap/extension-highlight';
 import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
+import UnderlineExt from '@tiptap/extension-underline';
+import ImageExt from '@tiptap/extension-image';
+import TaskListExt from '@tiptap/extension-task-list';
+import TaskItemExt from '@tiptap/extension-task-item';
+import MentionExt from '@tiptap/extension-mention';
+import { ReactRenderer } from '@tiptap/react';
+import MentionList from '@/components/MentionList';
+import type { Member } from '@/types';
 import {
   Bold, Italic, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, Code, Link2, Undo, Redo, Highlighter,
-  Palette, RemoveFormatting
+  Palette, RemoveFormatting, Underline, Image as ImageIcon, ListTodo
 } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * TipTap Rich Text Editor — 非受控模式
@@ -30,6 +38,8 @@ interface RichTextEditorProps {
   placeholder?: string;
   className?: string;
   onFocus?: () => void;
+  members?: Member[];
+  onMentionsChange?: (memberIds: string[]) => void;
 }
 
 const FONT_COLORS = [
@@ -42,10 +52,74 @@ const BG_COLORS = [
   '#f3e8ff', '#ffedd5', '#e2e8f0', '#fecaca', '#ccfbf1'
 ];
 
-export default function RichTextEditor({ initialContent, onChange, placeholder, className, onFocus }: RichTextEditorProps) {
+/** Toolbar button — defined at module level to avoid remount on every render */
+function ToolbarButton({ onClick, isActive, title, children }: { onClick: () => void; isActive?: boolean; title: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`p-1.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-muted-foreground'}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+export default function RichTextEditor({ initialContent, onChange, placeholder, className, onFocus, members, onMentionsChange }: RichTextEditorProps) {
   // Debounce ref: avoid calling onChange on every keystroke
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestHtml = useRef<string>(initialContent);
+  const membersRef = useRef<Member[]>(members || []);
+  membersRef.current = members || [];
+  const [showFontColor, setShowFontColor] = useState(false);
+  const [showBgColor, setShowBgColor] = useState(false);
+  const fontColorRef = useRef<HTMLDivElement>(null);
+  const bgColorRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭颜色面板
+  useEffect(() => {
+    if (!showFontColor && !showBgColor) return;
+    const handler = (e: MouseEvent) => {
+      if (showFontColor && fontColorRef.current && !fontColorRef.current.contains(e.target as Node)) setShowFontColor(false);
+      if (showBgColor && bgColorRef.current && !bgColorRef.current.contains(e.target as Node)) setShowBgColor(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showFontColor, showBgColor]);
+
+  // Build mention suggestion config (only active when members prop provided)
+  const mentionSuggestion = members ? {
+    items: ({ query }: { query: string }) => {
+      const q = query.toLowerCase();
+      return membersRef.current.filter(m => {
+        const name = (m.name || m.nickname || '').toLowerCase();
+        return name.includes(q);
+      }).slice(0, 10);
+    },
+    render: () => {
+      let reactRenderer: InstanceType<typeof ReactRenderer> | null = null;
+      let popup: HTMLDivElement | null = null;
+      const updatePos = (clientRect: (() => DOMRect | null) | undefined) => {
+        const rect = clientRect?.();
+        if (rect && popup) { popup.style.top = `${rect.bottom + 4}px`; popup.style.left = `${rect.left}px`; }
+      };
+      return {
+        onStart: (props: any) => {
+          reactRenderer = new ReactRenderer(MentionList, { props, editor: props.editor as Editor });
+          popup = document.createElement('div');
+          popup.style.position = 'fixed';
+          popup.style.zIndex = '9999';
+          popup.appendChild(reactRenderer.element);
+          document.body.appendChild(popup);
+          updatePos(props.clientRect);
+        },
+        onUpdate: (props: any) => { reactRenderer?.updateProps(props); updatePos(props.clientRect); },
+        onKeyDown: (props: any) => (reactRenderer?.ref as any)?.onKeyDown(props) ?? false,
+        onExit: () => { popup?.remove(); popup = null; reactRenderer = null; },
+      };
+    },
+  } : undefined;
 
   const editor = useEditor({
     extensions: [
@@ -56,6 +130,15 @@ export default function RichTextEditor({ initialContent, onChange, placeholder, 
       Color,
       Highlight.configure({ multicolor: true }),
       Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { class: 'text-primary underline', target: '_blank', rel: 'noopener noreferrer' } }),
+      UnderlineExt,
+      ImageExt.configure({ inline: false, allowBase64: false, HTMLAttributes: { class: 'rounded-lg max-w-full' } }),
+      TaskListExt.configure({ itemTypeName: 'taskItem' }),
+      TaskItemExt.configure({ nested: true }),
+      ...(mentionSuggestion ? [MentionExt.configure({
+        HTMLAttributes: { class: 'mention' },
+        suggestion: mentionSuggestion,
+        renderLabel: (opts: any) => `@${opts.node.attrs.label || opts.node.attrs.id}`,
+      })] : []),
       Placeholder.configure({ placeholder: placeholder || '开始书写...' }),
     ],
     content: initialContent,
@@ -67,6 +150,17 @@ export default function RichTextEditor({ initialContent, onChange, placeholder, 
     onUpdate: ({ editor: e }) => {
       const html = e.getHTML();
       latestHtml.current = html;
+      // Extract mention member IDs for notification dispatch
+      if (onMentionsChange) {
+        const json = e.getJSON();
+        const ids: string[] = [];
+        const walk = (node: any) => {
+          if (node.type === 'mention' && node.attrs?.id) ids.push(node.attrs.id);
+          (node.content || []).forEach(walk);
+        };
+        walk(json);
+        onMentionsChange(ids);
+      }
       // Debounce: notify parent after 300ms of inactivity
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       debounceTimer.current = setTimeout(() => {
@@ -103,18 +197,14 @@ export default function RichTextEditor({ initialContent, onChange, placeholder, 
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   }, [editor]);
 
-  if (!editor) return null;
+  const setImage = useCallback(() => {
+    if (!editor) return;
+    const url = window.prompt('输入图片URL（支持 http/https 外链）:', 'https://');
+    if (!url || url === 'https://') return;
+    editor.chain().focus().setImage({ src: url }).run();
+  }, [editor]);
 
-  const ToolbarButton = ({ onClick, isActive, title, children }: { onClick: () => void; isActive?: boolean; title: string; children: React.ReactNode }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className={`p-1.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-muted-foreground'}`}
-    >
-      {children}
-    </button>
-  );
+  if (!editor) return null;
 
   return (
     <div className={`flex flex-col min-h-0 flex-1 ${className || ''}`} onBlur={handleBlur}>
@@ -125,6 +215,9 @@ export default function RichTextEditor({ initialContent, onChange, placeholder, 
         </ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} title="斜体">
           <Italic size={15} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} title="下划线">
+          <Underline size={15} />
         </ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editor.isActive('strike')} title="删除线">
           <Strikethrough size={15} />
@@ -147,6 +240,9 @@ export default function RichTextEditor({ initialContent, onChange, placeholder, 
         <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editor.isActive('orderedList')} title="有序列表">
           <ListOrdered size={15} />
         </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleTaskList().run()} isActive={editor.isActive('taskList')} title="任务列表">
+          <ListTodo size={15} />
+        </ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editor.isActive('codeBlock')} title="代码块">
           <Code size={15} />
         </ToolbarButton>
@@ -154,61 +250,68 @@ export default function RichTextEditor({ initialContent, onChange, placeholder, 
         <span className="w-px h-4 bg-border mx-1" />
 
         {/* Font color picker */}
-        <div className="relative group">
-          <ToolbarButton onClick={() => {}} title="字体颜色">
+        <div className="relative" ref={fontColorRef}>
+          <ToolbarButton onClick={() => setShowFontColor(v => !v)} isActive={showFontColor} title="字体颜色">
             <Palette size={15} />
           </ToolbarButton>
-          <div className="absolute left-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg p-2 hidden group-hover:flex flex-wrap gap-1 z-50 w-[200px]">
-            {FONT_COLORS.map(c => (
+          {showFontColor && (
+            <div className="absolute left-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg p-2 flex flex-wrap gap-1 z-50 w-[200px]">
+              {FONT_COLORS.map(c => (
+                <button
+                  key={`fc-${c}`}
+                  type="button"
+                  title={c}
+                  className="w-5 h-5 rounded-full border border-gray-300 hover:scale-125 transition-transform"
+                  style={{ backgroundColor: c, color: c === '#ffffff' ? '#999' : c }}
+                  onClick={() => { editor.chain().focus().setColor(c).run(); setShowFontColor(false); }}
+                />
+              ))}
               <button
-                key={`fc-${c}`}
                 type="button"
-                title={c}
-                className="w-5 h-5 rounded-full border border-gray-300 hover:scale-125 transition-transform"
-                style={{ backgroundColor: c, color: c === '#ffffff' ? '#999' : c }}
-                onClick={() => editor.chain().focus().setColor(c).run()}
-              />
-            ))}
-            <button
-              type="button"
-              title="重置字体颜色"
-              className="w-5 h-5 rounded-full border border-gray-300 hover:scale-125 transition-transform flex items-center justify-center text-[10px] text-muted-foreground bg-white"
-              onClick={() => editor.chain().focus().unsetColor().run()}
-            >
-              ×
-            </button>
-          </div>
+                title="重置字体颜色"
+                className="w-5 h-5 rounded-full border border-gray-300 hover:scale-125 transition-transform flex items-center justify-center text-[10px] text-muted-foreground bg-white"
+                onClick={() => { editor.chain().focus().unsetColor().run(); setShowFontColor(false); }}
+              >
+                ×
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Background highlight color picker */}
-        <div className="relative group">
-          <ToolbarButton onClick={() => {}} title="背景高亮">
+        <div className="relative" ref={bgColorRef}>
+          <ToolbarButton onClick={() => setShowBgColor(v => !v)} isActive={showBgColor} title="背景高亮">
             <Highlighter size={15} />
           </ToolbarButton>
-          <div className="absolute left-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg p-2 hidden group-hover:flex flex-wrap gap-1 z-50 w-[200px]">
-            {BG_COLORS.map(c => (
+          {showBgColor && (
+            <div className="absolute left-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg p-2 flex flex-wrap gap-1 z-50 w-[200px]">
+              {BG_COLORS.map(c => (
+                <button
+                  key={`bg-${c}`}
+                  type="button"
+                  title={c}
+                  className="w-5 h-5 rounded-full border border-gray-300 hover:scale-125 transition-transform"
+                  style={{ backgroundColor: c }}
+                  onClick={() => { editor.chain().focus().toggleHighlight({ color: c }).run(); setShowBgColor(false); }}
+                />
+              ))}
               <button
-                key={`bg-${c}`}
                 type="button"
-                title={c}
-                className="w-5 h-5 rounded-full border border-gray-300 hover:scale-125 transition-transform"
-                style={{ backgroundColor: c }}
-                onClick={() => editor.chain().focus().toggleHighlight({ color: c }).run()}
-              />
-            ))}
-            <button
-              type="button"
-              title="移除背景高亮"
-              className="w-5 h-5 rounded-full border border-gray-300 hover:scale-125 transition-transform flex items-center justify-center text-[10px] text-muted-foreground bg-white"
-              onClick={() => editor.chain().focus().unsetHighlight().run()}
-            >
-              ×
-            </button>
-          </div>
+                title="移除背景高亮"
+                className="w-5 h-5 rounded-full border border-gray-300 hover:scale-125 transition-transform flex items-center justify-center text-[10px] text-muted-foreground bg-white"
+                onClick={() => { editor.chain().focus().unsetHighlight().run(); setShowBgColor(false); }}
+              >
+                ×
+              </button>
+            </div>
+          )}
         </div>
 
         <ToolbarButton onClick={setLink} isActive={editor.isActive('link')} title="插入链接">
           <Link2 size={15} />
+        </ToolbarButton>
+        <ToolbarButton onClick={setImage} title="插入图片">
+          <ImageIcon size={15} />
         </ToolbarButton>
 
         <span className="w-px h-4 bg-border mx-1" />
@@ -253,6 +356,12 @@ export default function RichTextEditor({ initialContent, onChange, placeholder, 
         .tiptap-editor-body .tiptap a { color: var(--primary); text-decoration: underline; }
         .tiptap-editor-body .tiptap p { margin: 0.25rem 0; }
         .tiptap-editor-body .tiptap blockquote { border-left: 3px solid var(--primary); padding-left: 0.75rem; color: #6b7280; margin: 0.5rem 0; }
+        .tiptap-editor-body .tiptap ul[data-type="taskList"] { list-style: none; padding-left: 0; }
+        .tiptap-editor-body .tiptap ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5rem; }
+        .tiptap-editor-body .tiptap ul[data-type="taskList"] li > label { flex-shrink: 0; margin-top: 0.25rem; }
+        .tiptap-editor-body .tiptap ul[data-type="taskList"] li > div { flex: 1; }
+        .tiptap-editor-body .tiptap .mention { background: var(--primary); color: var(--primary-foreground); border-radius: 0.25rem; padding: 0.1em 0.3em; font-size: 0.85em; }
+        .tiptap-editor-body .tiptap img { border-radius: 0.5rem; max-width: 100%; }
       `}</style>
     </div>
   );

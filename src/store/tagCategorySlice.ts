@@ -9,7 +9,7 @@ export function tagCategoryReducer(state: AppState, action: Action): AppState | 
     case 'ADD_TAG': {
       const s = needMutate(state, ['tags']);
       const now = tsNow();
-      const tag = { ...action.payload, id: genId('tag'), createdAt: now, updatedAt: now };
+      const tag = { ...action.payload, teamId: s.currentTeamId || '__default__', id: genId('tag'), createdAt: now, updatedAt: now };
       s.tags.push(tag);
       supabaseInsert('tags', tag);
       return s;
@@ -49,15 +49,16 @@ export function tagCategoryReducer(state: AppState, action: Action): AppState | 
     case 'ADD_CATEGORY': {
       const s = needMutate(state, ['categories']);
       const now = tsNow();
-      const c = { ...action.payload, id: genId('cat'), createdAt: now };
+      const c = { ...action.payload, teamId: s.currentTeamId || '__default__', id: genId('cat'), createdAt: now, updatedAt: now };
       s.categories.push(c);
       supabaseInsert('categories', c);
       return s;
     }
     case 'UPDATE_CATEGORY': {
       const s = needMutate(state, ['categories']);
+      const now = tsNow();
       const idx = s.categories.findIndex(c => c.id === action.payload.id);
-      if (idx !== -1) { s.categories[idx] = { ...s.categories[idx], ...action.payload.updates }; supabaseUpdate('categories', action.payload.id, action.payload.updates); }
+      if (idx !== -1) { s.categories[idx] = { ...s.categories[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('categories', action.payload.id, { ...action.payload.updates, updated_at: now }); }
       return s;
     }
     case 'DELETE_CATEGORY': {

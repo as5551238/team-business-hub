@@ -132,10 +132,10 @@ export interface AIInsight {
   suggestedAction?: SuggestedAction;
 }
 
-/** 内置 API Key — 用户未配置时自动使用，零门槛开箱即用 */
-export const BUILTIN_API_KEY = 'sk-3a3d1d950e23416d8d5ead90fd30be22';
-export const BUILTIN_BASE_URL = 'https://api.deepseek.com';
-export const BUILTIN_MODEL = 'deepseek-v4-flash';
+/** 内置 API Key — 优先从环境变量读取，开发 fallback 仅限本地开发使用 */
+export const BUILTIN_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || 'sk-3a3d1d950e23416d8d5ead90fd30be22';
+export const BUILTIN_BASE_URL = import.meta.env.VITE_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+export const BUILTIN_MODEL = import.meta.env.VITE_DEEPSEEK_MODEL || 'deepseek-v4-flash';
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
   provider: 'deepseek',

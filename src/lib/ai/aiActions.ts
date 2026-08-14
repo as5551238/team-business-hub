@@ -16,7 +16,7 @@ export interface AiActionDef {
   category: 'create' | 'update' | 'delete' | 'analyze' | 'workflow';
   params: { key: string; type: 'string' | 'number' | 'boolean' | 'enum'; required: boolean; enum?: string[]; description: string }[];
   /** Returns dispatch payload if valid, or error string if invalid */
-  execute: (state: AppState, params: Record<string, any>) => Action | { error: string };
+  execute: (state: AppState, params: Record<string, any>) => Action | Action[] | { error: string };
 }
 
 // ==================== Create Actions ====================
@@ -161,7 +161,7 @@ const updateKRValue: AiActionDef = {
     { key: 'value', type: 'number', required: true, description: 'New currentValue' },
   ],
   execute: (state, p) => {
-    return { type: 'UPDATE_KR', payload: { goalId: p.goalId, krId: p.krId, value: p.value } };
+    return { type: 'UPDATE_KEY_RESULT', payload: { goalId: p.goalId, krId: p.krId, value: p.value } };
   },
 };
 
@@ -177,7 +177,7 @@ const batchUpdateTaskStatus: AiActionDef = {
   execute: (state, p) => {
     const ids = (p.taskIds as string).split(',').map((s: string) => s.trim()).filter(Boolean);
     if (ids.length === 0) return { error: '至少选择一个任务' };
-    return { type: 'BATCH_UPDATE', payload: { itemType: 'task', ids, updates: { status: p.status } } };
+    return ids.map(id => ({ type: 'UPDATE_TASK' as const, payload: { id, updates: { status: p.status } } }));
   },
 };
 
@@ -192,7 +192,7 @@ const deleteTask: AiActionDef = {
     { key: 'taskId', type: 'string', required: true, description: 'Task ID' },
   ],
   execute: (state, p) => {
-    return { type: 'DELETE_TASK', payload: { id: p.taskId } };
+    return { type: 'DELETE_TASK', payload: p.taskId };
   },
 };
 
@@ -205,7 +205,7 @@ const deleteComment: AiActionDef = {
     { key: 'commentId', type: 'string', required: true, description: 'Comment ID' },
   ],
   execute: (state, p) => {
-    return { type: 'DELETE_COMMENT', payload: { id: p.commentId } };
+    return { type: 'DELETE_COMMENT', payload: p.commentId };
   },
 };
 

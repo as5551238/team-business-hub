@@ -18,12 +18,8 @@ self.addEventListener('message', (event) => {
       badge: './icon-192.png',
       data: { url: url || '/', actions: actions || [] },
     };
-    // Add action buttons for task notifications
-    if (actions && actions.length > 0) {
-      (opts as any).actions = actions.slice(0, 2).map((a: any) => ({
-        action: a.action || 'open',
-        title: a.title || '查看',
-      }));
+      // `self` in SW context allows arbitrary properties on notification options
+      (opts).actions = actions.slice(0, 2).map(function(a) {
     }
     self.registration.showNotification(title, opts);
   }
@@ -45,14 +41,16 @@ self.addEventListener('push', (event) => {
     badge: './icon-192.png',
     data: { url: data.url || '/', actions: data.actions || [] },
     vibrate: [100, 50, 100],
-  } as any;
+  }; // end opts
 
-  // Add action buttons for quick interactions
+  // Add action buttons for quick interactions (plain JS — no TS types in SW)
   if (data.actions && data.actions.length > 0) {
-    opts.actions = data.actions.slice(0, 2).map((a: any) => ({
-      action: a.action || 'open',
-      title: a.title || '查看',
-    }));
+    opts.actions = data.actions.slice(0, 2).map(function(a) {
+      return {
+        action: a.action || 'open',
+        title: a.title || '查看',
+      };
+    });
   }
 
   event.waitUntil(
@@ -70,11 +68,11 @@ self.addEventListener('notificationclick', (event) => {
   // Handle quick actions (complete / snooze)
   if (action && action !== 'open') {
     // Find the matching action definition
-    const actionDef = actions.find((a: any) => a.action === action);
+    const actionDef = actions.find(function(a) { return a.action === action; });
     if (actionDef) {
       // Post action to the app for processing
       event.waitUntil(
-        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
           if (clientList.length > 0) {
             clientList[0].postMessage({
               type: 'NOTIFICATION_ACTION',
@@ -92,10 +90,11 @@ self.addEventListener('notificationclick', (event) => {
 
   // Default: navigate to URL in existing window
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url.includes('team-business-hub') && 'focus' in client) {
-          client.postMessage({ type: 'NAVIGATE', url });
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        if (client.url.indexOf('team-business-hub') !== -1 && 'focus' in client) {
+          client.postMessage({ type: 'NAVIGATE', url: url });
           return client.focus();
         }
       }

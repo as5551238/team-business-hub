@@ -118,7 +118,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Wire up write-error notification (STA-01)
   useEffect(() => {
     setOnWriteError((msg: string) => {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { id: `err-${Date.now()}`, type: 'error', title: '同步失败', message: msg, read: false, createdAt: new Date().toISOString() } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { id: `err-${Date.now()}`, type: 'error', title: '同步失败', message: msg, relatedId: '', relatedType: 'note', memberId: '', read: false, createdAt: new Date().toISOString() } });
     });
     return () => { setOnWriteError(() => {}); };
   }, [dispatch]);
@@ -167,8 +167,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const config: SupabaseConfig = JSON.parse(configStr);
         if (config.url && config.anonKey) doConnect(config.url, config.anonKey);
       } else {
-        const defaultUrl = 'https://atexvoyvnnuaonvrgzhn.supabase.co';
-        const defaultKey = 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie';
+        const defaultUrl = import.meta.env.VITE_SUPABASE_URL || 'https://atexvoyvnnuaonvrgzhn.supabase.co';
+        const defaultKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie';
         doConnect(defaultUrl, defaultKey);
       }
     } catch (e) {
@@ -318,6 +318,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const origDispatch = dispatch;
     const dedupedDispatch = (action: Action) => {
       origDispatch(action);
+      notifySelectorListeners();
     };
 
     const handleDbChange = (table: string, payload: any) => {
@@ -351,6 +352,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'item_links', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('item_links', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('tags', p))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sprints', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('sprints', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'knowledge', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('knowledge', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes', filter: teamId ? `team_id=eq.${teamId}` : undefined }, (p) => handleDbChange('notes', p))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'push_notifications' }, (p) => {
         const { new: newRow } = p;
         if (!newRow) return;
@@ -370,15 +373,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       item_links: 'itemLinks', schedule_events: 'scheduleEvents', saved_views: 'savedViews',
       status_flow_rules: 'statusFlowRules', automation_rules: 'automationRules',
     };
-    const allTables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules'];
+    const allTables = ['goals', 'projects', 'tasks', 'members', 'notifications', 'activities', 'item_links', 'reviews', 'categories', 'templates', 'schedule_events', 'notes', 'comments', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules', 'sprints', 'knowledge'];
     const teamScopedTables = new Set(['goals', 'projects', 'tasks', 'notifications', 'activities', 'item_links', 'comments', 'categories', 'templates', 'schedule_events', 'notes', 'reviews', 'tags', 'bookmarks', 'saved_views', 'status_flow_rules', 'automation_rules', 'sprints', 'knowledge']);
     let polling = false;
-    const fallbackPoll = async () => {
-      if (polling || document.visibilityState === 'hidden') return;
+    const fallbackPoll = async (): Promise<boolean> => {
+      if (polling || document.visibilityState === 'hidden') return true;
       polling = true;
       try {
         const teamId = stateRef.current?.currentTeamId;
-        const results = await Promise.allSettled(allTables.map(table => {
+        // Also fetch team_members to filter members by team (P2#20 fix)
+        const queries = allTables.map(table => {
           let query: any;
           if (table === 'members') {
             query = sb.from(table).select('*').eq('status', 'active');
@@ -389,18 +393,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (teamId && teamScopedTables.has(table)) {
             query = query.eq('team_id', teamId);
           }
-          return query.then(({ data }) => {
+          return query.then(({ data, error }: { data: any; error: any }) => {
+            if (error) throw error;
             const key = tableKeyMap[table] || table;
             return { key, data: Array.isArray(data) ? data.map(toCamel) : [] };
           });
-        }));
+        });
+        // Add team_members query for member filtering
+        queries.push(
+          sb.from('team_members').select('*').then(({ data, error }: { data: any; error: any }) => {
+            if (error) throw error;
+            return { key: '__team_members', data: Array.isArray(data) ? data.map(toCamel) : [] };
+          })
+        );
+        const results = await Promise.allSettled(queries);
         const payload: Record<string, any> = {};
-        results.forEach(r => { if (r.status === 'fulfilled') { payload[r.value.key] = r.value.data; } });
+        let successCount = 0;
+        let teamMemberLinks: any[] = [];
+        results.forEach(r => {
+          if (r.status === 'fulfilled') {
+            if (r.value.key === '__team_members') {
+              teamMemberLinks = r.value.data;
+            } else {
+              payload[r.value.key] = r.value.data;
+              successCount++;
+            }
+          }
+        });
+        // Bug#7: skip dispatch if all requests failed — preserve local data
+        if (successCount === 0) {
+          console.warn('[fallbackPoll] all table fetches failed, skipping merge to preserve local data');
+          return false;
+        }
+        // P2#20 fix: filter members by team using team_members links
+        if (payload.members && teamMemberLinks.length > 0 && teamId) {
+          const memberIdsInTeam = new Set(teamMemberLinks.filter((tm: any) => tm.teamId === teamId).map((tm: any) => tm.memberId));
+          payload.members = payload.members.filter((m: any) => memberIdsInTeam.has(m.id) || m.teamId === teamId);
+        }
         dispatch({ type: 'MERGE_STATE', payload });
         notifySelectorListeners();
-        try { bc.postMessage({ type: 'MERGE_STATE', payload }); } catch {}
+        try { if (bc) bc.postMessage({ type: 'MERGE_STATE', payload }); } catch {}
+        return true;
       } catch (e) {
         console.error('[fallbackPoll] data sync failed:', e);
+        return false;
       } finally {
         polling = false;
       }
@@ -437,7 +473,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const onOnline = () => {
       const delay = Math.min(100 * Math.pow(2, reconnectFailures), 5000);
       setTimeout(async () => {
-        const success = await fallbackPoll().then(() => true).catch(() => false);
+        // P2#12 fix: use actual return value instead of always-true .then(()=>true)
+        const success = await fallbackPoll().catch(() => false);
         if (success) {
           reconnectFailures = 0;
           offlineWriteCountRef.current = 0;

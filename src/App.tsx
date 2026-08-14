@@ -6,6 +6,7 @@ import { FeatureFlagProvider } from '@/lib/featureFlags';
 import { startAiPushScan, stopAiPushScan } from '@/lib/pushEventEngine';
 import { useShareTarget } from '@/hooks/useShareTarget';
 import { startAutomaton, stopAutomaton } from '@/lib/ai/aiAutomaton';
+import { initNativeFeatures } from '@/lib/nativeBridge';
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Goals = lazy(() => import('@/pages/Goals'));
 const Projects = lazy(() => import('@/pages/Projects'));
@@ -42,7 +43,7 @@ const LOGIN_KEY = 'tbh-current-user';
 const TEAM_KEY = 'tbh-current-team';
 import { genId } from '@/store/utils';
 
-const PAGE_LABELS: Record<Page, string> = { dashboard: '工作台', goals: '目标管理', projects: '项目中心', tasks: '任务中心', insight: '数据洞察', ai: 'AI 分析', knowledge: '知识库', admin: '管理中心' };
+const PAGE_LABELS: Record<Page, string> = { dashboard: '工作台', goals: '目标管理', projects: '项目中心', tasks: '任务中心', insight: '数据洞察', knowledge: '知识库', admin: '管理中心', privacy: '隐私设置' };
 function navLabel(p: Page) { return PAGE_LABELS[p] || p; }
 
 function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
@@ -601,6 +602,9 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
 function App() {
   // Initialize Sentry on first load
   useEffect(() => { initSentry(); }, []);
+
+  // Initialize Capacitor native features (no-op in PWA/browser)
+  useEffect(() => { initNativeFeatures(); }, []);
 
   // Force SW update: detect new version and reload to bust stale PWA cache
   useEffect(() => {

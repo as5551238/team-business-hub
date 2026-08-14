@@ -81,7 +81,7 @@ function ExpandableSection({ section }: { section: ReviewSection }) {
           {section.metrics && section.metrics.length > 0 && (
             <div className="flex flex-wrap gap-3 mt-3">
               {section.metrics.map((m, i) => (
-                <div key={i} className="bg-gray-50 rounded-md px-3 py-2 flex items-center gap-2">
+                <div key={`metric-${i}`} className="bg-gray-50 rounded-md px-3 py-2 flex items-center gap-2">
                   <span className="text-xs text-gray-500">{m.label}</span>
                   <span className="text-sm font-semibold">{m.value}</span>
                   <TrendIcon trend={m.trend} />
@@ -190,6 +190,9 @@ export default function AIReviewPanel({ goalId, onClose }: AIReviewPanelProps) {
         repeatCycle: 'none',
         blockedBy: [],
         sprintId: null,
+        appType: 'personal' as const,
+        teamId: '__default__',
+        discussionThreadId: null,
         summary: '',
        },
      });
@@ -260,7 +263,7 @@ export default function AIReviewPanel({ goalId, onClose }: AIReviewPanelProps) {
             <button
               type="button"
               className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-              disabled={panelState === 'generating'}
+              disabled={(panelState as string) === 'generating'}
               onClick={() => handleGenerate(false)}
             >
               生成本地复盘
@@ -268,7 +271,7 @@ export default function AIReviewPanel({ goalId, onClose }: AIReviewPanelProps) {
             <button
               type="button"
               className="px-4 py-2 text-sm font-medium bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 transition-colors"
-              disabled={panelState === 'generating'}
+              disabled={(panelState as string) === 'generating'}
               onClick={() => handleGenerate(true)}
             >
               深度复盘
@@ -325,7 +328,7 @@ export default function AIReviewPanel({ goalId, onClose }: AIReviewPanelProps) {
             {/* Sections */}
             <div className="space-y-2">
               {result.sections.map((s, i) => (
-                <ExpandableSection key={i} section={s} />
+                <ExpandableSection key={`sec-${i}`} section={s} />
               ))}
             </div>
 
@@ -335,7 +338,7 @@ export default function AIReviewPanel({ goalId, onClose }: AIReviewPanelProps) {
                 <h4 className="text-sm font-semibold mb-3">KR 评分</h4>
                 <div className="space-y-3">
                   {result.okrFeedback.map((fb, i) => (
-                    <KRFeedbackCard key={i} feedback={fb} />
+                    <KRFeedbackCard key={`kr-${i}`} feedback={fb} />
                   ))}
                 </div>
               </div>
@@ -348,7 +351,7 @@ export default function AIReviewPanel({ goalId, onClose }: AIReviewPanelProps) {
                 <div className="space-y-2">
                   {result.extractedLessons.map((lesson, i) => (
                     <blockquote
-                      key={i}
+                      key={`lesson-${i}`}
                       className="border-l-4 border-indigo-400 bg-indigo-50 pl-4 py-2 text-sm text-gray-700 italic"
                     >
                       {lesson}
@@ -367,7 +370,7 @@ export default function AIReviewPanel({ goalId, onClose }: AIReviewPanelProps) {
                     const badge = priorityBadge(item.priority);
                     return (
                       <div
-                        key={i}
+                        key={`action-${i}`}
                         className="flex items-center gap-3 border rounded-lg px-4 py-3"
                       >
                         <span className="text-sm flex-1">{item.action}</span>

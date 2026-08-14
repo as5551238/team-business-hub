@@ -11,6 +11,7 @@
  */
 import { getApiTokens, validateToolAccess, type ApiToken } from './api';
 import { trackMCPToolCall } from '@/store/behaviorTracking';
+import { getSupabaseClient } from '@/supabase/client';
 
 // ===== 权限校验 =====
 
@@ -70,38 +71,61 @@ export interface MCPToolResult {
 
 // ===== Supabase REST 辅助 =====
 
-const SUPABASE_URL = 'https://atexvoyvnnuaonvrgzhn.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie';
+// Read Supabase config dynamically from the initialized client or localStorage
+function getSupabaseConfig(): { url: string; key: string } {
+  // Try to get from the initialized Supabase client first
+  try {
+    const sb = getSupabaseClient();
+    if (sb) {
+      const url = (sb as any).supabaseUrl || (sb as any)?.config?.url || '';
+      const key = (sb as any)?.supabaseKey || (sb as any)?.rest?.headers?.apikey || '';
+      if (url && key) return { url, key };
+    }
+  } catch {}
+  // Fallback to localStorage config
+  try {
+    const configStr = localStorage.getItem('tbh-supabase-config');
+    if (configStr) {
+      const config = JSON.parse(configStr);
+      if (config.url && config.anonKey) return { url: config.url, key: config.anonKey };
+    }
+  } catch {}
+  return { url: '', key: '' };
+}
 
 async function restGet(table: string, query?: Record<string, string>): Promise<any[]> {
-  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
-  if (query) for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
-  const resp = await fetch(url.toString(), { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
+  const { url, key } = getSupabaseConfig();
+  const u = new URL(`${url}/rest/v1/${table}`);
+  if (query) for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v);
+  const resp = await fetch(u.toString(), { headers: { apikey: key, Authorization: `Bearer ${key}` } });
   return resp.json();
 }
 
 async function restPost(table: string, record: Record<string, any>): Promise<any> {
-  const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+  const { url, key } = getSupabaseConfig();
+  const resp = await fetch(`${url}/rest/v1/${table}`, {
     method: 'POST',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify(record),
   });
   return resp.json();
 }
 
 async function restPatch(table: string, id: string, updates: Record<string, any>): Promise<any> {
-  const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+  const { url, key } = getSupabaseConfig();
+  const resp = await fetch(`${url}/rest/v1/${table}?id=eq.${id}`, {
     method: 'PATCH',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify({ ...updates, updated_at: new Date().toISOString() }),
   });
   return resp.json();
 }
 
 async function restDelete(table: string, id: string): Promise<void> {
-  await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+  const { url, key } = getSupabaseConfig();
+  await fetch(`${url}/rest/v1/${table}?id=eq.${id}`, {
     method: 'DELETE',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
   });
 }
 
@@ -267,10 +291,11 @@ export async function callMCPTool(
     if (!valid) return { success: false, error: `Permission denied. Missing: ${missing.join(', ')}` };
   }
 
+  const sbConfig = getSupabaseConfig();
   const context: MCPContext = {
     token: tokenValue ? getApiTokens().find(t => t.token === tokenValue) : undefined,
-    baseUrl: `${SUPABASE_URL}/rest/v1`,
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+    baseUrl: `${sbConfig.url}/rest/v1`,
+    headers: { apikey: sbConfig.key, Authorization: `Bearer ${sbConfig.key}`, 'Content-Type': 'application/json' },
   };
 
   try {

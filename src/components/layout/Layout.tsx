@@ -312,7 +312,7 @@ function LayoutInner({ currentPage, onPageChange, children, currentUser }: Layou
           const key = t.id + ':reminder';
           if (existingKeys.has(key)) continue;
           dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'nrem_' + t.id + '_' + t.reminderDate, type: 'reminder' as const, title: '任务提醒', message: `"${t.title}" 的提醒时间已到 (${t.reminderDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
-          pushTaskEvent('reminder', t, memberLookup.getName);
+          pushTaskEvent('reminder', { ...t, dueDate: t.dueDate || undefined }, memberLookup.getName);
         }
       }
     };
@@ -336,7 +336,7 @@ function LayoutInner({ currentPage, onPageChange, children, currentUser }: Layou
           const key = t.id + ':overdue';
           if (existingKeys.has(key)) continue;
           dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'novd_' + t.id + '_' + t.dueDate, type: 'overdue' as const, title: '任务已逾期', message: `"${t.title}" 已逾期 (截止 ${t.dueDate})`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
-          pushTaskEvent('overdue', t, memberLookup.getName);
+          pushTaskEvent('overdue', { ...t, dueDate: t.dueDate || undefined }, memberLookup.getName);
           try { fireAutomationRules(state, t.id, 'task', t.title, 'due_arrive', { dueDate: t.dueDate }, t as any); } catch {}
           try { fireAutomationRules(state, t.id, 'task', t.title, 'overdue', { dueDate: t.dueDate, status: t.status }, t as any); } catch {}
         }
@@ -348,7 +348,7 @@ function LayoutInner({ currentPage, onPageChange, children, currentUser }: Layou
           dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'napr_' + t.id + '_' + t.dueDate, type: 'sync' as const, title: '任务即将到期', message: `"${t.title}" 将于 ${t.dueDate} 到期（还有${daysLeft}天）`, relatedId: t.id, relatedType: 'task' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
           // Also send WeChat/browser push for approaching deadlines
           try { sendBrowserNotification('任务即将到期', { body: `"${t.title}" 将于${t.dueDate}到期（还有${daysLeft}天）`, tag: 'approaching-' + t.id }); } catch {}
-          pushTaskEvent('reminder', t, memberLookup.getName);
+          pushTaskEvent('reminder', { ...t, dueDate: t.dueDate || undefined }, memberLookup.getName);
         }
       }
       // Phase3-P2: Knowledge due-date reminders (approaching / due today / auto-archive)
@@ -771,7 +771,7 @@ function LayoutInner({ currentPage, onPageChange, children, currentUser }: Layou
             </button>
           )}
           <h1 className="text-base font-semibold">
-            {(currentPage === 'settings' ? '系统设置' : navItems.find(n => n.page === currentPage)?.label)}
+            {((currentPage as string) === 'settings' ? '系统设置' : navItems.find(n => n.page === currentPage)?.label)}
           </h1>
 
           {userTeams.length > 1 && (
@@ -897,7 +897,7 @@ function LayoutInner({ currentPage, onPageChange, children, currentUser }: Layou
       <CommandPalette
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
-        onPageChange={onPageChange}
+        onPageChange={onPageChange as (page: string) => void}
         onNavigateItem={(id, type) => { window.dispatchEvent(new CustomEvent('tbh-nav-item', { detail: { id, type } })); }}
         onCreateItem={(type) => {
           if (type === 'task') { onPageChange('tasks'); setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-create-item', { detail: { type: 'task' } })), 200); }

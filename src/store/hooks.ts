@@ -82,7 +82,7 @@ export function useGoalProjects(goalId: string) {
 
 // --- Item links hook ---
 
-export function useItemLinks(sourceId: string, sourceType: 'goal' | 'project' | 'task') {
+export function useItemLinks(sourceId: string, sourceType: ItemType) {
   const itemLinks = useStore().state.itemLinks;
   return useMemo(() => itemLinks.filter(l => l.sourceId === sourceId && l.sourceType === sourceType), [itemLinks, sourceId, sourceType]);
 }
@@ -97,14 +97,17 @@ export function useMemberTasks(memberId: string) {
 // --- Backup export hook ---
 
 export function useBackupExport(): BackupData {
-  const { members, goals, projects, tasks, notifications, activities, itemLinks, tags, categories, templates, scheduleEvents, notes, reviews, comments, bookmarks, savedViews, statusFlowRules, automationRules, sprints } = useStore().state;
+  const { members, goals, projects, tasks, notifications, activities, itemLinks, tags, categories, templates, scheduleEvents, notes, knowledge, reviews, comments, bookmarks, savedViews, statusFlowRules, automationRules, sprints, batchOperations, teams, teamMembers, subscriptions, approvalAudits } = useStore().state;
   return {
     version: '3.0',
     exportedAt: new Date().toISOString(),
     members, goals, projects, tasks, notifications, activities, itemLinks,
-    tags, categories, templates, scheduleEvents, notes, reviews,
+    tags, categories, templates, scheduleEvents,
+    notes: notes || [], knowledge: knowledge || [], reviews: reviews || [],
     comments: comments || [], bookmarks: bookmarks || [], savedViews: savedViews || [],
     statusFlowRules: statusFlowRules || [], automationRules: automationRules || [], sprints: sprints || [],
+    batchOperations: batchOperations || [], teams: teams || [], teamMembers: teamMembers || [],
+    subscriptions: subscriptions || [], approvalAudits: approvalAudits || [],
   };
 }
 
@@ -189,7 +192,7 @@ export function useNotes(folder?: string) {
   return {
     notes: filtered,
     allNotes: notes,
-    addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => dispatch({ type: 'ADD_NOTE', payload: note }),
+    addNote: (note: Omit<Note, 'id' | 'teamId' | 'createdAt' | 'updatedAt'>) => dispatch({ type: 'ADD_NOTE', payload: note }),
     updateNote: (id: string, updates: Partial<Note>) => dispatch({ type: 'UPDATE_NOTE', payload: { id, updates } }),
     deleteNote: (id: string) => dispatch({ type: 'DELETE_NOTE', payload: id }),
     pinnedNotes: notes.filter(n => n.isPinned),

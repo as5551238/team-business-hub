@@ -8,7 +8,7 @@
  * - AI建议优先处理事项
  */
 
-import type { AppAction, AppState } from '@/store/types';
+import type { Action, AppState } from '@/store/types';
 import { callLLM } from '@/lib/ai/llmService';
 import { collectSnapshot } from '@/lib/ai/dataCollector';
 import { detectRisks } from '@/lib/ai/analysisEngine';

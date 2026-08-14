@@ -1,4 +1,4 @@
-import type { AppState, Project } from '@/types';
+import type { AppState, Project, AutomationRule, TaskPriority } from '@/types';
 import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete, logActivity } from './supabase';
 import { genId } from './utils';
@@ -21,7 +21,7 @@ export function projectReducer(state: AppState, action: Action): AppState | null
         id: genId('p'),
         appType: payload.appType ?? 'personal',
         progress: 0,
-        priority: (inheritedPriority || payload.priority) ?? 'medium',
+        priority: ((inheritedPriority || payload.priority) ?? 'medium') as TaskPriority,
         tags: payload.tags ?? [],
         supporterIds: payload.supporterIds ?? [],
         category: payload.category ?? '',
@@ -64,15 +64,16 @@ export function projectReducer(state: AppState, action: Action): AppState | null
           const hasNewParent = !!newGoalId || !!newParentId;
           if (hasNewParent) {
             const inherited = resolveInheritedPriority(s, { goalId: newGoalId, parentId: newParentId });
-            if (inherited) updates.priority = inherited;
+            if (inherited) updates.priority = inherited as TaskPriority;
           }
         }
         if (updates.status !== undefined && oldStatus && updates.status !== oldStatus) {
           const { allowed, rule } = validateStatusFlow(s, action.payload.id, 'project', oldStatus, updates.status);
           if (!allowed) {
             delete updates.status;
+            s.notifications.unshift({ id: genId('n'), type: 'sync', title: '状态变更被拒绝', message: `「${s.projects[idx].title}」的状态无法从「${oldStatus}」变为「${updates.status}」，流程规则限制`, relatedId: s.projects[idx].id, relatedType: 'project', memberId: state.currentUser?.id || '', read: false, createdAt: new Date().toISOString() });
           } else if (rule) {
-            executeAutomationActions(s, rule, s.projects[idx].id, 'project', s.projects[idx].title);
+            executeAutomationActions(s, rule as AutomationRule, s.projects[idx].id, 'project', s.projects[idx].title);
           }
         }
         s.projects[idx] = { ...s.projects[idx], ...updates, updatedAt: now };
@@ -83,10 +84,10 @@ export function projectReducer(state: AppState, action: Action): AppState | null
           notifyAssigned(s, state.currentUser?.id, newlyAssigned, s.projects[idx].title, s.projects[idx].id, 'project');
         }
         if (updates.status && updates.status !== oldStatus) {
-          fireAutomationRules(s, s.projects[idx].id, 'project', s.projects[idx].title, 'status_change', updates, s.projects[idx]);
+          fireAutomationRules(s, s.projects[idx].id, 'project', s.projects[idx].title, 'status_change', updates, s.projects[idx] as unknown as Record<string, unknown>);
         }
         if (Object.keys(updates).some(k => k !== 'status')) {
-          fireAutomationRules(s, s.projects[idx].id, 'project', s.projects[idx].title, 'field_change', updates, s.projects[idx]);
+          fireAutomationRules(s, s.projects[idx].id, 'project', s.projects[idx].title, 'field_change', updates, s.projects[idx] as unknown as Record<string, unknown>);
         }
       }
       return s;
@@ -95,13 +96,20 @@ export function projectReducer(state: AppState, action: Action): AppState | null
     case 'DELETE_PROJECT': {
       if (!reducerCanDelete(state, 'projects_delete')) return state;
       const pid = action.payload;
-      const s = needMutate(state, ['projects']);
+      const s = needMutate(state, ['projects', 'tasks']);
       const now = tsNow();
       const deletedProject = s.projects.find(p => p.id === pid);
       if (deletedProject) {
         deletedProject.deletedAt = now;
         deletedProject.updatedAt = now;
         supabaseUpdate('projects', pid, { deleted_at: now, updated_at: now });
+        // P3-#6: clean child task references
+        s.tasks.filter(t => t.projectId === pid && !t.deletedAt).forEach(t => {
+          const tIdx = s.tasks.findIndex(tt => tt.id === t.id);
+          if (tIdx === -1) return;
+          s.tasks[tIdx] = { ...t, projectId: null, updatedAt: now };
+          supabaseUpdate('tasks', t.id, { project_id: null, updated_at: now });
+        });
       }
       logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '项目', targetId: pid, targetTitle: deletedProject?.title || '' });
       return s;

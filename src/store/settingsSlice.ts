@@ -15,7 +15,7 @@ export function settingsReducer(state: AppState, action: Action): AppState | nul
       const validation = validateNewFlowRule(s.statusFlowRules, rule);
       if (!validation.valid) { console.warn('Invalid flow rule:', validation.reason); return state; }
       s.statusFlowRules.push(rule);
-      supabaseInsert('status_flow_rules', { id: rule.id, from_status: rule.fromStatus, to_status: rule.toStatus, allowed_roles: rule.allowedRoles, auto_actions: rule.autoActions ?? [] });
+      supabaseInsert('status_flow_rules', { id: rule.id, item_type: rule.itemType, from_status: rule.fromStatus, to_status: rule.toStatus, allowed_roles: rule.allowedRoles, auto_actions: rule.autoActions ?? [], enabled: rule.enabled ?? true, name: rule.name ?? '', team_id: s.currentTeamId || '__default__', created_at: tsNow(), updated_at: tsNow() });
       return s;
     }
     case 'UPDATE_STATUS_FLOW_RULE': {
@@ -27,7 +27,7 @@ export function settingsReducer(state: AppState, action: Action): AppState | nul
         const validation = validateNewFlowRule(others, rule);
         if (!validation.valid) { console.warn('Invalid flow rule:', validation.reason); return state; }
         s.statusFlowRules[index] = rule;
-        supabaseUpdate('status_flow_rules', rule.id, { from_status: rule.fromStatus, to_status: rule.toStatus, allowed_roles: rule.allowedRoles, auto_actions: rule.autoActions ?? [], updated_at: tsNow() });
+        supabaseUpdate('status_flow_rules', rule.id, { item_type: rule.itemType, from_status: rule.fromStatus, to_status: rule.toStatus, allowed_roles: rule.allowedRoles, auto_actions: rule.autoActions ?? [], enabled: rule.enabled ?? true, name: rule.name ?? '', team_id: s.currentTeamId || '__default__', updated_at: tsNow() });
       }
       return s;
     }
@@ -48,7 +48,7 @@ export function settingsReducer(state: AppState, action: Action): AppState | nul
       for (const old of s.statusFlowRules) { supabaseDelete('status_flow_rules', old.id); }
       s.statusFlowRules = action.payload;
       for (const rule of s.statusFlowRules) {
-        supabaseInsert('status_flow_rules', { id: rule.id, from_status: rule.fromStatus, to_status: rule.toStatus, allowed_roles: rule.allowedRoles, auto_actions: rule.autoActions ?? [] });
+        supabaseInsert('status_flow_rules', { id: rule.id, item_type: rule.itemType, from_status: rule.fromStatus, to_status: rule.toStatus, allowed_roles: rule.allowedRoles, auto_actions: rule.autoActions ?? [], enabled: rule.enabled ?? true, name: rule.name ?? '', team_id: s.currentTeamId || '__default__', created_at: tsNow(), updated_at: tsNow() });
       }
       return s;
     }
@@ -58,7 +58,7 @@ export function settingsReducer(state: AppState, action: Action): AppState | nul
       const now = tsNow();
       const rule: AutomationRule = { ...action.payload, id: genId('ar'), createdAt: now, updatedAt: now };
       s.automationRules.push(rule);
-      supabaseInsert('automation_rules', { id: rule.id, name: rule.name, enabled: rule.enabled, item_type: rule.itemType, trigger: rule.trigger, condition: rule.condition, actions: rule.actions, created_at: now, updated_at: now });
+      supabaseInsert('automation_rules', { id: rule.id, name: rule.name, enabled: rule.enabled, item_type: rule.itemType, trigger: rule.trigger, condition: rule.condition, actions: rule.actions, team_id: s.currentTeamId || '__default__', created_at: now, updated_at: now });
       return s;
     }
     case 'UPDATE_AUTOMATION_RULE': {

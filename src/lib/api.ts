@@ -58,15 +58,20 @@ export interface ApiResponse<T = any> {
 
 // ===== CRUD 操作 =====
 
-/** 通用查询 — 通过 Supabase REST API 直接查询 */
+/** Supabase REST API 基地址 — 优先从环境变量读取 */
 export function getApiBaseUrl(): string {
-  return 'https://atexvoyvnnuaonvrgzhn.supabase.co/rest/v1';
+  return import.meta.env.VITE_SUPABASE_URL
+    ? `${import.meta.env.VITE_SUPABASE_URL}/rest/v1`
+    : 'https://atexvoyvnnuaonvrgzhn.supabase.co/rest/v1';
 }
+
+/** Supabase Anon Key — 优先从环境变量读取（仅 anon key，非 service_role key） */
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie';
 
 export function getApiHeaders(): Record<string, string> {
   return {
-    'apikey': 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie',
-    'Authorization': 'Bearer sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie',
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
     'Content-Type': 'application/json',
     'Prefer': 'return=representation',
   };

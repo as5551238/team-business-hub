@@ -131,6 +131,7 @@ export function AiHomepageChat({ onPanelChange, activePanel, className }: AiHome
           if (currentAgent.allowedActions.includes(intent.actionId)) {
             const { action, description } = executeIntent(intent, state, { itemId: '', itemType: 'task' });
             if (action && !('error' in action)) {
+              // executeIntent 返回的 action 类型与 Action 联合类型不严格匹配，使用 as any 安全分发
               dispatch(action as any);
               const signal = intent.actionId.includes('goal') ? 'quadrant' :
                 intent.actionId.includes('risk') || intent.actionId.includes('predict') ? 'risk' :
@@ -143,7 +144,7 @@ export function AiHomepageChat({ onPanelChange, activePanel, className }: AiHome
                 actionExecuted: true,
                 signalPanel: signal,
               }]);
-              if (onPanelChange) onPanelChange(signal as ChatMessage['signalPanel']!);
+              if (onPanelChange) onPanelChange(signal as 'quadrant' | 'today' | 'briefing' | 'report' | 'risk');
               trackAIChat(text.length, 'action');
             } else {
               const errMsg = action && 'error' in action ? action.error : '执行失败';
@@ -265,8 +266,8 @@ export function AiHomepageChat({ onPanelChange, activePanel, className }: AiHome
             <p className="text-xs text-muted-foreground/70 mt-1">试试说"今天有什么需要关注的"或"创建一个新任务"</p>
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+        {messages.map((msg) => (
+          <div key={msg.timestamp} className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
             {msg.role === 'assistant' && (
               <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 text-xs">
                 {AI_AGENT_MAP.get(msg.agentId || '')?.emoji || '🤖'}

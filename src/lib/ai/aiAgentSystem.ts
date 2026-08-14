@@ -6,8 +6,8 @@
  * and executes the matching AI action from aiActions.ts.
  */
 import { AI_ACTION_MAP, AI_ACTIONS } from './aiActions';
-import type { AppState } from '@/store/reducer';
-import type { Action } from '@/store/reducer';
+import type { AppState } from '@/types';
+import type { Action } from '@/store/types';
 
 // ===== Agent Persona Definitions =====
 

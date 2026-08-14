@@ -10,7 +10,7 @@ import type { DashboardTabProps } from './shared';
 export default function PlansTab({ onOpenDetail }: DashboardTabProps) {
   const { state, dispatch, memberTasks, todayStr, weekLaterStr, nowDisplay, getMemberName, getProjectTitle, commentCountMap } = useFilteredData();
 
-  const todayTodos = useMemo(() => memberTasks.filter(t => t.leaderId === state.currentUser?.id && t.status !== 'done' && t.dueDate === todayStr), [memberTasks, state.currentUser, todayStr]);
+  const todayTodos = useMemo(() => memberTasks.filter(t => (t.leaderId === state.currentUser?.id || t.assigneeId === state.currentUser?.id) && t.status !== 'done' && t.dueDate === todayStr), [memberTasks, state.currentUser, todayStr]);
 
   const upcomingTasks = useMemo(() => {
     return memberTasks.filter(t => {

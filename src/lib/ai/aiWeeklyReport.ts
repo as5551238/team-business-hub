@@ -9,7 +9,7 @@
  * - 下周重点建议
  */
 
-import type { AppState } from '@/store/types';
+import type { AppState } from '@/types';
 import { callLLM } from '@/lib/ai/llmService';
 import { collectSnapshot } from '@/lib/ai/dataCollector';
 import { computeEfficiency, detectRisks } from '@/lib/ai/analysisEngine';

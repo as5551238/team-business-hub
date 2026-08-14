@@ -48,7 +48,7 @@ export function DetailKRs({ goal, canEdit, updateItem }: DetailKRsProps) {
 
   function handleAddProject() {
     if (!newProjectTitle.trim()) return;
-    dispatch({ type: 'ADD_PROJECT', payload: { title: newProjectTitle.trim(), goalId: goal.id, parentId: null, status: 'todo', priority: 'medium', leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], description: '', startDate: '', endDate: '', category: '', attachments: [], trackingRecords: [], repeatCycle: 'none' as const, taskCount: 0 } });
+    dispatch({ type: 'ADD_PROJECT', payload: { title: newProjectTitle.trim(), goalId: goal.id, parentId: null, status: 'todo', priority: 'medium', leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], description: '', startDate: '', endDate: '', category: '', appType: 'personal' as const, attachments: [], trackingRecords: [], repeatCycle: 'none' as const, taskCount: 0, discussionThreadId: null, summary: '', teamId: '__default__' } });
     setNewProjectTitle('');
     setShowAddProject(false);
   }

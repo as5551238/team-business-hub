@@ -47,7 +47,7 @@ export function MyTodayView({ onOpenDetail }: MyTodayProps) {
   const unreadMentions = useMemo(() => {
     const comments = state.comments || [];
     return comments.filter(c =>
-      c.mentionedMemberIds?.includes(userId || '') &&
+      userId && c.mentionedMemberIds?.includes(userId) &&
       !c.isRead
     ).slice(0, 5);
   }, [state.comments, userId]);

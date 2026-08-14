@@ -102,9 +102,9 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
 
-  const goal = itemType === 'goal' ? state.goals.find(g => g.id === itemId) : null;
-  const project = itemType === 'project' ? state.projects.find(p => p.id === itemId) : null;
-  const task = itemType === 'task' ? state.tasks.find(t => t.id === itemId) : null;
+  const goal = itemType === 'goal' ? state.goals.find(g => g.id === itemId) ?? null : null;
+  const project = itemType === 'project' ? state.projects.find(p => p.id === itemId) ?? null : null;
+  const task = itemType === 'task' ? state.tasks.find(t => t.id === itemId) ?? null : null;
 
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -225,7 +225,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
     if (val && !tags.includes(val) && canEdit) {
       updateItem({ tags: [...tags, val] });
       if (!state.tags.find(t => t.name === val)) {
-        dispatch({ type: 'ADD_TAG', payload: { name: val, color: `hsl(${Math.random() * 360}, 70%, 60%)`, createdAt: new Date().toISOString() } });
+        dispatch({ type: 'ADD_TAG', payload: { name: val, color: `hsl(${Math.random() * 360}, 70%, 60%)` } });
       }
     }
     setCustomTagInput('');
@@ -387,7 +387,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
               { key: 'details', label: '详情' },
               { key: 'tracking', label: '跟踪', badge: trackingRecords.length || undefined },
               { key: 'comments', label: '评论', badge: ((state.comments || []).filter(c => c.itemId === itemId).length) || undefined },
-            ] as const).map(tab => (
+            ] as { key: string; label: string; badge?: number }[]).map(tab => (
               <button
                 key={tab.key}
                 className={cn('px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap', activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}

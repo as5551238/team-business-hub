@@ -10,9 +10,10 @@ export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing'
 export type ProjectStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
 export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type BusinessPriority = 'S' | 'A' | 'B' | 'C';
 export type ReviewPeriod = 'day' | 'week' | 'month' | 'quarter' | 'year';
 export type RepeatCycle = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
-export type ItemType = 'goal' | 'project' | 'task';
+export type ItemType = 'goal' | 'project' | 'task' | 'knowledge';
 
 // ==================== 模块权限 (V4 矩阵化) ====================
 export type PermissionModule = 'goals' | 'projects' | 'tasks' | 'team' | 'settings' | 'export' | 'knowledge';
@@ -90,9 +91,8 @@ export interface Member {
   joinDate: string;
   permissions: Permission[];
   teamId: string;
+  updatedAt?: string;
 }
-
-// ==================== 目标 ====================
 export interface Goal {
   id: string;
   title: string;
@@ -180,6 +180,7 @@ export interface SubTask {
 // ==================== 讨论/评论 ====================
 export interface Comment {
   id: string;
+  teamId: string;
   itemId: string;
   itemType: ItemType;
   memberId: string;
@@ -190,9 +191,8 @@ export interface Comment {
   followUpRequired: boolean;
   followUpStatus: 'none' | 'pending' | 'completed';
   createdAt: string;
+  updatedAt?: string;
 }
-
-// ==================== 应用类型 ====================
 export type AppType = 'personal' | 'enterprise';
 
 // ==================== 任务 ====================
@@ -235,6 +235,7 @@ export interface Task {
 // ==================== 关联/通知/活动/标签 ====================
 export interface ItemLink {
   id: string;
+  teamId: string;
   sourceId: string;
   sourceType: ItemType;
   targetId: string;
@@ -249,10 +250,11 @@ export interface Notification {
   title: string;
   message: string;
   relatedId: string;
-  relatedType: ItemType;
+  relatedType: ItemType | 'note';
   memberId: string;
   read: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface BatchOperation {
@@ -278,9 +280,11 @@ export interface Activity {
 
 export interface Tag {
   id: string;
+  teamId: string;
   name: string;
   color: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 // (Permission defined above as template literal type)
@@ -311,16 +315,17 @@ export interface TeamMember {
 // ==================== 自定义分类 ====================
 export interface Category {
   id: string;
+  teamId: string;
   name: string;
   color: string;
   icon: string;
   appliesTo: ItemType[];
   createdAt: string;
+  updatedAt?: string;
 }
-
-// ==================== 模板/工具库 ====================
 export interface Template {
   id: string;
+  teamId: string;
   title: string;
   description: string;
   type: 'goal' | 'project' | 'task' | 'document';
@@ -336,6 +341,7 @@ export interface Template {
 // ==================== 日程 ====================
 export interface ScheduleEvent {
   id: string;
+  teamId: string;
   title: string;
   description: string;
   startDate: string;
@@ -353,6 +359,7 @@ export interface ScheduleEvent {
 // ==================== 常用网址 ====================
 export interface Bookmark {
   id: string;
+  teamId: string;
   title: string;
   url: string;
   category: string;
@@ -360,16 +367,29 @@ export interface Bookmark {
   order: number;
   memberId?: string;
   createdAt: string;
+  updatedAt?: string;
 }
+export type KnowledgeStatus = 'active' | 'draft' | 'archived';
 
-// ==================== 个人知识库 ====================
+export type KnowledgePriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export type KnowledgeVisibility = 'personal' | 'team' | 'team_editable';
+
 export interface Knowledge {
   id: string;
+  teamId: string;
   title: string;
   content: string;
+  category?: string;              // Phase1-P0: 分类
   tags: string[];
+  status?: KnowledgeStatus;       // Phase1-P0: 状态 active/draft/archived
+  assigneeId?: string;            // Phase1-P0: 负责人
+  priority?: KnowledgePriority;   // Phase2-P0: 优先级
+  dueDate?: string | null;       // Phase2-P0: 截止日期
+  metadata?: Record<string, any>; // Phase2-P0: JSONB自定义元数据
+  visibility?: KnowledgeVisibility; // Phase2-P3: 记录级权限
   memberId: string;
-  relatedItems: { itemId: string; itemType: 'goal' | 'project' | 'task' }[];
+  relatedItems: { itemId: string; itemType: ItemType }[];
   color?: string;
   createdAt: string;
   updatedAt: string;
@@ -378,6 +398,7 @@ export interface Knowledge {
 // ==================== 记事本 ====================
 export interface Note {
   id: string;
+  teamId: string;
   title: string;
   content: string;
   folder: string;
@@ -411,8 +432,8 @@ export interface StatusFlowAutoAction {
 }
 
 // ==================== 自动化规则 ====================
-export type AutomationTrigger = 'status_change' | 'due_arrive' | 'item_created' | 'field_change' | 'kr_lag' | 'overdue';
-export type AutomationAction = 'notify' | 'set_field' | 'create_subtask' | 'assign' | 'escalation' | 'ai_action';
+export type AutomationTrigger = 'status_change' | 'due_arrive' | 'item_created' | 'field_change' | 'kr_lag' | 'overdue' | 'content_created' | 'tag_suggested';
+export type AutomationAction = 'notify' | 'set_field' | 'create_subtask' | 'assign' | 'escalation' | 'ai_action' | 'auto_tag' | 'auto_classify' | 'suggest_priority';
 
 export interface AutomationRule {
   id: string;
@@ -431,6 +452,7 @@ export type SprintStatus = 'planning' | 'active' | 'completed';
 
 export interface Sprint {
   id: string;
+  teamId: string;
   name: string;
   startDate: string;
   endDate: string;
@@ -449,6 +471,7 @@ export interface ViewFilter {
 
 export interface SavedView {
   id: string;
+  teamId: string;
   name: string;
   type: ItemType;
   filters: ViewFilter[];
@@ -460,6 +483,7 @@ export interface SavedView {
 
 export interface ReviewEntry {
   id: string;
+  teamId: string;
   period: ReviewPeriod;
   periodStart: string;
   periodEnd: string;

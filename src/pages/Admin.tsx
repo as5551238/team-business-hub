@@ -219,7 +219,7 @@ export default function Admin({ activeTab }: { activeTab?: string }) {
           {tab === 'collab' && <TabErrorBoundary key="collab" name={TAB_LABELS.collab}><Suspense fallback={<TabLoader />}><CollabTab /></Suspense></TabErrorBoundary>}
           {tab === 'automaton' && <TabErrorBoundary key="automaton" name={TAB_LABELS.automaton}><Suspense fallback={<TabLoader />}><AutomatonTab /></Suspense></TabErrorBoundary>}
           {tab === 'templates' && <TabErrorBoundary key="templates" name={TAB_LABELS.templates}><Suspense fallback={<TabLoader />}><TemplateMarketTab /></Suspense></TabErrorBoundary>}
-          {tab === 'privacy' && <TabErrorBoundary key="privacy" name={TAB_LABELS.privacy}><Suspense fallback={<TabLoader />}><PrivacySection onBack={() => {}} /></Suspense></TabErrorBoundary>}
+          {tab === 'privacy' && <TabErrorBoundary key="privacy" name={TAB_LABELS.privacy}><Suspense fallback={<TabLoader />}><PrivacySection onBack={() => setTab('team')} /></Suspense></TabErrorBoundary>}
         </div>
       </div>
     </div>

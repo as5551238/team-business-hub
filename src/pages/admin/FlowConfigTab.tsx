@@ -50,11 +50,11 @@ export function FlowConfigTab() {
   const { state, dispatch } = useStore();
   const rules = state.statusFlowRules || [];
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const [form, setForm] = useState<StatusFlowRule>({ id: '', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [] });
+  const [form, setForm] = useState<StatusFlowRule>({ id: '', itemType: 'task', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [], enabled: true });
 
   function handleAdd() {
     dispatch({ type: 'ADD_STATUS_FLOW_RULE', payload: { ...form } });
-    setForm({ id: '', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [] });
+    setForm({ id: '', itemType: 'task', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [], enabled: true });
     setEditingIdx(null);
   }
 
@@ -62,7 +62,7 @@ export function FlowConfigTab() {
     if (editingIdx !== null) {
       dispatch({ type: 'UPDATE_STATUS_FLOW_RULE', payload: { index: editingIdx, rule: { ...form, id: form.id || rules[editingIdx]?.id || '' } } });
       setEditingIdx(null);
-      setForm({ id: '', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [] });
+      setForm({ id: '', itemType: 'task', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [], enabled: true });
     }
   }
 
@@ -103,7 +103,7 @@ export function FlowConfigTab() {
             <option value="" disabled>重置为预设模板...</option>
             {Object.entries(FLOW_PRESETS).map(([key, preset]) => (<option key={key} value={key}>{preset.label}—{preset.desc}</option>))}
           </select>)}
-          <button onClick={() => { setForm({ fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [] }); setEditingIdx(rules.length); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"><Plus size={14} /> 新增规则</button>
+          <button onClick={() => { setForm({ itemType: 'task', fromStatus: 'todo', toStatus: 'in_progress', allowedRoles: [], autoActions: [], enabled: true, id: '' }); setEditingIdx(rules.length); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"><Plus size={14} /> 新增规则</button>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">定义项目/任务状态之间的流转约束。留空角色列表 = 所有角色可转。状态变更时自动执行配置的动作。</p>

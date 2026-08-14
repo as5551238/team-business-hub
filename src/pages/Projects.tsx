@@ -108,8 +108,8 @@ export default function Projects() {
 
   // 创建对话框草稿自动保存
   const projectDraft = useDraftSave('project-create', formData);
-  useEffect(() => { if (showCreateDialog) { const draft = projectDraft.loadDraft(); if (draft) setFormData(f => ({ ...f, ...draft })); } }, [showCreateDialog]);
-  useEffect(() => { if (showCreateDialog && formData.title) projectDraft.saveDraft(formData); }, [showCreateDialog, formData]);
+  useEffect(() => { if (showCreateDialog) { const draft = projectDraft.loadDraft(); if (draft) setFormData(f => ({ ...f, ...draft })); } }, [showCreateDialog, projectDraft]);
+  useEffect(() => { if (showCreateDialog && formData.title) projectDraft.saveDraft(formData); }, [showCreateDialog, formData, projectDraft]);
 
   const batchProps = useMemo((): BatchProps => ({ batchMode, selectedIds, onToggleSelect: (id: string) => { setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); } }), [batchMode, selectedIds]);
 

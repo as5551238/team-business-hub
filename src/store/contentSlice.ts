@@ -3,14 +3,14 @@ import { isSupabaseConfigured } from '@/supabase/client';
 import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseUpsert, supabaseDelete } from './supabase';
 import { genId } from './utils';
-import { reducerCanDelete, canDeleteOwnContent, needMutate, tsNow, markPendingDelete } from './shared';
+import { reducerCanDelete, canDeleteOwnContent, needMutate, tsNow, markPendingDelete, fireAutomationRules } from './shared';
 
 export function contentReducer(state: AppState, action: Action): AppState | null {
   switch (action.type) {
     case 'ADD_SAVED_VIEW': {
       const s = needMutate(state, ['savedViews']);
       const now = tsNow();
-      const view = { ...action.payload, id: genId('sv'), createdAt: now };
+      const view = { ...action.payload, teamId: s.currentTeamId || '__default__', id: genId('sv'), createdAt: now };
       s.savedViews.push(view);
       supabaseInsert('saved_views', view);
       return s;
@@ -38,7 +38,7 @@ export function contentReducer(state: AppState, action: Action): AppState | null
       const now = tsNow();
       const payload = { ...action.payload };
       if (payload.memberId && payload.memberId !== state.currentUser.id) return state;
-      const r = { ...payload, id: genId('rv'), createdAt: now, updatedAt: now };
+      const r = { ...payload, teamId: s.currentTeamId || '__default__', id: genId('rv'), createdAt: now, updatedAt: now };
       s.reviews.push(r);
       supabaseInsert('reviews', r);
       return s;
@@ -69,7 +69,7 @@ export function contentReducer(state: AppState, action: Action): AppState | null
     case 'ADD_TEMPLATE': {
       const s = needMutate(state, ['templates']);
       const now = tsNow();
-      const t = { ...action.payload, id: genId('tpl'), createdAt: now, updatedAt: now };
+      const t = { ...action.payload, teamId: s.currentTeamId || '__default__', id: genId('tpl'), createdAt: now, updatedAt: now };
       s.templates.push(t);
       supabaseInsert('templates', t);
       return s;
@@ -92,7 +92,7 @@ export function contentReducer(state: AppState, action: Action): AppState | null
     case 'ADD_SCHEDULE_EVENT': {
       const s = needMutate(state, ['scheduleEvents']);
       const now = tsNow();
-      const e = { ...action.payload, id: genId('evt'), createdAt: now, updatedAt: now };
+      const e = { ...action.payload, teamId: s.currentTeamId || '__default__', id: genId('evt'), createdAt: now, updatedAt: now };
       s.scheduleEvents.push(e);
       supabaseInsert('schedule_events', e);
       return s;
@@ -117,7 +117,7 @@ export function contentReducer(state: AppState, action: Action): AppState | null
     case 'ADD_NOTE': {
       const s = needMutate(state, ['notes']);
       const now = tsNow();
-      const n = { ...action.payload, id: genId('note'), createdAt: now, updatedAt: now };
+      const n = { ...action.payload, teamId: s.currentTeamId || '__default__', id: genId('note'), createdAt: now, updatedAt: now };
       s.notes.push(n);
       supabaseInsert('notes', n);
       return s;
@@ -141,15 +141,16 @@ export function contentReducer(state: AppState, action: Action): AppState | null
     }
     case 'ADD_BOOKMARK': {
       const s = needMutate(state, ['bookmarks']);
-      const b: Bookmark = { ...action.payload, id: genId('bm'), createdAt: new Date().toISOString() };
+      const b: Bookmark = { ...action.payload, teamId: s.currentTeamId || '__default__', id: genId('bm'), createdAt: new Date().toISOString() };
       s.bookmarks.push(b);
       supabaseInsert('bookmarks', b);
       return s;
     }
     case 'UPDATE_BOOKMARK': {
       const s = needMutate(state, ['bookmarks']);
+      const now = tsNow();
       const idx = s.bookmarks.findIndex(b => b.id === action.payload.id);
-      if (idx !== -1) { s.bookmarks[idx] = { ...s.bookmarks[idx], ...action.payload.updates }; supabaseUpdate('bookmarks', action.payload.id, action.payload.updates); }
+      if (idx !== -1) { s.bookmarks[idx] = { ...s.bookmarks[idx], ...action.payload.updates, updatedAt: now }; supabaseUpdate('bookmarks', action.payload.id, { ...action.payload.updates, updated_at: now }); }
       return s;
     }
     case 'DELETE_BOOKMARK': {
@@ -177,9 +178,13 @@ export function contentReducer(state: AppState, action: Action): AppState | null
     case 'ADD_KNOWLEDGE': {
       const s = needMutate(state, ['knowledge']);
       const now = tsNow();
-      const k: Knowledge = { ...action.payload, id: genId('kb'), tags: action.payload.tags ?? [], relatedItems: action.payload.relatedItems ?? [], content: action.payload.content ?? '', createdAt: now, updatedAt: now };
+      const k: Knowledge = { ...action.payload, teamId: s.currentTeamId || '__default__', id: genId('kb'), category: action.payload.category ?? '', status: action.payload.status ?? 'active', assigneeId: action.payload.assigneeId ?? undefined, priority: action.payload.priority ?? 'medium', dueDate: action.payload.dueDate ?? null, metadata: action.payload.metadata ?? {}, visibility: action.payload.visibility ?? 'team', tags: action.payload.tags ?? [], relatedItems: action.payload.relatedItems ?? [], content: action.payload.content ?? '', color: action.payload.color ?? '', createdAt: now, updatedAt: now };
       s.knowledge.push(k);
       supabaseInsert('knowledge', k);
+      // Phase3-P2: Fire automation rules for content_created trigger
+      try {
+        fireAutomationRules(s, k.id, 'knowledge', k.title, 'content_created', { status: k.status ?? 'active' }, {});
+      } catch (e) { console.warn('knowledge content_created automation failed:', e); }
       return s;
     }
     case 'UPDATE_KNOWLEDGE': {
@@ -203,6 +208,8 @@ export function contentReducer(state: AppState, action: Action): AppState | null
       return s;
     }
     case 'UPDATE_SUBSCRIPTION': {
+      // Subscriptions are managed via Stripe webhooks, not direct Supabase writes.
+      // No supabaseUpdate needed here — the webhook handler updates the DB.
       const s = needMutate(state, ['subscriptions']);
       const idx = s.subscriptions.findIndex(sub => sub.teamId === action.payload.teamId);
       const now = tsNow();

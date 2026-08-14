@@ -1,4 +1,4 @@
-import type { AppState, Task, SubTask } from '@/types';
+import type { AppState, Task, SubTask, AutomationRule, TaskPriority } from '@/types';
 import type { Action } from './types';
 import { supabaseInsert, supabaseUpdate, supabaseDelete, logActivity } from './supabase';
 import { genId } from './utils';
@@ -31,7 +31,7 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
         startDate: payload.startDate || null,
         dueDate: payload.dueDate || null,
         reminderDate: payload.reminderDate || null,
-        priority: (inheritedPriority || payload.priority) ?? 'medium',
+        priority: ((inheritedPriority || payload.priority) ?? 'medium') as TaskPriority,
         parentId: payload.parentId || null,
         tags: payload.tags ?? [],
         supporterIds: payload.supporterIds ?? [],
@@ -89,7 +89,7 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
           const hasNewParent = !!newGoalId || !!newProjectId || !!newParentId;
           if (hasNewParent) {
             const inherited = resolveInheritedPriority(s, { goalId: newGoalId, projectId: newProjectId, parentId: newParentId });
-            if (inherited) updates.priority = inherited;
+            if (inherited) updates.priority = inherited as TaskPriority;
           }
         }
         if (updates.parentId === action.payload.id) updates.parentId = null;
@@ -98,15 +98,16 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
           const { allowed, rule } = validateStatusFlow(s, action.payload.id, 'task', oldTask.status, updates.status);
           if (!allowed) {
             delete updates.status;
+            s.notifications.unshift({ id: genId('n'), type: 'sync', title: '状态变更被拒绝', message: `「${oldTask.title}」的状态无法从「${oldTask.status}」变为「${updates.status}」，流程规则限制`, relatedId: oldTask.id, relatedType: 'task', memberId: state.currentUser?.id || '', read: false, createdAt: new Date().toISOString() });
           } else if (rule) {
-            try { executeAutomationActions(s, rule, oldTask.id, 'task', oldTask.title); } catch (e) { console.warn('status_flow automation failed:', e); }
+            try { executeAutomationActions(s, rule as AutomationRule, oldTask.id, 'task', oldTask.title); } catch (e) { console.warn('status_flow automation failed:', e); }
           }
         }
         if (updates.status && updates.status !== oldTask.status) {
-          fireAutomationRules(s, oldTask.id, 'task', oldTask.title, 'status_change', updates, oldTask);
+          fireAutomationRules(s, oldTask.id, 'task', oldTask.title, 'status_change', updates, oldTask as unknown as Record<string, unknown>);
         }
         if (Object.keys(updates).some(k => k !== 'status')) {
-          fireAutomationRules(s, oldTask.id, 'task', oldTask.title, 'field_change', updates, oldTask);
+          fireAutomationRules(s, oldTask.id, 'task', oldTask.title, 'field_change', updates, oldTask as unknown as Record<string, unknown>);
         }
         s.tasks[tIdx] = { ...oldTask, ...updates, updatedAt: now };
         // 完成时自动补 completedAt（确保 P1 延期预测自学习和 K2 KR 更新正常工作）
@@ -177,6 +178,10 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
             s.notifications.unshift({ id: genId('n'), type: 'sync', title: '任务被阻塞', message: `「${s.tasks[tIdx].title}」的前置任务「${names.join('、')}」尚未完成，已自动标记为阻塞`, relatedId: s.tasks[tIdx].id, relatedType: 'task', memberId: s.tasks[tIdx].leaderId || state.currentUser?.id || '', read: false, createdAt: new Date().toISOString() });
           }
         }
+        // Sync updates.status with effectiveStatus so all subsequent logic uses the correct value
+        if (effectiveStatus === 'blocked') {
+          updates.status = 'blocked';
+        }
         // Single supabase write with resolved status (avoids race condition)
         const finalUpdates = effectiveStatus === 'blocked' ? { ...updates, status: 'blocked' } : updates;
         supabaseUpdate('tasks', action.payload.id, { ...finalUpdates, updated_at: now }, oldTask.updatedAt);
@@ -196,10 +201,11 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
             if (allDone) {
               const { allowed: parentAutoOk } = validateStatusFlow(s, parentTask.id, 'task', parentTask.status, 'done');
               if (parentAutoOk) {
+                const parentOldUpdatedAt = parentTask.updatedAt;
                 parentTask.status = 'done';
                 parentTask.completedAt = new Date().toISOString();
                 parentTask.updatedAt = now;
-                supabaseUpdate('tasks', parentTask.id, { status: 'done', completed_at: parentTask.completedAt, updated_at: now });
+                supabaseUpdate('tasks', parentTask.id, { status: 'done', completed_at: parentTask.completedAt, updated_at: now }, parentOldUpdatedAt);
                 s.notifications.unshift({ id: genId('n'), type: 'sync', title: '任务自动完成', message: `「${parentTask.title}」的所有子任务已完成，已自动标记为完成`, relatedId: parentTask.id, relatedType: 'task', memberId: parentTask.leaderId || state.currentUser?.id || '', read: false, createdAt: new Date().toISOString() });
               }
             }
@@ -288,10 +294,11 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
               return !bt || bt.status !== 'done';
             });
             if (stillBlocked.length === 0) {
+              const utOldUpdatedAt = ut.updatedAt;
               ut.status = 'todo';
               ut.updatedAt = now;
               const utIdx = s.tasks.findIndex(t => t.id === ut.id);
-              if (utIdx !== -1) supabaseUpdate('tasks', ut.id, { status: 'todo', updated_at: now });
+              if (utIdx !== -1) supabaseUpdate('tasks', ut.id, { status: 'todo', updated_at: now }, utOldUpdatedAt);
               s.notifications.unshift({ id: genId('n'), type: 'sync', title: '任务已解除阻塞', message: `「${ut.title}」的前置任务已全部完成，可以开始执行`, relatedId: ut.id, relatedType: 'task', memberId: ut.leaderId || state.currentUser?.id || '', read: false, createdAt: new Date().toISOString() });
             }
           }
@@ -307,9 +314,24 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
       const now = tsNow();
       const t = s.tasks.find(t => t.id === tid);
       if (t) {
+        const oldUpdatedAt = t.updatedAt;
         t.deletedAt = now;
         t.updatedAt = now;
-        supabaseUpdate('tasks', tid, { deleted_at: now, updated_at: now });
+        supabaseUpdate('tasks', tid, { deleted_at: now, updated_at: now }, oldUpdatedAt);
+        // P3-#7: clean blockedBy references in other tasks
+        s.tasks.filter(other => (other.blockedBy ?? []).includes(tid) && !other.deletedAt).forEach(other => {
+          const otherIdx = s.tasks.findIndex(t2 => t2.id === other.id);
+          if (otherIdx === -1) return;
+          const newBlockedBy = (other.blockedBy ?? []).filter(id => id !== tid);
+          const otherOldUpdatedAt = other.updatedAt;
+          s.tasks[otherIdx] = { ...other, blockedBy: newBlockedBy, updatedAt: now };
+          supabaseUpdate('tasks', other.id, { blocked_by: newBlockedBy, updated_at: now }, otherOldUpdatedAt);
+          // If unblocked and was in 'blocked' status, restore to 'todo'
+          if (newBlockedBy.length === 0 && other.status === 'blocked') {
+            s.tasks[otherIdx].status = 'todo';
+            supabaseUpdate('tasks', other.id, { status: 'todo', updated_at: now }, now);
+          }
+        });
       }
       logActivity({ memberId: state.currentUser?.id, action: '删除', targetType: '任务', targetId: tid, targetTitle: t?.title || '' });
       return s;
@@ -319,9 +341,10 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
       const s = needMutate(state, ['tasks']);
       const t = s.tasks.find(t => t.id === tid);
       if (t) {
+        const oldUpdatedAt = t.updatedAt;
         t.deletedAt = undefined;
         t.updatedAt = tsNow();
-        supabaseUpdate('tasks', tid, { deleted_at: null, updated_at: t.updatedAt });
+        supabaseUpdate('tasks', tid, { deleted_at: null, updated_at: t.updatedAt }, oldUpdatedAt);
       }
       return s;
     }
@@ -331,11 +354,12 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
       const now = tsNow();
       const tIdx = s.tasks.findIndex(t => t.id === action.payload.taskId);
       if (tIdx !== -1) {
+        const oldUpdatedAt = s.tasks[tIdx].updatedAt;
         s.tasks[tIdx].subtasks = s.tasks[tIdx].subtasks.map(st =>
           st.id === action.payload.subtaskId ? { ...st, completed: !st.completed } : st
         );
         s.tasks[tIdx].updatedAt = now;
-        supabaseUpdate('tasks', action.payload.taskId, { subtasks: s.tasks[tIdx].subtasks, updated_at: now });
+        supabaseUpdate('tasks', action.payload.taskId, { subtasks: s.tasks[tIdx].subtasks, updated_at: now }, oldUpdatedAt);
         // 子任务完成率变化后更新所属项目进度
         if (s.tasks[tIdx].projectId) {
           const pIdx = s.projects.findIndex(p => p.id === s.tasks[tIdx].projectId);
@@ -350,6 +374,7 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
       const now = tsNow();
       const tIdx = s.tasks.findIndex(t => t.id === action.payload.taskId);
       if (tIdx !== -1) {
+        const oldUpdatedAt = s.tasks[tIdx].updatedAt;
         const subPayload = action.payload.subtask;
         const newSub: SubTask = {
           ...subPayload,
@@ -365,7 +390,7 @@ export function taskReducer(state: AppState, action: Action): AppState | null {
         };
         s.tasks[tIdx].subtasks.push(newSub);
         s.tasks[tIdx].updatedAt = now;
-        supabaseUpdate('tasks', action.payload.taskId, { subtasks: s.tasks[tIdx].subtasks, updated_at: now });
+        supabaseUpdate('tasks', action.payload.taskId, { subtasks: s.tasks[tIdx].subtasks, updated_at: now }, oldUpdatedAt);
       }
       return s;
     }

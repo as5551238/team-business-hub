@@ -90,6 +90,12 @@ export function PWAInstallPrompt() {
     try { localStorage.setItem(DISMISS_KEY, '1'); } catch {}
   };
 
+  // Also detect if running inside Capacitor (native app shell)
+  useEffect(() => {
+    const isCapacitor = !!(window as any).capacitor;
+    if (isCapacitor && isStandalone) return;
+  }, [isStandalone]);
+
   if (isStandalone || !showBanner) return null;
 
   // iOS Guide overlay

@@ -240,8 +240,8 @@ export function AiChatPanel({ itemId, itemType, itemTitle, itemDescription }: Ai
               {currentAgent.greeting}
             </p>
           )}
-          {messages.map((msg, i) => (
-            <div key={i} className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+          {messages.map((msg) => (
+            <div key={msg.timestamp} className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
               {msg.role === 'assistant' && (
                 <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 text-[10px]">
                   {AI_AGENT_MAP.get(msg.agentId || '')?.emoji || '🤖'}
@@ -280,7 +280,7 @@ export function AiChatPanel({ itemId, itemType, itemTitle, itemDescription }: Ai
                         }
                       }}
                       onCancel={() => {
-                        setMessages(prev => prev.map((m, mi) => mi === i ? { ...m, showFallback: false } : m));
+                        setMessages(prev => prev.map(m => m.timestamp === msg.timestamp ? { ...m, showFallback: false } : m));
                       }}
                     />
                   </div>

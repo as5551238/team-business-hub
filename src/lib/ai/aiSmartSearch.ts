@@ -91,7 +91,7 @@ interface SearchIntent {
   priorityFilter?: string;
   overdueOnly?: boolean;
   personFilter?: string;
-  remaining!: string[];
+  remaining: string[];
 }
 
 function parseSearchIntent(queryTokens: string[]): SearchIntent {

@@ -10,7 +10,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Plus, ListChecks, AlertCircle } from 'lucide-react';
 import type { ParsedIntent } from '@/lib/ai/intentParser';
-import type { AppType, TaskPriority, GoalType } from '@/types';
+import type { AppType, TaskPriority, GoalType, BusinessPriority } from '@/types';
 
 interface FallbackFormProps {
   intent: ParsedIntent;
@@ -24,7 +24,7 @@ interface FallbackFormProps {
 function TaskFallbackForm({ intent, onSubmit, onCancel }: FallbackFormProps) {
   const prefill = intent.params || {};
   const [title, setTitle] = useState((prefill.title as string) || '');
-  const [priority, setPriority] = useState<TaskPriority>((prefill.priority as TaskPriority) || 'B');
+  const [priority, setPriority] = useState<BusinessPriority>((prefill.priority as BusinessPriority) || 'B');
   const [dueDate, setDueDate] = useState((prefill.dueDate as string) || '');
   const [description, setDescription] = useState((prefill.description as string) || '');
 
@@ -53,7 +53,7 @@ function TaskFallbackForm({ intent, onSubmit, onCancel }: FallbackFormProps) {
           <select
             className="w-full border border-input rounded px-2 py-1 text-xs bg-card"
             value={priority}
-            onChange={e => setPriority(e.target.value as TaskPriority)}
+            onChange={e => setPriority(e.target.value as BusinessPriority)}
           >
             <option value="S">S-紧急</option>
             <option value="A">A-高</option>

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import type { ItemType } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Link2, Plus, Trash2, Target, FolderKanban, CheckSquare, AlertTriangle, Clock } from 'lucide-react';
+import { Link2, Plus, Trash2, Target, FolderKanban, CheckSquare, AlertTriangle, Clock, BookOpen } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Section } from './detail-shared';
 
@@ -117,24 +117,27 @@ export function DetailLinks({ itemId, itemType, canEdit }: DetailLinksProps) {
     state.goals.forEach(g => { if (g.id !== itemId) targets.push({ id: g.id, title: g.title, type: 'goal' }); });
     state.projects.forEach(p => { if (p.id !== itemId) targets.push({ id: p.id, title: p.title, type: 'project' }); });
     state.tasks.forEach(t => { if (t.id !== itemId) targets.push({ id: t.id, title: t.title, type: 'task' }); });
+    state.knowledge.forEach(k => { if (k.id !== itemId) targets.push({ id: k.id, title: k.title, type: 'knowledge' }); });
     return targets;
-  }, [state.goals, state.projects, state.tasks, itemId]);
+  }, [state.goals, state.projects, state.tasks, state.knowledge, itemId]);
 
   function getItemTitle(id: string, type: ItemType) {
     if (type === 'goal') return state.goals.find(g => g.id === id)?.title || id;
     if (type === 'project') return state.projects.find(p => p.id === id)?.title || id;
+    if (type === 'knowledge') return state.knowledge.find(k => k.id === id)?.title || id;
     return state.tasks.find(t => t.id === id)?.title || id;
   }
 
   function getTypeIcon(type: ItemType) {
     if (type === 'goal') return <Target className="w-3.5 h-3.5" />;
     if (type === 'project') return <FolderKanban className="w-3.5 h-3.5" />;
+    if (type === 'knowledge') return <BookOpen className="w-3.5 h-3.5" />;
     return <CheckSquare className="w-3.5 h-3.5" />;
   }
 
   function handleAddLink() {
     if (!addLinkTargetId || !canEdit) return;
-    dispatch({ type: 'ADD_ITEM_LINK', payload: { sourceId: itemId, sourceType: itemType, targetId: addLinkTargetId, targetType: addLinkType, label: addLinkLabel || undefined, createdAt: new Date().toISOString() } });
+    dispatch({ type: 'ADD_ITEM_LINK', payload: { sourceId: itemId, sourceType: itemType, targetId: addLinkTargetId, targetType: addLinkType, label: addLinkLabel || undefined } });
     setAddLinkTargetId('');
     setAddLinkLabel('');
     setShowAddLink(false);
@@ -187,6 +190,7 @@ export function DetailLinks({ itemId, itemType, canEdit }: DetailLinksProps) {
               <option value="goal">目标</option>
               <option value="project">项目</option>
               <option value="task">任务</option>
+              <option value="knowledge">知识条目</option>
             </select>
             <select className="w-full text-sm border border-input rounded px-2 py-1 bg-card" value={addLinkTargetId} onChange={e => setAddLinkTargetId(e.target.value)}>
               <option value="">选择...</option>

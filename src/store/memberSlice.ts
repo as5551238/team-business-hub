@@ -27,9 +27,9 @@ export function memberReducer(state: AppState, action: Action): AppState | null 
         if (!isAdmin && action.payload.updates.role !== undefined) {
           action.payload.updates.role = s.members[idx].role;
         }
-        s.members[idx] = { ...s.members[idx], ...action.payload.updates };
-        if (state.currentUser?.id === action.payload.id && state.currentUser) s.currentUser = { ...state.currentUser, ...action.payload.updates } as Member;
-        supabaseUpdate('members', action.payload.id, action.payload.updates);
+        s.members[idx] = { ...s.members[idx], ...action.payload.updates, updatedAt: tsNow() };
+        if (state.currentUser?.id === action.payload.id && state.currentUser) s.currentUser = { ...state.currentUser, ...action.payload.updates, updatedAt: tsNow() } as Member;
+        supabaseUpdate('members', action.payload.id, { ...action.payload.updates, updated_at: tsNow() });
       }
       return s;
     }
@@ -64,7 +64,7 @@ export function memberReducer(state: AppState, action: Action): AppState | null 
         if (changed) { t.updatedAt = now; supabaseUpdate('tasks', t.id, { leader_id: t.leaderId, supporter_ids: t.supporterIds, updated_at: now }); }
       });
       s.comments.forEach(c => {
-        if (c.memberId === mid) { c.memberId = null; supabaseUpdate('comments', c.id, { member_id: null }); } // P3#8 fix: use null instead of ''
+        if (c.memberId === mid) { c.memberId = ''; supabaseUpdate('comments', c.id, { member_id: null }); } // P3#8 fix: use null instead of ''
       });
       s.members = s.members.filter(m => m.id !== mid);
       supabaseDelete('members', mid); // P3#7 fix: removed conflicting supabaseUpdate('members', mid, { status: 'inactive' })

@@ -216,8 +216,8 @@ export default function Goals() {
 
   // 创建对话框草稿自动保存
   const goalDraft = useDraftSave('goal-create', formData);
-  useEffect(() => { if (showCreateDialog) { const draft = goalDraft.loadDraft(); if (draft) setFormData(f => ({ ...f, ...draft })); } }, [showCreateDialog]);
-  useEffect(() => { if (showCreateDialog && formData.title) goalDraft.saveDraft(formData); }, [showCreateDialog, formData]);
+  useEffect(() => { if (showCreateDialog) { const draft = goalDraft.loadDraft(); if (draft) setFormData(f => ({ ...f, ...draft })); } }, [showCreateDialog, goalDraft]);
+  useEffect(() => { if (showCreateDialog && formData.title) goalDraft.saveDraft(formData); }, [showCreateDialog, formData, goalDraft]);
 
   function handleCreateGoal() {
     if (!formData.title.trim()) return;

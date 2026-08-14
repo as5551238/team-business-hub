@@ -194,7 +194,7 @@ export function MorningBriefingPanel({ className }: MorningBriefingPanelProps) {
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">风险预警</h3>
                 <div className="space-y-1.5">
                   {briefing.riskAlerts.map((r, i) => (
-                    <div key={i} className={cn('p-2 rounded text-xs', severityColor(r.severity))}>
+                    <div key={`risk-${i}`} className={cn('p-2 rounded text-xs', severityColor(r.severity))}>
                       <div className="font-medium">{r.itemTitle}</div>
                       <div className="text-[10px] opacity-80">{r.description}</div>
                     </div>

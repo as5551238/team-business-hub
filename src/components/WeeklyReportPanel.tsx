@@ -278,7 +278,7 @@ export function WeeklyReportPanel({ className }: WeeklyReportPanelProps) {
               <Section title="关键成果" icon={<Trophy className="w-3 h-3" />}>
                 <div className="space-y-1.5">
                   {report.keyAchievements.map((a, i) => (
-                    <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-card border border-border">
+                    <div key={`ach-${i}`} className="flex items-start gap-2 p-2 rounded-lg bg-card border border-border">
                       <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0', impactBadge(a.impact))}>
                         {impactLabel(a.impact)}
                       </span>
@@ -338,7 +338,7 @@ export function WeeklyReportPanel({ className }: WeeklyReportPanelProps) {
                     <span className="text-emerald-500">已解决: <strong>{report.riskSummary.resolvedCount}</strong></span>
                   </div>
                   {report.riskSummary.newRisks.map((r, i) => (
-                    <div key={i} className={cn('p-2 rounded text-xs', r.severity === 'critical' ? 'bg-red-50 dark:bg-red-900/20 text-red-600' : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600')}>
+                    <div key={`risk-${i}`} className={cn('p-2 rounded text-xs', r.severity === 'critical' ? 'bg-red-50 dark:bg-red-900/20 text-red-600' : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600')}>
                       {r.title}
                     </div>
                   ))}

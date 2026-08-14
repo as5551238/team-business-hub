@@ -1,3 +1,5 @@
+import type { ItemType } from '@/types';
+
 export type AdminTab = 'team' | 'flow' | 'automation' | 'automaton' | 'toolbox' | 'schedule' | 'integrations' | 'settings' | 'kpi' | 'agent' | 'deploy' | 'riskradar' | 'teamload' | 'mcptools' | 'billing' | 'retro' | 'marketplace' | 'compliance' | 'collab' | 'templates' | 'privacy';
 
 export const tabItems: { key: AdminTab; label: string; icon: any }[] = [
@@ -51,7 +53,7 @@ export interface TForm { title: string; description: string; type: 'goal' | 'pro
 export const emptyForm: TForm = { title: '', description: '', type: 'task', content: '', category: '', isPublic: false };
 export function formFromTemplate(t: any): TForm { return { title: t.title, description: t.description, type: t.type, content: t.content, category: t.category, isPublic: t.isPublic }; }
 
-export interface EvtForm { title: string; description: string; startDate: string; endDate: string; allDay: boolean; color: string; linkedItemId: string; linkedItemType: 'goal' | 'project' | 'task' | null; repeatCycle: string; memberId: string; }
+export interface EvtForm { title: string; description: string; startDate: string; endDate: string; allDay: boolean; color: string; linkedItemId: string; linkedItemType: ItemType | null; repeatCycle: string; memberId: string; }
 export const emptyEvtForm: EvtForm = { title: '', description: '', startDate: '', endDate: '', allDay: true, color: '#3b82f6', linkedItemId: '', linkedItemType: null, repeatCycle: 'none', memberId: '' };
 
 export interface CalendarDay { date: string; day: number; isCurrentMonth: boolean; isToday: boolean; }

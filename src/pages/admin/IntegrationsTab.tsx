@@ -2,7 +2,7 @@
  * 集成管理 Tab — 开放 API 文档 + Webhook 出站管理
  * Phase 3: Cross-platform protocol
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { usePermissions } from '@/store/hooks';
 import { Code, Globe, Webhook, Plus, Trash2, TestTube, CheckCircle2, Copy, ExternalLink, ChevronDown, ChevronRight, Key, Eye, EyeOff, MessageSquare, Send, Bell, Link2, Unlink, Activity } from 'lucide-react';
@@ -46,8 +46,17 @@ function OpenAPISection() {
   const { state } = useStore();
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
 
-  const supabaseUrl = 'https://atexvoyvnnuaonvrgzhn.supabase.co';
-  const publishableKey = 'sb_publishable_WeMPVE8GNCTOqrE7OZhTIw_WXJaz2Ie';
+  // Read Supabase config from localStorage (stored by StoreProvider on connect)
+  const { supabaseUrl, publishableKey } = useMemo(() => {
+    try {
+      const configStr = localStorage.getItem('tbh-supabase-config');
+      if (configStr) {
+        const config = JSON.parse(configStr);
+        return { supabaseUrl: config.url || '', publishableKey: config.anonKey || '' };
+      }
+    } catch {}
+    return { supabaseUrl: '', publishableKey: '' };
+  }, []);
 
   const tables = [
     { name: 'goals', label: '目标', fields: ['id', 'title', 'description', 'type', 'status', 'priority', 'start_date', 'end_date', 'leader_id', 'progress', 'key_results'] },

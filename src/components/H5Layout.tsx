@@ -43,7 +43,7 @@ export function H5Layout({ children }: H5LayoutProps) {
 
   const handleRequestNotify = useCallback(async () => {
     const result = await requestNotificationPermission();
-    setNotifyPermission(result);
+    setNotifyPermission(result ? 'granted' : 'denied');
   }, []);
 
   const handleToggleTask = useCallback((taskId: string, currentStatus: string) => {

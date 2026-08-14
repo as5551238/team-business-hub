@@ -12,6 +12,7 @@ export function saveLocalStateImmediate(state: AppState) {
       console.warn(`[saveLocalState] state too large (${(json.length / 1024 / 1024).toFixed(1)}MB), truncating activities/notifications`);
       const trimmed = { ...state, activities: state.activities.slice(0, 50), notifications: state.notifications.slice(0, 100) };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+      _onWriteError?.('本地存储空间不足，已自动清理旧活动记录和通知。');
     } else {
       localStorage.setItem(STORAGE_KEY, json);
     }
@@ -106,7 +107,11 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
     const allMembers = data(membersRes0).map(toCamel) as Member[];
     const teamMemberLinks = data(val(teamMembersRes)).map(toCamel);
     const memberIdsInTeam = new Set(teamMemberLinks.filter((tm: any) => tm.teamId === tid).map((tm: any) => tm.memberId));
-    const teamMembers = allMembers.filter(m => memberIdsInTeam.has(m.id) || m.teamId === tid);
+    // P2#21 fix: if team_members query failed/empty, fall back to showing all active members
+    // (better to show all members than to show zero members)
+    const teamMembers = teamMemberLinks.length > 0
+      ? allMembers.filter(m => memberIdsInTeam.has(m.id) || m.teamId === tid)
+      : allMembers;
 
     let savedUserId: string | null = null;
     try { savedUserId = localStorage.getItem(CURRENT_USER_KEY); } catch {}
@@ -146,7 +151,14 @@ let _onWriteError: ((msg: string) => void) | null = null;
 export function setOnWriteError(cb: (msg: string) => void) { _onWriteError = cb; }
 
 // Failed write queue — persisted to localStorage so tab close doesn't lose data.
-interface PendingWrite { fn: () => Promise<any>; label: string; addedAt: number; version: number; serialized?: string; }
+interface SerializedWrite {
+  table: string;
+  operation: 'insert' | 'update' | 'upsert' | 'delete';
+  id?: string;
+  data?: Record<string, any> | Record<string, any>[];
+  oldUpdatedAt?: string;
+}
+interface PendingWrite { fn: () => Promise<any>; label: string; addedAt: number; version: number; serialized?: SerializedWrite; }
 const failedWrites: PendingWrite[] = [];
 const PENDING_WRITES_KEY = 'tbh-pending-writes';
 const MAX_PENDING_WRITES = 100;
@@ -166,25 +178,55 @@ function loadPendingMeta() {
     if (!raw) return;
     const meta = JSON.parse(raw);
     if (!Array.isArray(meta)) return;
-    // Note: fn callbacks can't be serialized — these are informational only
-    // Actual replay only works within the same session; persisted items serve as audit trail
     for (const m of meta) {
       if (failedWrites.length < MAX_PENDING_WRITES) {
-        failedWrites.push({ fn: async () => {}, label: m.label, addedAt: m.addedAt, version: m.version, serialized: m.serialized });
+        failedWrites.push({ fn: m.serialized ? reconstructWriteFn(m.serialized) : async () => {}, label: m.label, addedAt: m.addedAt, version: m.version, serialized: m.serialized });
       }
     }
   } catch {}
 }
 loadPendingMeta();
 
-async function withRetry(fn: () => Promise<any>, retries = 2, label = 'write'): Promise<void> {
+/** Reconstruct a write function from serialized data — enables replay after page reload */
+function reconstructWriteFn(sw: SerializedWrite): () => Promise<any> {
+  return async () => {
+    const sb = getSupabaseClient();
+    if (!sb) return;
+    switch (sw.operation) {
+      case 'insert':
+      case 'upsert': {
+        const arr = Array.isArray(sw.data) ? sw.data : [sw.data!];
+        const snakeData = arr.map(d => filterColumns(sw.table, toSnake(d)));
+        for (let i = 0; i < snakeData.length; i += 100) {
+          const res = await sb.from(sw.table).upsert(snakeData.slice(i, i + 100), { onConflict: 'id' });
+          if (res.error) throw res.error;
+        }
+        break;
+      }
+      case 'update': {
+        let q = sb.from(sw.table).update(filterColumns(sw.table, toSnake(sw.data as Record<string, any>)), { count: 'exact' }).eq('id', sw.id!);
+        if (sw.oldUpdatedAt) q = q.eq('updated_at', sw.oldUpdatedAt);
+        const res = await q;
+        if (res.error) throw res.error;
+        break;
+      }
+      case 'delete': {
+        const res = await sb.from(sw.table).delete().eq('id', sw.id!);
+        if (res.error) throw res.error;
+        break;
+      }
+    }
+  };
+}
+
+async function withRetry(fn: () => Promise<any>, retries = 2, label = 'write', serialized?: SerializedWrite): Promise<void> {
   for (let i = 0; i <= retries; i++) {
     try { await fn(); _writeVersion++; return; } catch (e: unknown) {
       if (i === retries) {
         console.error(`Supabase ${label} failed after retries:`, e);
         // Queue for replay on reconnect instead of silently losing data
         if (failedWrites.length < MAX_PENDING_WRITES) {
-          failedWrites.push({ fn, label, addedAt: Date.now(), version: _writeVersion });
+          failedWrites.push({ fn, label, addedAt: Date.now(), version: _writeVersion, serialized });
           persistPendingMeta();
         }
         _onWriteError?.('数据同步失败，已自动重试。请检查网络后刷新页面。');
@@ -219,9 +261,9 @@ export async function replayFailedWrites(): Promise<void> {
 
 /** Whitelist of DB columns per table — prevents sending unknown columns that cause 400 errors */
 const TABLE_COLUMNS: Record<string, Set<string> | null> = {
-  goals: new Set(['id','title','description','type','status','parent_id','level','start_date','end_date','owner_id','key_results','progress','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','selected_kr_ids','team_id','deleted_at','app_type']),
+  goals: new Set(['id','title','description','type','status','parent_id','level','start_date','end_date','owner_id','key_results','progress','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','selected_kr_ids','team_id','deleted_at','app_type','approval_status','dual_track']),
   projects: new Set(['id','title','description','goal_id','status','start_date','end_date','owner_id','member_ids','task_count','progress','created_at','updated_at','leader_id','supporter_ids','parent_id','canvas_x','canvas_y','priority','tags','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','team_id','deleted_at','app_type']),
-  tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','start_date','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','blocked_by','sprint_id','team_id','deleted_at','app_type']),
+  tasks: new Set(['id','title','description','project_id','goal_id','status','priority','assignee_id','owner_id','start_date','due_date','reminder_date','completed_at','subtasks','tags','created_at','updated_at','leader_id','supporter_ids','canvas_x','canvas_y','parent_id','category','repeat_cycle','discussion_thread_id','summary','tracking_records','attachments','blocked_by','sprint_id','team_id','deleted_at','app_type','kr_id']),
   members: new Set(['id','name','role','department','avatar','email','status','join_date','created_at','updated_at','nickname','phone','wechat_id','permissions','team_id']),
   notifications: new Set(['id','type','title','message','related_id','related_type','member_id','read','created_at','team_id']),
   activities: new Set(['id','member_id','action','target_type','target_id','target_title','details','created_at','team_id']),
@@ -236,10 +278,10 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   comments: new Set(['id','item_id','item_type','member_id','member_name','content','created_at','mentioned_member_ids','is_read','follow_up_required','follow_up_status','team_id']),
   bookmarks: new Set(['id','title','url','category','icon','order','member_id','created_at','team_id']),
   saved_views: new Set(['id','name','type','filters','filter_logic','member_id','updated_at','created_at','team_id']),
-  status_flow_rules: new Set(['id','from_status','to_status','allowed_roles','auto_actions','created_at','updated_at','team_id']),
+  status_flow_rules: new Set(['id','item_type','from_status','to_status','allowed_roles','auto_actions','enabled','name','created_at','updated_at','team_id']),
   automation_rules: new Set(['id','name','enabled','item_type','trigger','condition','actions','created_at','updated_at','team_id']),
   sprints: new Set(['id','name','start_date','end_date','goal_ids','status','created_at','updated_at','team_id']),
-  knowledge: new Set(['id','title','content','tags','member_id','related_items','created_at','updated_at','team_id']),
+  knowledge: new Set(['id','title','content','category','tags','status','assignee_id','priority','due_date','metadata','visibility','member_id','related_items','color','created_at','updated_at','team_id']),
   teams: new Set(['id','name','description','avatar','invite_code','owner_id','settings','created_at','updated_at']),
   team_members: new Set(['id','team_id','member_id','role','permissions','joined_at']),
 };
@@ -270,7 +312,7 @@ export async function supabaseUpsert(table: string, data: Record<string, any> | 
       const res = await sb.from(table).upsert(snakeData.slice(i, i + 100), { onConflict: 'id' });
       if (res.error) throw res.error;
     }
-  });
+  }, 2, `upsert:${table}`, { table, operation: 'upsert', data });
 }
 
 export async function supabaseUpdate(table: string, id: string, data: Record<string, any>, oldUpdatedAt?: string) {
@@ -287,7 +329,7 @@ export async function supabaseUpdate(table: string, id: string, data: Record<str
       console.warn(`[supabaseUpdate] optimistic lock conflict: ${table}/${id}`);
       _onWriteError?.('数据已被其他人修改，请刷新页面后重试。');
     }
-  });
+  }, 2, `update:${table}/${id}`, { table, operation: 'update', id, data, oldUpdatedAt });
 }
 
 export async function supabaseInsert(table: string, data: Record<string, any>) {
@@ -296,7 +338,7 @@ export async function supabaseInsert(table: string, data: Record<string, any>) {
   await withRetry(async () => {
     const res = await sb.from(table).upsert(filterColumns(table, toSnake(data)), { onConflict: 'id' });
     if (res.error) throw res.error;
-  });
+  }, 2, `insert:${table}`, { table, operation: 'insert', data });
 }
 
 export async function supabaseDelete(table: string, id: string) {
@@ -305,7 +347,7 @@ export async function supabaseDelete(table: string, id: string) {
   await withRetry(async () => {
     const res = await sb.from(table).delete().eq('id', id);
     if (res.error) throw res.error;
-  });
+  }, 2, `delete:${table}/${id}`, { table, operation: 'delete', id });
 }
 
 /** Audit log: fire-and-forget write to activities table (SEC-06).
@@ -322,6 +364,6 @@ export function logActivity(params: { memberId?: string; action: string; targetT
       target_id: params.targetId,
       target_title: params.targetTitle.slice(0, 200),
       details: (params.details || '').slice(0, 500),
-    }).catch(() => {});
+    }).then(() => {}, () => {});
   } catch {}
 }

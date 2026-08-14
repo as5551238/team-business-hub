@@ -100,11 +100,13 @@ const tabItems: { key: InsightTab; label: string; icon: typeof BarChart3 }[] = [
 ];
 
 function getWeekKey(dateStr: string): string {
+  // ISO 8601 week: use Thursday-based algorithm
   const d = new Date(dateStr);
-  const start = new Date(d.getFullYear(), 0, 1);
-  const diff = d.getTime() - start.getTime();
-  const oneWeek = 604800000;
-  const weekNum = Math.ceil((diff / oneWeek) + start.getDay() / 7);
+  const day = d.getDay() || 7; // Sunday=7
+  const thursday = new Date(d);
+  thursday.setDate(d.getDate() + (4 - day)); // nearest Thursday
+  const yearStart = new Date(thursday.getFullYear(), 0, 1);
+  const weekNum = Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
   return `W${weekNum}`;
 }
 

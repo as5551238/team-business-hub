@@ -1,8 +1,9 @@
-import type { AppState, Goal, Project, Task, Permission, PermissionModule, PermissionAction, MemberRole, AutomationRule, StatusFlowRule } from '@/types';
+import type { AppState, Goal, Project, Task, Permission, PermissionAction, MemberRole, AutomationRule, AutomationTrigger, AutomationAction, StatusFlowRule, ItemType } from '@/types';
 import { genId } from './utils';
 import { supabaseUpdate } from './supabase';
 import { calcDualTrack, calcKpiKrScore } from '@/lib/kpiScoring';
 import { getFactoryRules } from './factoryRules';
+import { analyzeKnowledge } from '@/lib/ai/knowledgeRules';
 
 // Late-injected dispatch bridge for ai_action (avoids circular dependency with useStore)
 let _asyncDispatch: ((action: any) => void) | null = null;
@@ -43,6 +44,7 @@ const SET_FIELD_ALLOWLIST: Record<string, string[]> = {
   goal: ['status', 'priority', 'category', 'endDate'],
   project: ['status', 'priority', 'category', 'endDate'],
   task: ['status', 'priority', 'category', 'dueDate', 'reminderDate'],
+  knowledge: ['status', 'priority', 'category', 'tags', 'dueDate', 'visibility'],
 };
 
 // ==================== 权限矩阵 ====================
@@ -68,15 +70,6 @@ export function hasPermission(state: AppState, memberId: string, permission: Per
   // Fall back to role defaults
   const defaults = ROLE_DEFAULTS[member.role] ?? [];
   return defaults.includes(permission);
-}
-
-/** Check if a member has ANY permission for a module */
-export function hasModuleAccess(state: AppState, memberId: string, module: PermissionModule): boolean {
-  const member = state.members.find(m => m.id === memberId);
-  if (!member) return false;
-  if (member.role === 'admin') return true;
-  const defaults = ROLE_DEFAULTS[member.role] ?? [];
-  return defaults.some(p => p.startsWith(module + '_'));
 }
 
 /** Backward compat: map old permission names to new ones */
@@ -106,7 +99,7 @@ export function canDeleteOwnContent(state: AppState, creatorId: string | undefin
 
 export function notifyAssigned(
   s: AppState, currentUserId: string | undefined,
-  memberIds: string[], itemTitle: string, itemId: string, itemType: string,
+  memberIds: string[], itemTitle: string, itemId: string, itemType: ItemType,
 ) {
   if (!currentUserId) return;
   for (const mid of memberIds) {
@@ -137,10 +130,10 @@ export function matchCondition(operator: string, fieldValue: any, condValue: str
   }
 }
 
-/** 触发自动化规则（status_change / field_change / item_created 统一入口） */
+/** 触发自动化规则（status_change / field_change / item_created / content_created 等统一入口） */
 export function fireAutomationRules(
-  s: AppState, itemId: string, itemType: 'goal' | 'project' | 'task', itemTitle: string,
-  trigger: 'status_change' | 'field_change' | 'item_created' | 'due_arrive' | 'kr_lag' | 'overdue',
+  s: AppState, itemId: string, itemType: ItemType, itemTitle: string,
+  trigger: AutomationTrigger,
   updates: Record<string, unknown>, oldItem: Record<string, unknown>,
 ) {
   for (const rule of s.automationRules) {
@@ -176,7 +169,7 @@ export function fireAutomationRules(
   }
 }
 
-export function executeAutomationActions(s: AppState, rule: AutomationRule | { actions: AutomationRule['actions']; name?: string }, itemId: string, itemType: 'goal' | 'project' | 'task', itemTitle: string) {
+export function executeAutomationActions(s: AppState, rule: AutomationRule | { actions: AutomationRule['actions']; name?: string }, itemId: string, itemType: ItemType, itemTitle: string) {
   if (isAutomationLocked()) return;
   _ruleDepth++;
   try {
@@ -202,30 +195,30 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
           if (!act.config.field || !act.config.value) continue;
           const allowed = SET_FIELD_ALLOWLIST[itemType] ?? [];
           if (!allowed.includes(act.config.field)) { console.warn(`set_field: field "${act.config.field}" not in allowlist for ${itemType}`); continue; }
-          const items = itemType === 'goal' ? s.goals : itemType === 'project' ? s.projects : s.tasks;
+          const items = itemType === 'goal' ? s.goals : itemType === 'project' ? s.projects : itemType === 'task' ? s.tasks : itemType === 'knowledge' ? s.knowledge : [];
           const item = items.find(i => i.id === itemId) as Record<string, unknown> | undefined;
           if (!item) continue;
           const oldValue = item[act.config.field];
           if (oldValue === act.config.value) continue;
-          if (act.config.field === 'status') {
+          if (act.config.field === 'status' && (itemType === 'goal' || itemType === 'project' || itemType === 'task')) {
             const { allowed: flowOk } = validateStatusFlow(s, itemId, itemType, oldValue as string, act.config.value);
             if (!flowOk) continue;
           }
           item[act.config.field] = act.config.value;
           item.updatedAt = new Date().toISOString();
-          const tableName = itemType === 'goal' ? 'goals' : itemType === 'project' ? 'projects' : 'tasks';
+          const tableName = itemType === 'goal' ? 'goals' : itemType === 'project' ? 'projects' : itemType === 'task' ? 'tasks' : itemType === 'knowledge' ? 'knowledge' : '';
           const snakeField = act.config.field.replace(/([A-Z])/g, '_$1').toLowerCase();
-          supabaseUpdate(tableName, itemId, { [snakeField]: act.config.value, updated_at: new Date().toISOString() });
-          if (act.config.field === 'status' && act.config.value === 'done') {
+          if (tableName) supabaseUpdate(tableName, itemId, { [snakeField]: act.config.value, updated_at: new Date().toISOString() });
+          if (act.config.field === 'status' && act.config.value === 'done' && (itemType === 'goal' || itemType === 'project' || itemType === 'task')) {
             item.completedAt = new Date().toISOString();
-            supabaseUpdate(tableName, itemId, { completed_at: new Date().toISOString() });
+            if (tableName) supabaseUpdate(tableName, itemId, { completed_at: new Date().toISOString() });
           }
         } else if (act.type === 'create_subtask') {
           if (itemType !== 'task' || !act.config.title) continue;
           const parentTask = s.tasks.find(t => t.id === itemId);
           if (!parentTask) continue;
           if (!parentTask.subtasks) parentTask.subtasks = [];
-          const subtask = { id: genId('sub'), title: act.config.title, completed: false, priority: act.config.priority ?? parentTask.priority ?? 'medium', dueDate: act.config.dueDate ?? null, leaderId: act.config.memberId ?? parentTask.leaderId ?? '', createdAt: new Date().toISOString() };
+          const subtask = { id: genId('sub'), title: act.config.title, completed: false, priority: act.config.priority ?? parentTask.priority ?? 'medium', dueDate: act.config.dueDate ?? null, reminderDate: null, leaderId: act.config.memberId ?? parentTask.leaderId ?? '', supporterIds: [], tags: [], attachments: [], trackingRecords: [], repeatCycle: 'none', createdAt: new Date().toISOString() };
           parentTask.subtasks = [...parentTask.subtasks, subtask];
           parentTask.updatedAt = new Date().toISOString();
           supabaseUpdate('tasks', itemId, { subtasks: parentTask.subtasks, updated_at: parentTask.updatedAt });
@@ -234,7 +227,7 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
           }
         } else if (act.type === 'assign') {
           if (!act.config.memberId) continue;
-          const items = itemType === 'goal' ? s.goals : itemType === 'project' ? s.projects : s.tasks;
+          const items = itemType === 'goal' ? s.goals : itemType === 'project' ? s.projects : itemType === 'task' ? s.tasks : itemType === 'knowledge' ? s.knowledge : [];
           const item = items.find(i => i.id === itemId) as Record<string, unknown> | undefined;
           if (!item) continue;
           const oldLeaderId = item.leaderId as string | undefined;
@@ -243,10 +236,40 @@ export function executeAutomationActions(s: AppState, rule: AutomationRule | { a
           if (!targetMember) continue;
           item.leaderId = act.config.memberId;
           item.updatedAt = new Date().toISOString();
-          const tableName = itemType === 'goal' ? 'goals' : itemType === 'project' ? 'projects' : 'tasks';
-          supabaseUpdate(tableName, itemId, { leader_id: act.config.memberId, updated_at: new Date().toISOString() });
+          const tableName = itemType === 'goal' ? 'goals' : itemType === 'project' ? 'projects' : itemType === 'task' ? 'tasks' : itemType === 'knowledge' ? 'knowledge' : '';
+          if (tableName) supabaseUpdate(tableName, itemId, { leader_id: act.config.memberId, updated_at: new Date().toISOString() });
           if (act.config.memberId !== s.currentUser?.id) {
             s.notifications.unshift({ id: genId('n'), type: 'assigned', title: '你被自动指派了新事项', message: `自动化规则将你指派为「${itemTitle}」的负责人`, relatedId: itemId, relatedType: itemType, memberId: act.config.memberId, read: false, createdAt: new Date().toISOString() });
+          }
+        } else if (act.type === 'auto_tag' || act.type === 'auto_classify' || act.type === 'suggest_priority') {
+          // Phase3-P2: AI-powered auto-tagging/classification for knowledge items
+          if (itemType !== 'knowledge') continue;
+          const kItem = s.knowledge.find(k => k.id === itemId);
+          if (!kItem) continue;
+          const suggestion = analyzeKnowledge(kItem.title, kItem.content);
+          if (suggestion.confidence === 0) continue;
+          if (act.type === 'auto_tag' && suggestion.tags.length > 0) {
+            const existing = kItem.tags ?? [];
+            const merged = [...new Set([...existing, ...suggestion.tags])];
+            if (merged.length !== existing.length) {
+              kItem.tags = merged;
+              kItem.updatedAt = new Date().toISOString();
+              supabaseUpdate('knowledge', itemId, { tags: merged, updated_at: kItem.updatedAt });
+            }
+          }
+          if (act.type === 'auto_classify' && suggestion.category) {
+            if (kItem.category !== suggestion.category) {
+              kItem.category = suggestion.category;
+              kItem.updatedAt = new Date().toISOString();
+              supabaseUpdate('knowledge', itemId, { category: suggestion.category, updated_at: kItem.updatedAt });
+            }
+          }
+          if (act.type === 'suggest_priority' && suggestion.priority) {
+            if (kItem.priority !== suggestion.priority) {
+              kItem.priority = suggestion.priority;
+              kItem.updatedAt = new Date().toISOString();
+              supabaseUpdate('knowledge', itemId, { priority: suggestion.priority, updated_at: kItem.updatedAt });
+            }
           }
         } else if (act.type === 'ai_action') {
           // AI-powered workflow action: invoke an AI action with context-aware params
@@ -368,6 +391,8 @@ export function calcGoalProgress(goals: Goal[], goalId: string, visited?: Set<st
     // 只计算 selected 的 KR，未选中的不参与进度计算
     const krs = allKrs.filter(kr => kr.selected !== false);
     // D6: 回写 KPI 评分到每个 KR 的 kpiScore 字段
+    // 注意：此处有意 mutate 原始 KR 对象，仅在 reducer 内调用时安全（needMutate 已深拷贝）。
+    // 组件层只应消费返回值 progress，不应依赖 kpiScore/dualTrack 写回。
     for (const kr of allKrs) {
       if (kr.track === 'kpi' || kr.track === 'both') {
         kr.kpiScore = calcKpiKrScore(kr).score;
@@ -421,7 +446,7 @@ export function needMutate(state: AppState, keys?: (keyof AppState)[]): AppState
   if (!keys) return structuredClone(state);
   const s = { ...state } as AppState;
   for (const key of keys) {
-    (s as Record<string, unknown>)[key] = structuredClone(state[key]);
+    (s as unknown as Record<string, unknown>)[key] = structuredClone(state[key]);
   }
   return s;
 }

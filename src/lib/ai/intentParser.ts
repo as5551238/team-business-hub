@@ -12,8 +12,8 @@ import { callLLM } from './llmService';
 import { loadAIConfig } from './types';
 import { parseActionIntent, executeAiAction } from './aiAgentSystem';
 import { getAiActionSummary } from './aiActions';
-import type { AppState } from '@/store/reducer';
-import type { Action } from '@/store/reducer';
+import type { AppState } from '@/types';
+import type { Action } from '@/store/types';
 
 // ==================== 类型定义 ====================
 

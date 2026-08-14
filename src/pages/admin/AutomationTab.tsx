@@ -12,6 +12,8 @@ const TRIGGERS: { value: AutomationTrigger; label: string }[] = [
   { value: 'field_change', label: '字段变更' },
   { value: 'kr_lag', label: 'KR进度落后' },
   { value: 'overdue', label: '事项逾期' },
+  { value: 'content_created', label: '创建知识' },
+  { value: 'tag_suggested', label: 'AI标签建议' },
 ];
 const ACTIONS: { value: AutomationAction; label: string }[] = [
   { value: 'notify', label: '发送通知' },
@@ -20,11 +22,15 @@ const ACTIONS: { value: AutomationAction; label: string }[] = [
   { value: 'assign', label: '分配负责人' },
   { value: 'escalation', label: '升级通知' },
   { value: 'ai_action', label: 'AI智能动作' },
+  { value: 'auto_tag', label: '自动打标签' },
+  { value: 'auto_classify', label: '自动分类' },
+  { value: 'suggest_priority', label: '建议优先级' },
 ];
 const ITEM_TYPES: { value: ItemType; label: string }[] = [
   { value: 'task', label: '任务' },
   { value: 'project', label: '项目' },
   { value: 'goal', label: '目标' },
+  { value: 'knowledge', label: '知识' },
 ];
 
 export function AutomationTab() {

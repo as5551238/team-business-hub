@@ -11,7 +11,8 @@
  * This bridges the gap from "AI chat" to "AI execute" — the system acts
  * autonomously within user-defined guardrails.
  */
-import type { AppState, Action } from '@/store/reducer';
+import type { AppState } from '@/types';
+import type { Action } from '@/store/types';
 import { AI_ACTION_MAP } from './aiActions';
 
 export interface AutomatonRule {

@@ -1,4 +1,4 @@
-import type { AppState, Goal, Project, Task, Member, SubTask, ItemLink, Bookmark, Permission, StatusFlowRule, AutomationRule, Sprint, Knowledge } from '@/types';
+import type { AppState, Goal, Project, Task, Member, SubTask, ItemLink, Bookmark, Permission, StatusFlowRule, AutomationRule, Sprint, Knowledge, ItemType } from '@/types';
 import { isSupabaseConfigured } from '@/supabase/client';
 import type { Action } from './types';
 import { ensureAppStateDefaults } from './types';
@@ -83,18 +83,19 @@ export function reducer(state: AppState, action: Action): AppState {
       const now = Date.now();
       let conflictCount = 0;
       const conflictNames: string[] = [];
+      const conflictKeys: string[] = [];
       let offlineSince = 0;
       try { offlineSince = parseInt(localStorage.getItem('tbh-went-offline-at') || '0'); } catch {}
       for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
         const newVal = payload[key];
         if (!Array.isArray(newVal)) {
           if (key === 'currentUser' && !newVal && s[key]) continue;
-          (s as Record<string, unknown>)[key as string] = newVal;
+          (s as unknown as Record<string, unknown>)[key as string] = newVal;
           continue;
         }
         if (!Array.isArray(s[key])) continue;
-        const localArr = s[key] as Array<Record<string, unknown>>;
-        let remoteArr = newVal as Array<Record<string, unknown>>;
+        const localArr = s[key] as unknown as Array<Record<string, unknown>>;
+        let remoteArr = newVal as unknown as Array<Record<string, unknown>>;
         if (currentTeam && teamScopedTables.has(key)) {
           remoteArr = remoteArr.filter((item) => !item.teamId || item.teamId === currentTeam || item.teamId === '__default__');
         }
@@ -109,7 +110,7 @@ export function reducer(state: AppState, action: Action): AppState {
             const remoteUpdated = new Date((remoteItem.updatedAt as string) || (remoteItem.updated_at as string) || 0);
             if (remoteUpdated > localUpdated && localUpdated.getTime() > 0) {
               const locAge = Date.now() - localUpdated.getTime();
-              if (locAge < 300000) { logActivity({ memberId: s.currentUser?.id, action: 'sync_overwrite', targetType: key as string, targetId: remoteItem.id as string, targetTitle: (remoteItem.title as string) || (remoteItem.name as string) || '数据', details: '数据已被其他设备更新' }); conflictCount++; if (conflictNames.length < 3) conflictNames.push((remoteItem.title as string) || (remoteItem.name as string) || '数据'); }
+              if (locAge < 300000) { logActivity({ memberId: s.currentUser?.id, action: 'sync_overwrite', targetType: key as string, targetId: remoteItem.id as string, targetTitle: (remoteItem.title as string) || (remoteItem.name as string) || '数据', details: '数据已被其他设备更新' }); conflictCount++; if (conflictNames.length < 3) { conflictNames.push((remoteItem.title as string) || (remoteItem.name as string) || '数据'); conflictKeys.push(key as string); } }
             }
             merged.push(remoteUpdated > localUpdated ? { ...localItem, ...remoteItem } : { ...localItem, deletedAt: remoteItem.deletedAt ?? localItem.deletedAt });
           } else {
@@ -131,16 +132,16 @@ export function reducer(state: AppState, action: Action): AppState {
             merged.push(localItem);
           }
         }
-        (s as Record<string, unknown>)[key as string] = merged;
+        (s as unknown as Record<string, unknown>)[key as string] = merged;
       }
       if (offlineSince > 0) { try { localStorage.removeItem('tbh-went-offline-at'); } catch {} }
       if (conflictCount > 0 && now - lastSyncNotificationTime > 60000) {
         lastSyncNotificationTime = now;
         const desc = conflictCount <= 3 ? conflictNames.join('、') : `${conflictNames.slice(0, 2).join('、')} 等${conflictCount}项`;
       // P3#3 fix: map state key to entity type instead of hardcoding 'task'
-      const keyToEntityType: Record<string, string> = { goals: 'goal', projects: 'project', tasks: 'task', members: 'member', notifications: 'notification', activities: 'activity', comments: 'comment', tags: 'tag' };
-      const conflictType = keyToEntityType[conflictNames[0]] || 'task';
-      s.notifications.unshift({ id: `sync-${Date.now()}-conflict`, type: 'sync', title: '数据同步更新', message: `${desc} 已被其他设备更新`, read: false, createdAt: new Date().toISOString(), relatedId: '', relatedType: conflictType, memberId: s.currentUser?.id || '' });
+      const keyToEntityType: Record<string, string> = { goals: 'goal', projects: 'project', tasks: 'task', members: 'member', notifications: 'notification', activities: 'activity', comments: 'comment', tags: 'tag', knowledge: 'knowledge', notes: 'note', reviews: 'goal', bookmarks: 'task', savedViews: 'task', scheduleEvents: 'task', templates: 'task', itemLinks: 'task', sprints: 'goal' };
+      const conflictType = keyToEntityType[conflictKeys[0]] || 'task';
+      s.notifications.unshift({ id: `sync-${Date.now()}-conflict`, type: 'sync', title: '数据同步更新', message: `${desc} 已被其他设备更新`, read: false, createdAt: new Date().toISOString(), relatedId: '', relatedType: conflictType as ItemType, memberId: s.currentUser?.id || '' });
       }
       return ensureAppStateDefaults(s as Partial<AppState> & { members: Member[] });
     }
@@ -171,16 +172,17 @@ export function reducer(state: AppState, action: Action): AppState {
       const { table, item } = action.payload;
       const stateKey = TABLE_TO_STATE_KEY[table];
       if (!stateKey) return state;
-      // P3#30 fix: reject items from other teams
-      const currentTeamId = (state as Record<string, unknown>).currentTeamId as string | undefined;
-      if (currentTeamId && (item as Record<string, unknown>).teamId && (item as Record<string, unknown>).teamId !== currentTeamId) return state;
-      const arr = (state as Record<string, unknown>)[stateKey];
+      // P3#30 fix: reject items from other teams (members are team-scoped via team_members, not team_id)
+      const currentTeamId = (state as unknown as Record<string, unknown>).currentTeamId as string | undefined;
+      const itemTeamId = (item as Record<string, unknown>).teamId as string | undefined;
+      if (currentTeamId && table !== 'members' && table !== 'teams' && itemTeamId && itemTeamId !== currentTeamId && itemTeamId !== '__default__') return state;
+      const arr = (state as unknown as Record<string, unknown>)[stateKey];
       if (!Array.isArray(arr)) return state;
       const itemId = (item as Record<string, unknown>).id as string;
       if (!itemId) return state;
-      const idx = (arr as Array<Record<string, unknown>>).findIndex((r: Record<string, unknown>) => (r as Record<string, unknown>).id === itemId);
+      const idx = (arr as unknown as Array<Record<string, unknown>>).findIndex((r: Record<string, unknown>) => r.id === itemId);
       const s = needMutate(state, [stateKey as keyof AppState]);
-      const currentArr = (s as Record<string, unknown>)[stateKey] as Array<Record<string, unknown>>;
+      const currentArr = (s as unknown as Record<string, unknown>)[stateKey] as unknown as Array<Record<string, unknown>>;
       if (idx >= 0) {
         // LWW per-field: for each field in the incoming item, take the remote
         // value only if remote updatedAt >= local updatedAt, preserving local
@@ -220,19 +222,19 @@ export function reducer(state: AppState, action: Action): AppState {
       const { table, id } = action.payload;
       const stateKey = TABLE_TO_STATE_KEY[table];
       if (!stateKey) return state;
-      const arr = (state as Record<string, unknown>)[stateKey];
+      const arr = (state as unknown as Record<string, unknown>)[stateKey];
       if (!Array.isArray(arr)) return state;
-      const idx = (arr as Array<Record<string, unknown>>).findIndex((r: Record<string, unknown>) => (r as Record<string, unknown>).id === id);
+      const idx = (arr as unknown as Array<Record<string, unknown>>).findIndex((r: Record<string, unknown>) => r.id === id);
       if (idx < 0) return state;
       const s = needMutate(state, [stateKey as keyof AppState]);
-      ((s as Record<string, unknown>)[stateKey] as Array<Record<string, unknown>>).splice(idx, 1);
+      ((s as unknown as Record<string, unknown>)[stateKey] as unknown as Array<Record<string, unknown>>).splice(idx, 1);
       return s;
     }
 
     case 'ADD_ITEM_LINK': {
       const s = needMutate(state, ['itemLinks']);
       const now = tsNow();
-      const link: ItemLink = { ...action.payload, id: genId('lnk'), createdAt: now };
+      const link: ItemLink = { ...action.payload, teamId: s.currentTeamId || '__default__', id: genId('lnk'), createdAt: now };
       s.itemLinks.push(link);
       supabaseInsert('item_links', link);
       return s;
@@ -252,24 +254,26 @@ export function reducer(state: AppState, action: Action): AppState {
       const backup = action.payload;
       if (!backup || typeof backup !== 'object') return state;
       const requiredArrays = ['members', 'goals', 'projects', 'tasks'];
+      const backupRec = backup as unknown as Record<string, unknown>;
       for (const key of requiredArrays) {
-        if (!Array.isArray(backup[key])) return state;
+        if (!Array.isArray(backupRec[key])) return state;
       }
       const MAX_ITEMS = 10000;
       for (const key of requiredArrays) {
-        if (backup[key].length > MAX_ITEMS) return state;
+        if ((backupRec[key] as unknown[]).length > MAX_ITEMS) return state;
       }
       // Item-level validation: ensure each item has required fields (id, title)
-      const validateItems = (items: any[], name: string): boolean => {
+      const validateItems = (items: unknown[], _name: string): boolean => {
         for (const item of items) {
           if (!item || typeof item !== 'object') return false;
-          if (!item.id || typeof item.id !== 'string') return false;
-          if (!item.title || typeof item.title !== 'string') return false;
+          const obj = item as Record<string, unknown>;
+          if (!obj.id || typeof obj.id !== 'string') return false;
+          if (!obj.title || typeof obj.title !== 'string') return false;
         }
         return true;
       };
       for (const key of requiredArrays) {
-        if (!validateItems(backup[key], key)) return state;
+        if (!validateItems(backupRec[key] as unknown[], key)) return state;
       }
       const imported: AppState = {
         members: backup.members,
@@ -295,8 +299,11 @@ export function reducer(state: AppState, action: Action): AppState {
         knowledge: backup.knowledge ?? [],
         teams: backup.teams ?? [],
         teamMembers: backup.teamMembers ?? [],
+        subscriptions: backup.subscriptions ?? [],
+        approvalAudits: backup.approvalAudits ?? [],
         currentUser: state.currentUser,
         viewingMemberId: state.viewingMemberId,
+        currentTeamId: state.currentTeamId,
       };
       if (isSupabaseConfigured()) {
         supabaseUpsert('members', imported.members);

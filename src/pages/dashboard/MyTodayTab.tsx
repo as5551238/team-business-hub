@@ -5,8 +5,7 @@
 import { useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { useViewingMember } from '@/store/hooks';
-import { activeGoals, activeTasks, activeProjects } from '@/store/shared';
-import {
+import { activeGoals, activeTasks, activeProjects } from '@/store/shared';import {
   Clock, AlertTriangle, AtSign, CheckCircle2, Target, FolderKanban,
   CheckSquare, ChevronRight, Plus, Sparkles, Calendar, ArrowRight,
   Users2,
@@ -31,7 +30,7 @@ export default function MyTodayTab({ onOpenDetail, onPageChange }: MyTodayTabPro
   const goals = activeGoals(state.goals);
   const projects = activeProjects(state.projects);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const greeting = useMemo(() => {
     const h = new Date().getHours();
     if (h < 6) return '夜深了';

@@ -130,7 +130,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
 
   const handleAddTask = useCallback(() => {
     if (!canEditTasks) return;
-    dispatch({ type: 'ADD_TASK', payload: { title: '新任务', description: '', projectId: filterProject || null, goalId: null, status: 'todo', priority: 'medium', leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], category: '', startDate: formatDate(Date.now()), dueDate: formatDate(addDays(Date.now(), 7)), reminderDate: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', blockedBy: [] } });
+    dispatch({ type: 'ADD_TASK', payload: { title: '新任务', description: '', projectId: filterProject || null, goalId: null, parentId: null, status: 'todo', priority: 'medium', leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], category: '', startDate: formatDate(Date.now()), dueDate: formatDate(addDays(Date.now(), 7)), reminderDate: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', blockedBy: [], appType: 'personal' as const, discussionThreadId: null, summary: '', teamId: '__default__', sprintId: null } });
   }, [dispatch, filterProject, state.currentUser?.id, canEditTasks]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
@@ -230,7 +230,7 @@ export function GanttModal({ open, onClose }: GanttModalProps) {
     const x = e.clientX - rect.left + scrollOffset;
     const dayIdx = Math.floor(x / dayWidth);
     const clickDate = formatDate(addDays(timeRange.start, dayIdx));
-    dispatch({ type: 'ADD_TASK', payload: { title: '新任务', description: '', projectId: filterProject || null, goalId: null, status: 'todo', priority: 'medium', leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], category: '', startDate: clickDate, dueDate: formatDate(addDays(timeRange.start, dayIdx + 7)), reminderDate: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', blockedBy: [] } });
+    dispatch({ type: 'ADD_TASK', payload: { title: '新任务', description: '', projectId: filterProject || null, goalId: null, parentId: null, status: 'todo', priority: 'medium', leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], category: '', startDate: clickDate, dueDate: formatDate(addDays(timeRange.start, dayIdx + 7)), reminderDate: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', blockedBy: [], appType: 'personal' as const, discussionThreadId: null, summary: '', teamId: '__default__', sprintId: null } });
   }, [canEditTasks, scrollOffset, dayWidth, timeRange, filterProject, state.currentUser?.id, dispatch]);
 
   const handleApplySchedule = useCallback((s: ScheduleSuggestion) => {

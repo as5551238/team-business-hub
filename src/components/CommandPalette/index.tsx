@@ -233,7 +233,7 @@ export function CommandPalette({ isOpen, onClose, onPageChange, onNavigateItem, 
                       className={i === selectedIndex ? 'bg-accent text-accent-foreground rounded-lg' : ''}
                       onMouseEnter={() => setSelectedIndex(i)}
                     >
-                      <SmartSearchResult item={item.searchResult.item} matchReasons={item.searchResult.matchReasons} onClick={item.action} />
+                      <SmartSearchResult item={(item as SmartSearchEntry).searchResult.item} matchReasons={(item as SmartSearchEntry).searchResult.matchReasons} onClick={item.action} />
                     </div>
                   ) : (
                     <div

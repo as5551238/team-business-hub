@@ -53,6 +53,7 @@ const makeGoal = (overrides: Partial<Goal> = {}): Goal => ({
   parentId: null,
   level: 0,
   category: '',
+  appType: 'personal',
   startDate: '',
   endDate: '',
   leaderId: 'm1',
@@ -66,6 +67,7 @@ const makeGoal = (overrides: Partial<Goal> = {}): Goal => ({
   progress: 0,
   discussionThreadId: null,
   summary: '',
+  teamId: '__default__',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...overrides,
@@ -84,6 +86,7 @@ const makeTask = (overrides: Partial<Task> = {}): Task => ({
   supporterIds: [],
   tags: [],
   category: '',
+  appType: 'personal',
   startDate: null,
   dueDate: null,
   reminderDate: null,
@@ -96,6 +99,7 @@ const makeTask = (overrides: Partial<Task> = {}): Task => ({
   sprintId: null,
   discussionThreadId: null,
   summary: '',
+  teamId: '__default__',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...overrides,
@@ -115,6 +119,7 @@ const makeProject = (overrides: Partial<Project> = {}): Project => ({
   supporterIds: [],
   tags: [],
   category: '',
+  appType: 'personal',
   attachments: [],
   trackingRecords: [],
   repeatCycle: 'none',
@@ -122,6 +127,7 @@ const makeProject = (overrides: Partial<Project> = {}): Project => ({
   progress: 0,
   discussionThreadId: null,
   summary: '',
+  teamId: '__default__',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...overrides,
@@ -155,6 +161,8 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     currentUser: makeMember(),
     viewingMemberId: null,
     currentTeamId: null,
+    subscriptions: [],
+    approvalAudits: [],
     ...overrides,
   };
 }
@@ -166,7 +174,7 @@ describe('reducer — Goal actions', () => {
   beforeEach(() => { state = makeState(); vi.clearAllMocks(); });
 
   it('ADD_GOAL 添加目标并带默认值', () => {
-    const next = reducer(state, { type: 'ADD_GOAL', payload: { title: 'Q2目标', leaderId: 'm1' } });
+    const next = reducer(state, { type: 'ADD_GOAL', payload: { title: 'Q2目标', leaderId: 'm1', description: '', type: 'okr', status: 'todo', priority: 'medium', parentId: null, level: 0, category: '', appType: 'personal', startDate: '', endDate: '', supporterIds: [], tags: [], keyResults: [], selectedKRIds: [], attachments: [], trackingRecords: [], repeatCycle: 'none', discussionThreadId: null, summary: '', teamId: '__default__' } });
     expect(next.goals).toHaveLength(1);
     expect(next.goals[0].title).toBe('Q2目标');
     expect(next.goals[0].progress).toBe(0);
@@ -184,9 +192,9 @@ describe('reducer — Goal actions', () => {
     // 父目标无自己的KR，进度由子目标驱动
     state.goals = [
       makeGoal({ id: 'parent', keyResults: [] }),
-      makeGoal({ id: 'child', parentId: 'parent', keyResults: [{ id: 'kr2', title: 'KR2', currentValue: 5, targetValue: 10, weight: 1, selected: true }] }),
+      makeGoal({ id: 'child', parentId: 'parent', keyResults: [{ id: 'kr2', title: 'KR2', currentValue: 5, targetValue: 10, unit: '%', weight: 1, selected: true }] }),
     ];
-    const next = reducer(state, { type: 'UPDATE_GOAL', payload: { id: 'child', updates: { keyResults: [{ id: 'kr2', title: 'KR2', currentValue: 10, targetValue: 10, weight: 1, selected: true }] } } });
+    const next = reducer(state, { type: 'UPDATE_GOAL', payload: { id: 'child', updates: { keyResults: [{ id: 'kr2', title: 'KR2', currentValue: 10, targetValue: 10, unit: '%', weight: 1, selected: true }] } } });
     const parent = next.goals.find(g => g.id === 'parent')!;
     // 子目标 KR 已完成 → 子进度100% → 父进度应由子目标驱动
     expect(parent.progress).toBeGreaterThan(0);
@@ -199,12 +207,12 @@ describe('reducer — Goal actions', () => {
     expect(next.goals[0].deletedAt).toBeTruthy();
   });
 
-  it('DELETE_GOAL 子目标不自动解绑 parentId（软删除保留关系）', () => {
+  it('DELETE_GOAL 子目标自动解绑 parentId（P3-#5修复）', () => {
     state.goals = [makeGoal({ id: 'gp' }), makeGoal({ id: 'gc', parentId: 'gp' })];
     const next = reducer(state, { type: 'DELETE_GOAL', payload: 'gp' });
     const child = next.goals.find(g => g.id === 'gc')!;
-    // Soft delete: parent still exists with deletedAt, child parentId unchanged
-    expect(child.parentId).toBe('gp');
+    // P3-#5: deleting a parent goal clears child parentId to prevent orphan references
+    expect(child.parentId).toBeNull();
     const parent = next.goals.find(g => g.id === 'gp')!;
     expect(parent.deletedAt).toBeTruthy();
   });
@@ -215,7 +223,7 @@ describe('reducer — Task actions', () => {
   beforeEach(() => { state = makeState(); vi.clearAllMocks(); });
 
   it('ADD_TASK 添加任务并带默认值', () => {
-    const next = reducer(state, { type: 'ADD_TASK', payload: { title: '新任务', leaderId: 'm1' } });
+    const next = reducer(state, { type: 'ADD_TASK', payload: { title: '新任务', leaderId: 'm1', description: '', projectId: null, goalId: null, parentId: null, status: 'todo', priority: 'medium', supporterIds: [], tags: [], category: '', appType: 'personal', startDate: null, dueDate: null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', blockedBy: [], sprintId: null, discussionThreadId: null, summary: '', teamId: '__default__' } });
     expect(next.tasks).toHaveLength(1);
     expect(next.tasks[0].title).toBe('新任务');
     expect(next.tasks[0].subtasks).toEqual([]);
@@ -224,7 +232,7 @@ describe('reducer — Task actions', () => {
 
   it('ADD_TASK 关联项目时增加 taskCount 并更新进度', () => {
     state.projects = [makeProject({ id: 'p1', taskCount: 0, progress: 0 })];
-    const next = reducer(state, { type: 'ADD_TASK', payload: { title: '任务1', leaderId: 'm1', projectId: 'p1' } });
+    const next = reducer(state, { type: 'ADD_TASK', payload: { title: '任务1', leaderId: 'm1', projectId: 'p1', description: '', goalId: null, parentId: null, status: 'todo', priority: 'medium', supporterIds: [], tags: [], category: '', appType: 'personal', startDate: null, dueDate: null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none', blockedBy: [], sprintId: null, discussionThreadId: null, summary: '', teamId: '__default__' } });
     expect(next.projects[0].taskCount).toBe(1);
   });
 
@@ -253,15 +261,15 @@ describe('reducer — Task actions', () => {
     expect(next.tasks[0].deletedAt).toBeTruthy();
   });
 
-  it('DELETE_TASK 软删除不自动解除阻塞关系', () => {
+  it('DELETE_TASK 软删除自动解除阻塞关系（P3-#7修复）', () => {
     state.tasks = [
       makeTask({ id: 't1', status: 'done' }),
       makeTask({ id: 't2', status: 'blocked', blockedBy: ['t1'] }),
     ];
     const next = reducer(state, { type: 'DELETE_TASK', payload: 't1' });
     const blocked = next.tasks.find(t => t.id === 't2')!;
-    // Soft delete: blockedBy not auto-cleared (item can be restored)
-    expect(blocked.blockedBy).toEqual(['t1']);
+    // P3-#7: deleting a task clears its id from other tasks' blockedBy
+    expect(blocked.blockedBy).toEqual([]);
   });
 
   it('TOGGLE_SUBTASK 切换子任务完成状态并更新项目进度', () => {
@@ -273,7 +281,7 @@ describe('reducer — Task actions', () => {
 
   it('ADD_SUBTASK 向已有任务添加子任务', () => {
     state.tasks = [makeTask({ id: 't1', subtasks: [] })];
-    const next = reducer(state, { type: 'ADD_SUBTASK', payload: { taskId: 't1', subtask: { title: '新子任务' } } });
+    const next = reducer(state, { type: 'ADD_SUBTASK', payload: { taskId: 't1', subtask: { title: '新子任务', completed: false, priority: 'medium', dueDate: null, reminderDate: null, leaderId: '', supporterIds: [], tags: [], attachments: [], trackingRecords: [], repeatCycle: 'none' } } });
     expect(next.tasks[0].subtasks).toHaveLength(1);
     expect(next.tasks[0].subtasks[0].title).toBe('新子任务');
   });
@@ -284,7 +292,7 @@ describe('reducer — Project actions', () => {
   beforeEach(() => { state = makeState(); vi.clearAllMocks(); });
 
   it('ADD_PROJECT 添加项目并带默认值', () => {
-    const next = reducer(state, { type: 'ADD_PROJECT', payload: { title: '新项目', leaderId: 'm1' } });
+    const next = reducer(state, { type: 'ADD_PROJECT', payload: { title: '新项目', leaderId: 'm1', description: '', goalId: null, parentId: null, status: 'todo', priority: 'medium', startDate: '', endDate: '', supporterIds: [], tags: [], category: '', appType: 'personal', attachments: [], trackingRecords: [], repeatCycle: 'none', taskCount: 0, discussionThreadId: null, summary: '', teamId: '__default__' } });
     expect(next.projects).toHaveLength(1);
     expect(next.projects[0].progress).toBe(0);
   });
@@ -308,7 +316,7 @@ describe('reducer — Member actions', () => {
   beforeEach(() => { state = makeState(); vi.clearAllMocks(); });
 
   it('ADD_MEMBER 添加成员到列表', () => {
-    const next = reducer(state, { type: 'ADD_MEMBER', payload: { name: '新成员', role: 'member' } });
+    const next = reducer(state, { type: 'ADD_MEMBER', payload: { name: '新成员', role: 'member', nickname: '', wechatId: '', phone: '', email: '', department: '', avatar: '', status: 'active', permissions: [], teamId: '__default__' } });
     expect(next.members).toHaveLength(2);
     expect(next.members[1].name).toBe('新成员');
   });
@@ -352,13 +360,13 @@ describe('reducer — Notification actions', () => {
   });
 
   it('ADD_NOTIFICATION 添加通知到开头', () => {
-    const next = reducer(state, { type: 'ADD_NOTIFICATION', payload: { id: 'n3', type: 'assigned' as const, title: '新通知', message: '', relatedId: '', relatedType: 'task' as const, memberId: 'm1' } });
+    const next = reducer(state, { type: 'ADD_NOTIFICATION', payload: { id: 'n3', type: 'assigned' as const, title: '新通知', message: '', relatedId: '', relatedType: 'task' as const, memberId: 'm1', createdAt: '2026-01-01' } });
     expect(next.notifications).toHaveLength(3);
     expect(next.notifications[0].id).toBe('n3');
   });
 
   it('ADD_NOTIFICATION 去重（相同 id 跳过）', () => {
-    const next = reducer(state, { type: 'ADD_NOTIFICATION', payload: { id: 'n1', type: 'assigned' as const, title: '重复', message: '', relatedId: '', relatedType: 'task' as const, memberId: 'm1' } });
+    const next = reducer(state, { type: 'ADD_NOTIFICATION', payload: { id: 'n1', type: 'assigned' as const, title: '重复', message: '', relatedId: '', relatedType: 'task' as const, memberId: 'm1', createdAt: '2026-01-01' } });
     expect(next.notifications).toHaveLength(2);
   });
 });
@@ -374,7 +382,7 @@ describe('reducer — Tag actions', () => {
   });
 
   it('DELETE_TAG 删除标签并从关联项中移除', () => {
-    state.tags = [{ id: 'tag1', name: '红色', color: '#ff0000', createdAt: '2026-01-01' }];
+    state.tags = [{ id: 'tag1', teamId: '__default__', name: '红色', color: '#ff0000', createdAt: '2026-01-01' }];
     state.tasks = [makeTask({ id: 't1', tags: ['tag1'] })];
     const next = reducer(state, { type: 'DELETE_TAG', payload: 'tag1' });
     expect(next.tags).toHaveLength(0);
@@ -392,7 +400,7 @@ describe('reducer — Bookmark actions', () => {
   });
 
   it('DELETE_BOOKMARK 删除书签', () => {
-    state.bookmarks = [{ id: 'bm1', title: '百度', url: 'https://baidu.com', category: '搜索引擎', icon: 'globe', order: 0, memberId: 'm1', createdAt: '2026-01-01' }];
+    state.bookmarks = [{ id: 'bm1', teamId: '__default__', title: '百度', url: 'https://baidu.com', category: '搜索引擎', icon: 'globe', order: 0, memberId: 'm1', createdAt: '2026-01-01' }];
     const next = reducer(state, { type: 'DELETE_BOOKMARK', payload: 'bm1' });
     expect(next.bookmarks).toHaveLength(0);
   });
@@ -426,7 +434,7 @@ describe('reducer — Comment actions', () => {
 
   it('ADD_COMMENT 添加评论', () => {
     state.goals = [makeGoal({ id: 'g1' })];
-    const next = reducer(state, { type: 'ADD_COMMENT', payload: { itemId: 'g1', itemType: 'goal', memberId: 'm1', memberName: '测试', content: '你好' } });
+    const next = reducer(state, { type: 'ADD_COMMENT', payload: { itemId: 'g1', itemType: 'goal', memberId: 'm1', memberName: '测试', content: '你好', mentionedMemberIds: [], isRead: false, followUpRequired: false, followUpStatus: 'none' } });
     expect(next.comments).toHaveLength(1);
     expect(next.comments[0].content).toBe('你好');
   });
@@ -440,10 +448,10 @@ describe('reducer — IMPORT_BACKUP', () => {
     const backup = {
       version: '1.0',
       exportedAt: '2026-01-01',
-      members: [makeMember()],
-      goals: [makeGoal()],
-      projects: [makeProject()],
-      tasks: [makeTask()],
+      members: [{ ...makeMember(), id: 'm1', title: '测试用户' }],
+      goals: [{ ...makeGoal(), id: 'g1', title: '目标1' }],
+      projects: [{ ...makeProject(), id: 'p1', title: '项目1' }],
+      tasks: [{ ...makeTask(), id: 't1', title: '任务1' }],
       notifications: [],
       activities: [],
     };

@@ -9,7 +9,7 @@
  * - AI 综合研判与行动建议
  */
 
-import type { AppState } from '@/store/types';
+import type { AppState } from '@/types';
 import { callLLM } from '@/lib/ai/llmService';
 import { collectSnapshot } from '@/lib/ai/dataCollector';
 import { detectRisks } from '@/lib/ai/analysisEngine';

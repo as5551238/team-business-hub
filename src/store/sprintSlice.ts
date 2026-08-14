@@ -10,9 +10,9 @@ export function sprintReducer(state: AppState, action: Action): AppState | null 
       if (!reducerCanDelete(state, 'settings_manage')) return state;
       const s = needMutate(state, ['sprints']);
       const now = tsNow();
-      const sp: Sprint = { ...action.payload, id: genId('sp'), goalIds: action.payload.goalIds ?? [], status: action.payload.status ?? 'planning', createdAt: now, updatedAt: now };
+      const sp: Sprint = { ...action.payload, teamId: s.currentTeamId || '__default__', id: genId('sp'), goalIds: action.payload.goalIds ?? [], status: action.payload.status ?? 'planning', createdAt: now, updatedAt: now };
       s.sprints.push(sp);
-      supabaseInsert('sprints', { id: sp.id, name: sp.name, start_date: sp.startDate, end_date: sp.endDate, goal_ids: sp.goalIds, status: sp.status, created_at: now, updated_at: now });
+      supabaseInsert('sprints', { id: sp.id, team_id: sp.teamId, name: sp.name, start_date: sp.startDate, end_date: sp.endDate, goal_ids: sp.goalIds, status: sp.status, created_at: now, updated_at: now });
       return s;
     }
     case 'UPDATE_SPRINT': {

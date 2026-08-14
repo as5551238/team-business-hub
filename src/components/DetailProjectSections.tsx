@@ -21,7 +21,7 @@ export function DetailProjectSections({ project, startDate, endDate }: DetailPro
 
   function handleAddTask() {
     if (!newTaskTitle.trim()) return;
-    dispatch({ type: 'ADD_TASK', payload: { title: newTaskTitle.trim(), projectId: project.id, goalId: project.goalId, parentId: null, status: 'todo' as const, priority: 'medium' as const, leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], description: '', startDate: null, dueDate: null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none' as const, category: '', summary: '', blockedBy: [], sprintId: null } });
+    dispatch({ type: 'ADD_TASK', payload: { title: newTaskTitle.trim(), projectId: project.id, goalId: project.goalId, parentId: null, status: 'todo' as const, priority: 'medium' as const, leaderId: state.currentUser?.id || '', supporterIds: [], tags: [], description: '', startDate: null, dueDate: null, reminderDate: null, completedAt: null, subtasks: [], attachments: [], trackingRecords: [], repeatCycle: 'none' as const, category: '', summary: '', blockedBy: [], sprintId: null, appType: 'personal' as const, discussionThreadId: null, teamId: '__default__' } });
     setNewTaskTitle('');
     setShowAddTask(false);
   }

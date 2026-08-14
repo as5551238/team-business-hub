@@ -25,14 +25,14 @@ function flushQueue() {
   _queue = [];
   const sb = getSupabaseClient();
   if (!sb) return;
-  sb.from('behavior_events')
+  Promise.resolve(sb.from('behavior_events')
     .insert(items.map(i => ({
       user_id: i.userId,
       event_type: i.eventType,
       entity_type: i.entityType || null,
       entity_id: i.entityId || null,
       metadata: i.metadata,
-    })))
+    }))))
     .then(() => {})  // fire-and-forget
     .catch(() => {}); // 静默失败，不影响用户体验
 }

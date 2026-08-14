@@ -49,11 +49,13 @@ export function OperationToast() {
       {toasts.map(t => (
         <div
           key={t.id}
+          role="status"
+          aria-live={t.type === 'error' ? 'assertive' : 'polite'}
           className={`pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-lg border shadow-lg animate-in slide-in-from-bottom-4 fade-in duration-200 ${bgMap[t.type]}`}
         >
           {iconMap[t.type]}
           <span className="text-sm font-medium">{t.message}</span>
-          <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="text-muted-foreground/50 hover:text-foreground ml-1">
+          <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="text-muted-foreground/50 hover:text-foreground ml-1" aria-label="关闭">
             <X size={12} />
           </button>
         </div>

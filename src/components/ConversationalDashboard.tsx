@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { AiHomepageChat } from '@/components/AiHomepageChat';
 import { LayoutDashboard, Grid3X3, Clock, BarChart3, Shield } from 'lucide-react';
 import { useStore } from '@/store/useStore';
+import type { Task } from '@/types';
 
 // ===== 面板类型 =====
 
@@ -104,14 +105,14 @@ function TodayOverviewPanel() {
 
   const today = new Date().toISOString().split('T')[0];
   const allTasks = Array.isArray(state.tasks) ? state.tasks : [];
-  const overdue = allTasks.filter((t: any) =>
+  const overdue = allTasks.filter((t: Task) =>
     t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today
   );
-  const dueToday = allTasks.filter((t: any) =>
+  const dueToday = allTasks.filter((t: Task) =>
     t.status !== 'done' && t.status !== 'cancelled' && t.dueDate === today
   );
-  const inProgress = allTasks.filter((t: any) => t.status === 'in-progress');
-  const completed = allTasks.filter((t: any) => t.status === 'done');
+  const inProgress = allTasks.filter((t: Task) => t.status === 'in_progress');
+  const completed = allTasks.filter((t: Task) => t.status === 'done');
 
   const statCards = [
     { label: '逾期', value: overdue.length, color: 'text-red-500' },
@@ -135,7 +136,7 @@ function TodayOverviewPanel() {
         <div>
           <h3 className="text-xs font-semibold text-red-500 mb-2">逾期任务</h3>
           <div className="space-y-1">
-            {overdue.slice(0, 5).map((t: any) => (
+            {overdue.slice(0, 5).map((t: Task) => (
               <div key={t.id} className="flex items-center gap-2 p-2 rounded bg-red-50 dark:bg-red-900/10 text-xs">
                 <span className="truncate">{t.title}</span>
               </div>
@@ -148,7 +149,7 @@ function TodayOverviewPanel() {
         <div>
           <h3 className="text-xs font-semibold text-orange-500 mb-2">今日到期</h3>
           <div className="space-y-1">
-            {dueToday.slice(0, 5).map((t: any) => (
+            {dueToday.slice(0, 5).map((t: Task) => (
               <div key={t.id} className="flex items-center gap-2 p-2 rounded bg-orange-50 dark:bg-orange-900/10 text-xs">
                 <span className="truncate">{t.title}</span>
               </div>

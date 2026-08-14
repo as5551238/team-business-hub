@@ -477,7 +477,7 @@ export function ProjectKanbanView({ projects, members, setDetailItem, commentCou
   );
 }
 
-const MatrixQuadrantCard = React.memo(function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, batchProps, dispatch, dragRef }: { project: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; dispatch: React.Dispatch<any>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null> }) {
+const MatrixQuadrantCard = React.memo(function MatrixQuadrantCard({ project, members, setDetailItem, commentCounts, batchProps, dispatch, dragRef, dragMovedRef }: { project: Project; members: { id: string; name: string; avatar: string }[]; setDetailItem: (item: { type: 'project'; id: string }) => void; commentCounts: Record<string, number>; batchProps: BatchProps; dispatch: React.Dispatch<any>; dragRef: React.MutableRefObject<{ id: string; el: HTMLElement } | null>; dragMovedRef: React.MutableRefObject<boolean> }) {
   const { can } = usePermissions();
   const leader = (members || []).find(m => m.id === project.leaderId);
   return (
@@ -620,7 +620,7 @@ export function ProjectMatrixView({ projects, members, setDetailItem, commentCou
           <div key={qKey} data-quadrant={qKey} ref={el => { boxRefs.current[qKey] = el; }} className={`rounded-xl border p-3 min-h-[200px] ${q.accent}`}>
             <div className="text-xs font-bold mb-3 text-foreground/70">{q.title} ({items.length})</div>
             <div className="space-y-2 max-h-[calc(100vh-420px)] overflow-y-auto">
-              {items.map(p => <MatrixQuadrantCard key={p.id} project={p} members={members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} dispatch={dispatch} dragRef={dragRef} />)}
+              {items.map(p => <MatrixQuadrantCard key={p.id} project={p} members={members} setDetailItem={setDetailItem} commentCounts={commentCounts} batchProps={batchProps} dispatch={dispatch} dragRef={dragRef} dragMovedRef={dragMovedRef} />)}
               {items.length === 0 && <div className="text-xs text-muted-foreground/50 py-4 text-center">拖拽项目到此处</div>}
             </div>
           </div>
