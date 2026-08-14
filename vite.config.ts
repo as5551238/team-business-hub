@@ -26,15 +26,28 @@ export default defineConfig({
         theme_color: '#1E40AF',
         background_color: '#ffffff',
         display: 'standalone',
+        display_override: ['window_controls_overlay', 'standalone'],
         scope: './',
         start_url: './',
         categories: ['business', 'productivity'],
         icons: [
           { src: './icons.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: './icon-120.png', sizes: '120x120', type: 'image/png' },
           { src: './icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: './icon-512.png', sizes: '512x512', type: 'image/png' },
           { src: './icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
+        shortcuts: [
+          { name: '快速创建任务', short_name: '新建任务', url: './#/tasks?action=create', icons: [{ src: './icon-120.png', sizes: '120x120' }] },
+          { name: '今日待办', short_name: '今日待办', url: './#/dashboard', icons: [{ src: './icon-120.png', sizes: '120x120' }] },
+          { name: '目标管理', short_name: '目标', url: './#/goals', icons: [{ src: './icon-120.png', sizes: '120x120' }] },
+        ],
+        share_target: {
+          action: './#/tasks',
+          method: 'POST',
+          enctype: 'application/x-www-form-urlencoded',
+          params: { title: 'title', text: 'text', url: 'url' },
+        },
       },
       workbox: {
         importScripts: ['./sw-notifications.js'],
@@ -77,7 +90,10 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('recharts')) return 'charts';
+            // 注意：不得将 recharts 单独拆包。recharts 顶层即调用 React.forwardRef，
+            // 若独立成 charts chunk 会与 vendor(React) 形成循环依赖，导致初始化时
+            // React 为 undefined 而白屏崩溃（见 Circular chunk: charts -> vendor -> charts）。
+            // 因此 recharts 随其消费方（Dashboard 等）自然分包，由 Rollup 默认处理。
             if (id.includes('@supabase/supabase-js') || id.includes('@supabase/postgrest-js') || id.includes('@supabase/realtime-js') || id.includes('@supabase/storage-js') || id.includes('@supabase/functions-js')) return 'supabase';
             if (id.includes('xlsx')) return 'xlsx';
             if (id.includes('@sentry')) return 'sentry';

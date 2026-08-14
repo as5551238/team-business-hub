@@ -4,6 +4,7 @@ import { initSentry, setSentryUser, clearSentryUser } from '@/lib/sentry';
 import { DegradedBanner } from '@/components/DegradedMode';
 import { FeatureFlagProvider } from '@/lib/featureFlags';
 import { startAiPushScan, stopAiPushScan } from '@/lib/pushEventEngine';
+import { useShareTarget } from '@/hooks/useShareTarget';
 import { startAutomaton, stopAutomaton } from '@/lib/ai/aiAutomaton';
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Goals = lazy(() => import('@/pages/Goals'));
@@ -506,6 +507,9 @@ function AppInner({ loggedIn }: { loggedIn: string }) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Handle Web Share Target — other apps sharing content to TBH
+  useShareTarget();
+
   // --- Lightweight hash-based URL routing ---
   // Hash format: #/dashboard, #/goals, #/tasks, etc.
   const PAGE_FROM_HASH = (hash: string): Page => {
@@ -628,6 +632,22 @@ function App() {
             const itemType = url.includes('/goal') ? 'goal' : url.includes('/project') ? 'project' : 'task';
             setTimeout(() => window.dispatchEvent(new CustomEvent('tbh-nav-item', { detail: { id: itemId, type: itemType } })), 300);
           }
+        }
+      }
+      // Handle notification quick actions (complete / snooze from notification action buttons)
+      if (event.data?.type === 'NOTIFICATION_ACTION') {
+        const { action, url: actionUrl } = event.data;
+        if (action === 'complete' && actionUrl) {
+          const taskId = actionUrl.split('/').pop();
+          if (taskId) {
+            // Dispatch task completion via custom event
+            window.dispatchEvent(new CustomEvent('tbh-quick-action', { detail: { action: 'complete', taskId } }));
+          }
+        }
+        // For 'snooze' — navigate to task detail for manual follow-up
+        if (action === 'snooze' && actionUrl) {
+          const page = actionUrl.includes('/goal') ? 'goals' : actionUrl.includes('/project') ? 'projects' : 'tasks';
+          window.location.hash = `#/${page}`;
         }
       }
     };

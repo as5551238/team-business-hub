@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { useStore } from '@/store/useStore';
 import { useViewingMember, useMemberLookup, useActiveMembers, usePermissions } from '@/store/hooks';
 import { hasPermission } from '@/store/reducer';
@@ -21,14 +21,15 @@ import { requestNotificationPermission, sendBrowserNotification, isNotificationS
 import { isWeChatEnabled, sendWeChatMessage } from '@/supabase/wechat';
 import { setWeChatNotify, fireAutomationRules } from '@/store/shared';
 
-// Detect H5 embedded mode (WeChat/Feishu in-app browser or ?h5=1 param)
+// Detect H5 embedded mode (WeChat/Feishu/HarmonyOS in-app browser or ?h5=1 param)
 function isH5Mode(): boolean {
   try {
     const ua = navigator.userAgent.toLowerCase();
     const isWechat = ua.includes('micromessenger');
     const isFeishu = ua.includes('lark') || ua.includes('feishu');
+    const isHarmony = ua.includes('harmonyos') || ua.includes('harmonybrowser');
     const hasParam = new URLSearchParams(window.location.search).get('h5') === '1';
-    return isWechat || isFeishu || hasParam;
+    return isWechat || isFeishu || isHarmony || hasParam;
   } catch { return false; }
 }
 import {
@@ -107,14 +108,14 @@ interface NotificationDropdownProps {
 
 const NotificationDropdown = React.memo(function NotificationDropdown({ notifications, unreadCount, onMarkAllRead, onMarkRead, onNavigate }: NotificationDropdownProps) {
   return (
-    <div className="absolute right-0 top-full mt-1 w-80 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up">
+    <div role="region" aria-label="通知列表" className="absolute right-0 top-full mt-1 w-80 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <span className="font-semibold text-sm">通知</span>
         {unreadCount > 0 && <button className="text-xs text-primary hover:underline" onClick={onMarkAllRead}>全部已读</button>}
       </div>
       <div className="max-h-80 overflow-y-auto">
         {notifications.slice(0, 8).map(n => {
-          const targetPage = n.relatedType === 'goal' ? 'goals' : n.relatedType === 'project' ? 'projects' : n.relatedType === 'task' ? 'tasks' : null;
+          const targetPage = n.relatedType === 'goal' ? 'goals' : n.relatedType === 'project' ? 'projects' : n.relatedType === 'task' ? 'tasks' : n.relatedType === 'note' ? 'knowledge' : null;
           return (
             <div key={n.id} className={`px-4 py-3 border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors ${!n.read ? 'bg-primary/5' : ''}`}
               onClick={() => { onMarkRead(n.id); if (targetPage) onNavigate(targetPage, n.relatedId, n.relatedType); }}>
@@ -144,16 +145,16 @@ interface UserMenuDropdownProps {
 
 const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMembers, onSwitchUser, onLogout }: UserMenuDropdownProps) {
   return (
-    <div className="absolute right-0 top-full mt-1 w-56 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up">
+    <div role="menu" aria-label="用户菜单" className="absolute right-0 top-full mt-1 w-56 bg-card rounded-lg shadow-lg border border-border z-50 animate-slide-up">
       <div className="px-4 py-3 border-b border-border">
         <div className="font-medium text-sm">{user?.name}</div>
         <div className="text-xs text-muted-foreground">{isAdminRole(user?.role) ? user?.email : user?.email?.replace(/(.{2}).*(.@.*)/, '$1***$2')}</div>
       </div>
       <div className="py-1 max-h-64 overflow-y-auto">
         {visibleMembers.map(m => (
-          <button key={m.id}
-            onClick={(e) => { e.stopPropagation(); onSwitchUser(m.id); }}
-            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted transition-colors text-left ${m.id === user?.id ? 'bg-primary/5 text-primary' : ''}`}>
+          <button key={m.id} role="menuitem"
+             onClick={(e) => { e.stopPropagation(); onSwitchUser(m.id); }}
+             className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted transition-colors text-left ${m.id === user?.id ? 'bg-primary/5 text-primary' : ''}`}>
             <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">{m.avatar}</div>
             <div className="flex flex-col"><span>{m.name}</span><span className="text-xs text-muted-foreground">{getRoleLabel(m.role)}</span></div>
             <span className="text-xs text-muted-foreground ml-auto">{m.department}</span>
@@ -161,7 +162,7 @@ const UserMenuDropdown = React.memo(function UserMenuDropdown({ user, visibleMem
         ))}
       </div>
       <div className="border-t border-border px-4 py-2">
-        <button onClick={(e) => { e.stopPropagation(); onLogout(); }}
+        <button role="menuitem" onClick={(e) => { e.stopPropagation(); onLogout(); }}
           className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-destructive transition-colors">
           <LogOut size={14} />
           <span>退出登录</span>
@@ -188,13 +189,17 @@ const MobileContextMenu: React.FC<{ x: number; y: number; items: ContextMenuItem
 
 // --- Main Layout ---
 
-export default function Layout({ currentPage, onPageChange, children, currentUser }: LayoutProps) {
+export default function Layout(props: LayoutProps) {
   // H5 embedded mode: render mobile-optimized layout instead
+  // Note: must check before any hooks to avoid rules-of-hooks violation
   if (isH5Mode()) {
     return <H5Layout />;
   }
+  return <LayoutInner {...props} />;
+}
 
-  const { state, dispatch, connectionMode } = useStore();
+function LayoutInner({ currentPage, onPageChange, children, currentUser }: LayoutProps) {
+  const { state, dispatch, connectionMode, connectSupabase } = useStore();
   const { viewingMemberId, setViewingMember, isTeamView, viewingMember } = useViewingMember();
   const memberLookup = useMemberLookup();
   const { activeMembers } = useActiveMembers();
@@ -221,6 +226,12 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; targetId: string; targetType: string } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Responsive window width — tracks resize for mobile/desktop detection
+  const isMobile = useSyncExternalStore(
+    useCallback(cb => { const mql = window.matchMedia('(max-width: 767px)'); mql.addEventListener('change', cb); return () => mql.removeEventListener('change', cb); }, []),
+    () => window.innerWidth < 768,
+    () => false
+  );
   const user = state.currentUser;
   const isAdmin = isAdminRole(user?.role);
   const unreadCount = useMemo(() => state.notifications.filter(n => !n.read).length, [state.notifications]);
@@ -253,12 +264,25 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
     return state.teams.filter(t => teamIds.includes(t.id));
   }, [state.teams, state.teamMembers, user?.id]);
   const currentTeam = useMemo(() => state.teams.find(t => t.id === state.currentTeamId), [state.teams, state.currentTeamId]);
-  const handleSwitchTeam = useCallback((teamId: string) => {
+  const handleSwitchTeam = useCallback(async (teamId: string) => {
     dispatch({ type: 'SET_CURRENT_TEAM', payload: teamId });
     setShowTeamSelector(false);
-    // Reload data for the new team
+    // Re-fetch data for the new team without full page reload
+    try {
+      const configStr = localStorage.getItem('tbh-supabase-config');
+      if (configStr) {
+        const config = JSON.parse(configStr);
+        if (config.url && config.anonKey) {
+          await connectSupabase(config.url, config.anonKey);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('[Team Switch] re-fetch failed:', e);
+    }
+    // Fallback to reload if re-fetch fails or no config
     window.location.reload();
-  }, [dispatch]);
+  }, [dispatch, connectSupabase]);
 
   // Track offline write count from localStorage (COL: offline indicator)
   useEffect(() => {
@@ -273,6 +297,8 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   // P3#32 fix: use refs to avoid recreating interval on every notification change
   const tasksRef = useRef(state.tasks);
   tasksRef.current = state.tasks;
+  const knowledgeRef = useRef(state.knowledge);
+  knowledgeRef.current = state.knowledge;
   const notifsRef = useRef(state.notifications);
   notifsRef.current = state.notifications;
   useEffect(() => {
@@ -325,6 +351,39 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           pushTaskEvent('reminder', t, memberLookup.getName);
         }
       }
+      // Phase3-P2: Knowledge due-date reminders (approaching / due today / auto-archive)
+      const sevenDaysLater = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+      for (const k of knowledgeRef.current) {
+        if (!k.dueDate) continue;
+        const dueDay = k.dueDate.slice(0, 10);
+        if (k.status === 'archived' || k.status === 'draft') continue;
+        const isMine = k.assigneeId === currentUser?.id || k.memberId === currentUser?.id;
+        if (!isMine) continue;
+        // Approaching (due in 1-3 days)
+        if (dueDay > today && dueDay <= threeDaysLater) {
+          const daysLeft = Math.ceil((new Date(dueDay + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86400000);
+          const key = k.id + ':kd-approaching';
+          if (existingKeys.has(key)) continue;
+          dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'kdap_' + k.id + '_' + dueDay, type: 'reminder' as const, title: '知识条目即将到期', message: `知识条目「${k.title}」将于 ${dueDay} 到期（还有${daysLeft}天）`, relatedId: k.id, relatedType: 'knowledge' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
+        }
+        // Due today
+        else if (dueDay === today) {
+          const key = k.id + ':kd-due-today';
+          if (existingKeys.has(key)) continue;
+          dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'nkdu_' + k.id + '_' + dueDay, type: 'reminder' as const, title: '知识条目今日到期', message: `知识条目「${k.title}」今天到期，请及时更新或归档`, relatedId: k.id, relatedType: 'knowledge' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
+        }
+        // Overdue by 7+ days → auto-archive
+        else if (dueDay < today && dueDay < sevenDaysLater) {
+          const overdueDays = Math.floor((new Date(today + 'T00:00:00').getTime() - new Date(dueDay + 'T00:00:00').getTime()) / 86400000);
+          if (overdueDays >= 7) {
+            const key = k.id + ':kd-auto-archive';
+            if (existingKeys.has(key)) continue;
+            // Auto-archive: set status to archived
+            dispatch({ type: 'UPDATE_KNOWLEDGE', payload: { id: k.id, updates: { status: 'archived' as const } } });
+            dispatch({ type: 'ADD_NOTIFICATION', payload: { id: 'nkar_' + k.id + '_' + dueDay, type: 'sync' as const, title: '知识条目已自动归档', message: `知识条目「${k.title}」已逾期 ${overdueDays} 天，已自动归档`, relatedId: k.id, relatedType: 'knowledge' as const, memberId: currentUser?.id || '', read: false, createdAt: new Date().toISOString() } });
+          }
+        }
+      }
     };
     checkDeadlines();
     const id = setInterval(checkDeadlines, 60000);
@@ -355,7 +414,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
       const newest = state.notifications.find(n => !n.read) || state.notifications.filter(n => !n.read).at(-1);
       if (newest) {
         // D7: Build deep link URL for notification click
-        const relatedPage = newest.relatedType === 'goal' ? 'goals' : newest.relatedType === 'project' ? 'projects' : newest.relatedType === 'task' ? 'tasks' : null;
+        const relatedPage = newest.relatedType === 'goal' ? 'goals' : newest.relatedType === 'project' ? 'projects' : newest.relatedType === 'task' ? 'tasks' : newest.relatedType === 'note' ? 'knowledge' : null;
         const deepUrl = relatedPage && newest.relatedId ? `/${newest.relatedType}/${newest.relatedId}` : '/';
         sendBrowserNotification(newest.title, { body: newest.message, tag: newest.id, data: { url: deepUrl } });
       }
@@ -402,7 +461,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
 
   // Mobile long-press context menu handler on main content area
   const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
-    if (window.innerWidth >= 768) return; // desktop: no long-press
+    if (window.innerWidth >= 768) return; // desktop: no long-press — use matchMedia for responsive
     const touch = e.touches[0];
     // Find the closest card/row element with a data-item-id
     const target = (touch.target as HTMLElement).closest('[data-item-id]');
@@ -588,7 +647,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
   const notificationsMemo = useMemo(() => state.notifications, [state.notifications]);
 
   return (
-    <div className="flex h-screen overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+    <div className="flex h-dvh h-screen overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {sidebarOpen && <div className="sidebar-overlay md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <aside className={[
@@ -614,13 +673,14 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           <button className="md:hidden" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <nav aria-label="侧边栏" className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {navItems.filter(item => {
             const featureMap: Record<string, string> = { dashboard: 'dashboard', goals: 'goals_basic', projects: 'projects', tasks: 'tasks', knowledge: 'knowledge', insight: 'insight', admin: 'dashboard' };
             return isFeatureVisible(featureMap[item.page] || item.page);
           }).map((item, idx) => (
             <button key={item.page} onClick={() => handlePageClick(item.page)}
               title={sidebarNarrow ? item.label : undefined}
+              aria-current={currentPage === item.page ? 'page' : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 text-left relative ${currentPage === item.page ? 'bg-sidebar-accent text-white' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white'} ${sidebarNarrow ? 'justify-center px-0' : ''}`}>
               {item.icon}
               {!sidebarNarrow && !sidebarCollapsed && item.label}
@@ -701,8 +761,8 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-14 bg-background border-b border-border flex items-center px-4 gap-4 flex-shrink-0">
-          <button className="md:hidden p-1.5 -ml-1.5 rounded-md hover:bg-muted" onClick={() => setSidebarOpen(true)}>
+        <header className="h-14 bg-background border-b border-border flex items-center px-4 gap-4 flex-shrink-0 safe-area-top">
+          <button className="md:hidden p-1.5 -ml-1.5 rounded-md hover:bg-muted" aria-label="切换侧边栏" onClick={() => setSidebarOpen(true)}>
             <Menu size={20} />
           </button>
           {sidebarMode === 'hidden' && (
@@ -748,16 +808,16 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
             <Search size={16} /><input ref={searchInputRef} type="text" placeholder="搜索... (⌘K)" className="bg-transparent border-none outline-none flex-1 text-sm text-foreground placeholder:text-muted-foreground" onKeyDown={handleGlobalSearch} />
           </div>
           {/* AI Quick Access — opens CommandPalette focused on AI commands */}
-          <button className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors" onClick={() => setCommandPaletteOpen(true)} title="AI 助手 (⌘K)">
+          <button className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors" aria-label="AI助手" onClick={() => setCommandPaletteOpen(true)} title="AI 助手 (⌘K)">
             <Sparkles size={14} />
             <span>AI</span>
           </button>
           {/* Density toggle: comfortable ↔ compact */}
-          <button className="hidden md:flex p-1.5 rounded-md hover:bg-muted transition-colors" onClick={toggleDensity} title={density === 'comfortable' ? '切换紧凑模式' : '切换舒适模式'}>
+          <button className="hidden md:flex p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="切换密度模式" onClick={toggleDensity} title={density === 'comfortable' ? '切换紧凑模式' : '切换舒适模式'}>
             {density === 'comfortable' ? <Maximize2 size={16} className="text-muted-foreground" /> : <Minus size={16} className="text-primary" />}
           </button>
           {/* Theme toggle: light ↔ dark ↔ system */}
-          <button className="hidden md:flex p-1.5 rounded-md hover:bg-muted transition-colors" onClick={toggleTheme} title={`当前: ${theme === 'system' ? '跟随系统' : theme === 'dark' ? '暗色模式' : '亮色模式'} (点击切换)`}>
+          <button className="hidden md:flex p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="切换主题" onClick={toggleTheme} title={`当前: ${theme === 'system' ? '跟随系统' : theme === 'dark' ? '暗色模式' : '亮色模式'} (点击切换)`}>
             {theme === 'dark' ? <Moon size={16} className="text-primary" /> : theme === 'light' ? <Sun size={16} className="text-muted-foreground" /> : <Monitor size={16} className="text-muted-foreground" />}
           </button>
           {/* Online collaborators indicator with page-awareness */}
@@ -781,9 +841,9 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
           )}
            <CollabPresenceBar userId={user?.id || ''} userName={user?.name || ''} currentPage={currentPage} />
            <div className="relative">
-             <button className="relative p-2 rounded-lg hover:bg-muted transition-colors"
-               onClick={() => { setShowNotifications(!showNotifications); setShowUserMenu(false); setShowMemberFilter(false); }}>
-               <Bell size={18} />
+            <button className="relative p-2 rounded-lg hover:bg-muted transition-colors" aria-label="通知"
+                onClick={() => { setShowNotifications(!showNotifications); setShowUserMenu(false); setShowMemberFilter(false); }}>
+                <Bell size={18} />
               {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />}
             </button>
             {showNotifications && (
@@ -791,7 +851,7 @@ export default function Layout({ currentPage, onPageChange, children, currentUse
             )}
           </div>
           <div className="relative">
-            <button className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors"
+            <button className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors" aria-label="用户菜单"
               onClick={() => { setShowUserMenu(!showUserMenu); setShowNotifications(false); setShowMemberFilter(false); }}>
               <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">{user?.avatar || '?'}</div>
               <ChevronDown size={14} className="hidden sm:block text-muted-foreground" />

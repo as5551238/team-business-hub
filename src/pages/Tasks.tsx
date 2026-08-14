@@ -523,7 +523,7 @@ export default function Tasks() {
               )}
               <button onClick={() => setBatchMode(!batchMode)} className={cn('inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border transition-colors', batchMode ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-muted')}><Check size={14} /><span className="hidden sm:inline">{batchMode ? '退出批量' : '批量操作'}</span></button>
               <button onClick={() => setShowMatchPanel(true)} className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors"><Sparkles size={14} /><span className="hidden sm:inline">智能匹配</span></button>
-              <button className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-primary/90 transition-colors" onClick={() => setShowCreateDialog(true)}><Plus className="w-4 h-4" /> <span className="hidden xs:inline">新建任务</span></button>
+              <button className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-primary/90 transition-colors" onClick={() => setShowCreateDialog(true)}><Plus className="w-4 h-4" /> <span className="hidden sm:inline">新建任务</span></button>
             </div>
           </div>
 

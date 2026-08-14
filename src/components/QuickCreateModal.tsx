@@ -63,8 +63,8 @@ export function QuickCreateModal({ open, onClose, initialType = 'task' }: QuickC
   const typeLabel = type === 'task' ? '任务' : type === 'goal' ? '目标' : '项目';
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center pt-[15vh] bg-black/30" onClick={onClose}>
-      <div className="bg-card rounded-2xl shadow-2xl w-[480px] overflow-hidden" onClick={e => e.stopPropagation()} onKeyDown={handleKeyDown}>
+    <div className="fixed inset-0 z-[80] flex items-start justify-center pt-[10vh] md:pt-[15vh] bg-black/30" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label="快速创建" className="bg-card rounded-2xl shadow-2xl w-full max-w-[480px] mx-4 overflow-hidden mb-[300px] md:mb-0" onClick={e => e.stopPropagation()} onKeyDown={handleKeyDown}>
         {/* Header with type switcher */}
         <div className="flex items-center gap-1 px-4 pt-4 pb-2">
           {(['task', 'goal', 'project'] as ItemType[]).map(t => (
@@ -73,12 +73,12 @@ export function QuickCreateModal({ open, onClose, initialType = 'task' }: QuickC
               {t === 'task' ? '任务' : t === 'goal' ? '目标' : '项目'}
             </button>
           ))}
-          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded-lg"><X size={16} /></button>
+          <button onClick={onClose} className="ml-auto p-1 hover:bg-muted rounded-lg" aria-label="关闭"><X size={16} /></button>
         </div>
 
         {/* Title input — auto-focused */}
         <div className="px-4 pb-2">
-          <input ref={titleRef} type="text" className="w-full text-lg font-medium border-none outline-none placeholder:text-muted-foreground/50" placeholder={`${typeLabel}标题... (Enter 提交)`} value={title} onChange={e => setTitle(e.target.value)} />
+          <input ref={titleRef} type="text" className="w-full text-lg font-medium border-none outline-none placeholder:text-muted-foreground/50" placeholder={`${typeLabel}标题... (Enter 提交)`} value={title} onChange={e => setTitle(e.target.value)} onFocus={e => { setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100); }} />
         </div>
 
         {/* Quick fields — Tab navigable */}

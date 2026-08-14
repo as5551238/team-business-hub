@@ -93,7 +93,21 @@
 
 #root {
   width: 100%;
-  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: 100vh; /* fallback for older browsers */
+}
+
+/* Mobile safe-area padding — supports notch/dynamic island devices */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right);
+  }
 }
 
 ::-webkit-scrollbar {
@@ -205,4 +219,20 @@
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 6px;
+}
+
+/* Reduced motion — respect user accessibility preference (WCAG 2.1 §2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-fade-in, .animate-slide-up, .animate-slide-in-right, .animate-progress {
+    animation: none !important;
+  }
+  .card-lift:hover {
+    transform: none !important;
+  }
 }

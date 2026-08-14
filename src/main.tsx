@@ -10,7 +10,61 @@ import { registerSW } from 'virtual:pwa-register'
 registerSW({
   onNeedRefresh() { /* 新SW等待激活，App.tsx中已有SKIP_WAITING逻辑 */ },
   onOfflineReady() { /* 离线资源已缓存就绪 */ },
+  onError(registrationError) {
+    console.warn('[PWA] Service Worker registration failed, offline features unavailable:', registrationError);
+  },
 })
+
+// Web Vitals monitoring — LCP/FCP/CLS/TTFB/INP via PerformanceObserver (zero dependency)
+function reportWebVitals() {
+  const wv = (window as any).__webVitals = (window as any).__webVitals || {};
+  const record = (name: string, value: number) => {
+    const rating = name === 'CLS' ? (value < 0.1 ? 'good' : value < 0.25 ? 'needs-improvement' : 'poor')
+      : value < 2500 ? 'good' : value < 4000 ? 'needs-improvement' : 'poor';
+    wv[name] = { value: parseFloat(value.toFixed(2)), rating, timestamp: Date.now() };
+    try { localStorage.setItem('tbh-web-vitals', JSON.stringify(wv)); } catch {}
+  };
+
+  // LCP (Largest Contentful Paint)
+  new PerformanceObserver((list) => {
+    const entries = list.getEntries();
+    const lastEntry = entries[entries.length - 1];
+    record('LCP', lastEntry.startTime);
+  }).observe({ type: 'largest-contentful-paint', buffered: true });
+
+  // FCP (First Contentful Paint)
+  new PerformanceObserver((list) => {
+    list.getEntries().forEach(e => record('FCP', e.startTime));
+  }).observe({ type: 'paint', buffered: true });
+
+  // CLS (Cumulative Layout Shift)
+  let clsValue = 0;
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      if (!(entry as any).hadRecentInput) {
+        clsValue += (entry as any).value;
+      }
+    }
+    record('CLS', clsValue);
+  }).observe({ type: 'layout-shift', buffered: true });
+
+  // TTFB (Time to First Byte)
+  const navEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  if (navEntry) record('TTFB', navEntry.responseStart - navEntry.requestStart);
+
+  // INP (Interaction to Next Paint) — via event timing
+  let maxDuration = 0;
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      const duration = (entry as any).duration || 0;
+      if (duration > maxDuration) {
+        maxDuration = duration;
+        record('INP', maxDuration);
+      }
+    }
+  }).observe({ type: 'event', buffered: true });
+}
+reportWebVitals();
 
 // Global ErrorBoundary - prevents white screen when StoreProvider or root components crash
 class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {

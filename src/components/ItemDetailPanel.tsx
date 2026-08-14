@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { useStore } from '@/store/useStore';
 import { usePermissions } from '@/store/hooks';
 import { uploadFile, deleteFile, BUCKET_NAMES } from '@/supabase/storage';
@@ -77,6 +77,12 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [panelWidth, setPanelWidth] = useState(480);
+  // Responsive: track window width for mobile/desktop detection
+  const windowWidth = useSyncExternalStore(
+    useCallback(cb => { window.addEventListener('resize', cb); return () => window.removeEventListener('resize', cb); }, []),
+    () => window.innerWidth,
+    () => 1024
+  );
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -314,7 +320,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
     <DetailPanelErrorBoundary>
     <>
       {!inline && isOpen && <div className="fixed inset-0 bg-black/30 z-40 hidden md:block" onClick={handleOverlayClick} />}
-      <div className={cn(inline ? 'h-full flex flex-col border-l bg-card animate-slide-in-right items-center justify-center' : 'fixed bg-card border-border shadow-xl z-50 flex flex-col items-center justify-center transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', !inline && (isOpen ? 'translate-x-0' : 'translate-x-full'))} style={inline ? undefined : { width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}>
+      <div className={cn(inline ? 'h-full flex flex-col border-l bg-card animate-slide-in-right items-center justify-center' : 'fixed bg-card border-border shadow-xl z-50 flex flex-col items-center justify-center transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', !inline && (isOpen ? 'translate-x-0' : 'translate-x-full'))} role="dialog" aria-modal="true" aria-label="详情面板" style={inline ? undefined : { width: typeof window !== 'undefined' && windowWidth >= 768 ? panelWidth : undefined }}>
         <div className="text-center p-6">
           <div className="text-3xl mb-3">📝</div>
           <div className="text-sm text-muted-foreground mb-3">该事项已被删除</div>
@@ -329,7 +335,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
     <DetailPanelErrorBoundary>
     <>
       {!inline && isOpen && <div className="fixed inset-0 bg-black/30 z-40 hidden md:block" onClick={handleOverlayClick} />}
-      <div ref={panelRef} className={cn(inline ? 'h-full flex flex-col border-l bg-card animate-slide-in-right' : 'fixed bg-card border-border shadow-xl z-50 flex flex-col transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', !inline && (isOpen ? 'translate-x-0' : 'translate-x-full'))} style={inline ? undefined : { width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="详情面板" className={cn(inline ? 'h-full flex flex-col border-l bg-card animate-slide-in-right' : 'fixed bg-card border-border shadow-xl z-50 flex flex-col transition-transform duration-300 inset-0 md:inset-auto md:top-0 md:right-0 md:h-full md:border-l', !inline && (isOpen ? 'translate-x-0' : 'translate-x-full'))} style={inline ? undefined : { width: typeof window !== 'undefined' && windowWidth >= 768 ? panelWidth : undefined }}>
         {inline && <div className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/20 active:bg-primary/30 z-10" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }} />}
         {!inline && <div className="hidden md:block absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-primary/20 active:bg-primary/30 z-10" onMouseDown={e => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: panelRef.current?.offsetWidth || panelWidth }; }} />}
         <div className="overflow-y-auto flex-1">
@@ -367,7 +373,7 @@ export function ItemDetailPanel({ isOpen, onClose, itemType, itemId, inline }: I
                   </div>
                 </div>
               </div>
-              <button className="p-1 rounded hover:bg-accent cursor-pointer" onClick={handleClose}><X className="w-5 h-5" /></button>
+              <button className="p-1 rounded hover:bg-accent cursor-pointer" aria-label="关闭" onClick={handleClose}><X className="w-5 h-5" /></button>
             </div>
           </div>
           <div className="px-4 sm:px-5 py-1.5 border-b border-border/50 flex items-center gap-2">

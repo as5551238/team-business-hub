@@ -68,10 +68,14 @@ export function TaskMatrixView({ filteredTasks, setDetailItem, getMemberName, ge
     }
   }
 
-  const mmHandler = useCallback((e: MouseEvent) => handlePointerMove(e.clientX, e.clientY), []);
-  const muHandler = useCallback(() => handlePointerUp(), [handleDropToQuadrant]);
-  const tmHandler = useCallback((e: TouchEvent) => { const pos = getTouchPos(e); handlePointerMove(pos.x, pos.y); }, []);
-  const teHandler = useCallback(() => handlePointerUp(), [handleDropToQuadrant]);
+  // Ref pattern: always access latest closure without stale-capture risk
+  const fnsRef = useRef({ handlePointerMove, handlePointerUp });
+  fnsRef.current = { handlePointerMove, handlePointerUp };
+
+  const mmHandler = useCallback((e: MouseEvent) => fnsRef.current.handlePointerMove(e.clientX, e.clientY), []);
+  const muHandler = useCallback(() => fnsRef.current.handlePointerUp(), []);
+  const tmHandler = useCallback((e: TouchEvent) => { const pos = getTouchPos(e); fnsRef.current.handlePointerMove(pos.x, pos.y); }, []);
+  const teHandler = useCallback(() => fnsRef.current.handlePointerUp(), []);
 
   useEffect(() => {
     document.addEventListener('mousemove', mmHandler);
@@ -92,10 +96,10 @@ export function TaskMatrixView({ filteredTasks, setDetailItem, getMemberName, ge
             <div className="space-y-2 max-h-[calc(100vh-380px)] overflow-y-auto">
               {qTasks.length === 0 && <p className="text-xs text-muted-foreground text-center py-8 opacity-60">拖入任务</p>}
               {qTasks.map(task => (
-                <div key={task.id} className="bg-white/80 rounded-lg border border-border/50 shadow-sm p-2.5 hover:shadow-md transition-all cursor-pointer" onMouseDown={e => { if (e.button !== 0) return; e.preventDefault(); dragRef.current = { id: task.id, el: e.currentTarget }; e.currentTarget.classList.add('opacity-30', 'scale-95'); }} onTouchStart={e => { const t = e.touches[0]; if (!t) return; dragRef.current = { id: task.id, el: e.currentTarget as HTMLElement }; (e.currentTarget as HTMLElement).classList.add('opacity-30', 'scale-95'); }} onClick={() => { if (!dragRef.current) setDetailItem({ type: 'task', id: task.id }); }}>
+                <div key={task.id} role="button" aria-label={`拖拽任务：${task.title}，或点击查看详情`} className="bg-white/80 rounded-lg border border-border/50 shadow-sm p-2.5 hover:shadow-md transition-all cursor-pointer" onMouseDown={e => { if (e.button !== 0) return; e.preventDefault(); dragRef.current = { id: task.id, el: e.currentTarget }; e.currentTarget.classList.add('opacity-30', 'scale-95'); }} onTouchStart={e => { const t = e.touches[0]; if (!t) return; dragRef.current = { id: task.id, el: e.currentTarget as HTMLElement }; (e.currentTarget as HTMLElement).classList.add('opacity-30', 'scale-95'); }} onClick={() => { if (!dragRef.current) setDetailItem({ type: 'task', id: task.id }); }}>
                   {batchProps.batchMode && <div className="mb-1" onClick={e => e.stopPropagation()}><input type="checkbox" checked={batchProps.selectedIds.has(task.id)} className="rounded" onChange={() => batchProps.onToggleSelect(task.id)} /></div>}
                   <div className="flex items-center gap-2 mb-1">
-                    <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0" />
+                    <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0" aria-hidden="true" />
                     <StatusBadge status={task.status} />
                     <span className="text-xs text-muted-foreground ml-auto">{getMemberName(task.leaderId)}</span>
                   </div>

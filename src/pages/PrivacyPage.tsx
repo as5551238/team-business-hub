@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Shield, FileText, ChevronRight, ArrowLeft } from 'lucide-react';
 
 interface PrivacyPageProps {
@@ -157,10 +157,17 @@ export function ConsentDialog({ onAccept, onDecline }: { onAccept: () => void; o
   const [showPrivacy, setShowPrivacy] = useState(false);
   const CONSENT_KEY = 'tbh-privacy-consented';
 
-  // Check if already consented
+  // Check if already consented — must be in useEffect to avoid side effects during render
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(CONSENT_KEY)) {
+        onAccept();
+      }
+    } catch {}
+  }, [onAccept]);
+
   try {
     if (localStorage.getItem(CONSENT_KEY)) {
-      onAccept();
       return null;
     }
   } catch {}

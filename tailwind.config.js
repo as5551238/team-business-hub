@@ -79,6 +79,9 @@ export default {
           accent: "hsl(var(--sidebar-accent))",
         },
       },
+      screens: {
+        'xs': '375px',
+      },
       spacing: {
         '1': '4px',
         '2': '8px',
