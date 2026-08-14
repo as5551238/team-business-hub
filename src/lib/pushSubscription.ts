@@ -13,7 +13,7 @@
 
 // VAPID 公钥 — 需要替换为你自己的公钥
 // 生成方式：npx web-push generate-vapid-keys
-const VAPID_PUBLIC_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SVMeuBtM0Y5x0a5L5x0a5L5x0a5L5x0a5L5x0a5L5x0a5L5x0a5L5x0';
+const VAPID_PUBLIC_KEY = 'BMPFI8VVJ2Q14o6BwOzHqtLTRPnaSMvfv7y1KwD1ebJYE4yjYbdN1vaBMH3f-lZAz26IgCf2fPhgCQF5DZvcNcQ';
 
 /** Check if current context supports Push subscription */
 export function isPushSupported(): boolean {
