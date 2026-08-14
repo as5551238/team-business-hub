@@ -861,7 +861,7 @@ function LayoutInner({ currentPage, onPageChange, children, currentUser }: Layou
             )}
           </div>
         </header>
-        <main className={`flex-1 overflow-y-auto bg-muted/30 pb-24 md:pb-0 ${density === 'compact' ? 'text-sm' : ''}`} onTouchStart={handleMainTouchStart} onTouchEnd={handleMainTouchEnd} onTouchMove={handleMainTouchMove}><DensityContext.Provider value={density}><PageTransition keyProp={currentPage}>{children}</PageTransition></DensityContext.Provider></main>
+        <main className={`flex-1 overflow-y-auto bg-muted/30 ${density === 'compact' ? 'text-sm' : ''}`} onTouchStart={handleMainTouchStart} onTouchEnd={handleMainTouchEnd} onTouchMove={handleMainTouchMove}><DensityContext.Provider value={density}><div className="min-h-full pb-24 md:pb-0"><PageTransition keyProp={currentPage}>{children}</PageTransition></div></DensityContext.Provider></main>
       </div>
 
       {/* Mobile bottom navigation */}
