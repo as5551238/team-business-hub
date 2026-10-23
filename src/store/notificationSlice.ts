@@ -1,7 +1,7 @@
 import type { AppState } from '@/types';
 import { isSupabaseConfigured } from '@/supabase/client';
 import type { Action } from './types';
-import { supabaseUpsert, supabaseUpdate, supabaseInsert } from './supabase';
+import { supabaseUpsert, supabaseUpdate, supabaseInsert, supabaseInsertSilent } from './supabase';
 import { needMutate } from './shared';
 
 export function notificationReducer(state: AppState, action: Action): AppState | null {
@@ -27,7 +27,13 @@ export function notificationReducer(state: AppState, action: Action): AppState |
       const n = { ...action.payload, read: action.payload.read ?? false };
       if (n.id && s.notifications.some(x => x.id === n.id)) return state;
       s.notifications.unshift(n);
-      supabaseInsert('notifications', n);
+      // SYNC-03: system error notifications (err- prefix) write silently — a failed write of
+      // an error notification must never dispatch another error notification (infinite loop).
+      if (typeof n.id === 'string' && n.id.startsWith('err-')) {
+        supabaseInsertSilent('notifications', n);
+      } else {
+        supabaseInsert('notifications', n);
+      }
       return s;
     }
   }

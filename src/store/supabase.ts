@@ -4,22 +4,58 @@ import { STORAGE_KEY, CURRENT_USER_KEY, ensureAppStateDefaults, toCamel, toSnake
 import type { Notification, Activity, ItemLink, Category, Template, ScheduleEvent, Note, Comment, ReviewEntry, Bookmark, SavedView, Knowledge } from '@/types';
 import { initFactoryRulesIfNeeded } from './shared';
 
-export function saveLocalStateImmediate(state: AppState) {
-  try {
-    const json = JSON.stringify(state);
-    // DAT-06: check size before write (localStorage limit ~5-10MB)
-    if (json.length > 4 * 1024 * 1024) {
-      console.warn(`[saveLocalState] state too large (${(json.length / 1024 / 1024).toFixed(1)}MB), truncating activities/notifications`);
-      const trimmed = { ...state, activities: state.activities.slice(0, 50), notifications: state.notifications.slice(0, 100) };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-      _onWriteError?.('本地存储空间不足，已自动清理旧活动记录和通知。');
-    } else {
-      localStorage.setItem(STORAGE_KEY, json);
-    }
-    localStorage.setItem(CURRENT_USER_KEY, state.currentUser?.id || '');
-  } catch (e) {
-    console.error('[saveLocalState] localStorage write failed (possibly full):', e);
-  }
+// ==== SYNC-01: 通知云端写入规范化层 ====
+// 线上数据库 notifications 表 check 约束(实测 2026-10-22):
+//   type ∈ {reminder,overdue,assigned,completed,goal_update}
+//   related_type ∈ {task,goal,project}
+// 本地 UI 使用扩展值(error/sync/mentioned/system/risk_alert/note/knowledge...)语义,
+// 本地 state 保留原值; 仅写云端时映射到合法白名单, 防止 400 → 自激通知死循环。
+const DB_NOTIFICATION_TYPES = new Set(['reminder', 'overdue', 'assigned', 'completed', 'goal_update']);
+const DB_RELATED_TYPES = new Set(['task', 'goal', 'project']);
+const NOTIFICATION_TYPE_MAP: Record<string, string> = {
+  error: 'goal_update', sync: 'reminder', mentioned: 'assigned', mention: 'assigned',
+  system: 'goal_update', risk_alert: 'overdue', info: 'goal_update',
+  comment: 'assigned', approval: 'assigned',
+};
+const RELATED_TYPE_MAP: Record<string, string> = {
+  note: 'task', knowledge: 'goal', member: 'task', comment: 'task', sprint: 'goal',
+  template: 'task', review: 'goal', activity: 'task', schedule: 'task', bookmark: 'task',
+  saved_view: 'task',
+};
+/** Map local notification values to DB-legal values (camelCase payload stage, idempotent). */
+export function normalizeNotificationForDb(n: Record<string, any>): Record<string, any> {
+  const type = typeof n.type === 'string' ? n.type : '';
+  const rt = typeof n.relatedType === 'string' ? n.relatedType
+    : (typeof n.related_type === 'string' ? n.related_type : '');
+  return {
+    ...n,
+    type: DB_NOTIFICATION_TYPES.has(type) ? type : (NOTIFICATION_TYPE_MAP[type] || 'goal_update'),
+    relatedType: DB_RELATED_TYPES.has(rt) ? rt : (RELATED_TYPE_MAP[rt] || 'task'),
+    // SYNC-08: notifications table requires related_id/team_id NOT NULL —
+    // automaton payloads omit them entirely; backfill before column filtering.
+    relatedId: n.relatedId !== undefined ? n.relatedId : (n.related_id !== undefined ? n.related_id : ''),
+    teamId: n.teamId !== undefined ? n.teamId : (n.team_id !== undefined ? n.team_id : (getCurrentTeamId() || '__default__')),
+    read: n.read ?? false,
+    createdAt: n.createdAt ?? new Date().toISOString(),
+  };
+}
+/** Apply table-specific normalization before column filtering (camelCase stage). */
+function normalizeForDb(table: string, data: Record<string, any>): Record<string, any> {
+  return table === 'notifications' ? normalizeNotificationForDb(data) : data;
+}
+
+// ==== SYNC-02: 确定性错误分类 ====
+/** PostgREST/PG errors that will never succeed on retry (constraints, auth, schema).
+ *  Retrying or queuing them wastes requests and feeds the error-notification loop. */
+export function isPermanentWriteError(e: unknown): boolean {
+  const err = e as { code?: unknown; status?: unknown; message?: unknown } | null;
+  if (!err) return false;
+  const code = typeof err.code === 'string' ? err.code : '';
+  const status = typeof err.status === 'number' ? err.status : 0;
+  if ([400, 401, 403, 404, 409, 422].includes(status)) return true;
+  if (/^(23|42|53)/.test(code)) return true; // PG: constraint/schema/resource classes
+  if (/^PGRST/.test(code)) return true;        // PostgREST application errors
+  return false;
 }
 
 export function loadLocalState(): AppState {
@@ -35,7 +71,13 @@ export function loadLocalState(): AppState {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed && typeof parsed === 'object') return ensureAppStateDefaults(parsed);
+      if (parsed && typeof parsed === 'object') {
+        const recovered = ensureAppStateDefaults(parsed);
+        if (Array.isArray(recovered.notifications)) {
+          recovered.notifications = recoverPollutedNotifications(recovered.notifications);
+        }
+        return recovered;
+      }
     }
   } catch (e) {
     console.error('[loadLocalState] failed to load state:', e);
@@ -150,6 +192,47 @@ export async function fetchAllFromSupabase(teamId?: string): Promise<AppState | 
 let _onWriteError: ((msg: string) => void) | null = null;
 export function setOnWriteError(cb: (msg: string) => void) { _onWriteError = cb; }
 
+// SYNC-04: storage-warning throttle — "本地存储空间不足" fired on every save when state
+// stayed above threshold; each warning was itself an ADD_NOTIFICATION feeding the loop.
+const STORAGE_WARN_INTERVAL_MS = 5 * 60 * 1000;
+let _lastStorageWarnAt = 0;
+
+export function saveLocalStateImmediate(state: AppState) {
+  try {
+    const json = JSON.stringify(state);
+    // DAT-06: check size before write (localStorage limit ~5-10MB)
+    if (json.length > 4 * 1024 * 1024) {
+      console.warn(`[saveLocalState] state too large (${(json.length / 1024 / 1024).toFixed(1)}MB), truncating activities/notifications`);
+      // arrays are newest-first (fetch order created_at desc / unshift) — keep the head
+      const trimmed = { ...state, activities: state.activities.slice(0, 50), notifications: state.notifications.slice(0, 200) };
+      const trimmedJson = JSON.stringify(trimmed);
+      localStorage.setItem(STORAGE_KEY, trimmedJson.length > json.length ? json : trimmedJson);
+      const now = Date.now();
+      if (now - _lastStorageWarnAt > STORAGE_WARN_INTERVAL_MS) {
+        _lastStorageWarnAt = now;
+        _onWriteError?.('本地存储空间不足，已自动清理旧活动记录和通知。');
+      }
+    } else {
+      localStorage.setItem(STORAGE_KEY, json);
+    }
+    localStorage.setItem(CURRENT_USER_KEY, state.currentUser?.id || '');
+  } catch (e) {
+    console.error('[saveLocalState] localStorage write failed (possibly full):', e);
+  }
+}
+
+// SYNC-05: one-time recovery for state polluted by the historical error-notification loop —
+// old sessions accumulated thousands of duplicated err-/sync- system notices.
+const ERR_NOTIFICATION_KEEP = 10;
+function recoverPollutedNotifications(notifications: Notification[]): Notification[] {
+  const isSystemErr = (n: Notification) => typeof n.id === 'string' && (n.id.startsWith('err-') || n.id.startsWith('sync-'));
+  const errNotifs = notifications.filter(isSystemErr);
+  if (errNotifs.length <= ERR_NOTIFICATION_KEEP * 2) return notifications;
+  const keptRecent = errNotifs.slice(0, ERR_NOTIFICATION_KEEP);
+  const keptSet = new Set(keptRecent.map(n => n.id));
+  return notifications.filter(n => !isSystemErr(n) || keptSet.has(n.id));
+}
+
 // Failed write queue — persisted to localStorage so tab close doesn't lose data.
 interface SerializedWrite {
   table: string;
@@ -166,9 +249,17 @@ let _writeVersion = 0;
 export function bumpWriteVersion() { _writeVersion++; }
 
 // Persist pending writes metadata to localStorage (for crash/tab-close resilience)
+// SYNC-06: cap serialized size so the queue itself cannot exhaust localStorage.
+const PENDING_META_MAX_BYTES = 512 * 1024;
 function persistPendingMeta() {
   try {
-    const meta = failedWrites.map(w => ({ label: w.label, addedAt: w.addedAt, version: w.version, serialized: w.serialized }));
+    let meta = failedWrites.map(w => ({ label: w.label, addedAt: w.addedAt, version: w.version, serialized: w.serialized }));
+    // Drop oldest entries until under cap (old entries are least likely to still matter)
+    while (JSON.stringify(meta).length > PENDING_META_MAX_BYTES && meta.length > 0) {
+      meta.shift();
+      const failedShift = failedWrites.shift();
+      if (!failedShift) break;
+    }
     localStorage.setItem(PENDING_WRITES_KEY, JSON.stringify(meta));
   } catch {}
 }
@@ -222,6 +313,13 @@ function reconstructWriteFn(sw: SerializedWrite): () => Promise<any> {
 async function withRetry(fn: () => Promise<any>, retries = 2, label = 'write', serialized?: SerializedWrite): Promise<void> {
   for (let i = 0; i <= retries; i++) {
     try { await fn(); _writeVersion++; return; } catch (e: unknown) {
+      // SYNC-02: deterministic errors (constraint violations, schema/auth) can never succeed
+      // on retry — don't retry, don't queue, and critically don't fire a user notification
+      // (that path is what created the error-notification infinite loop).
+      if (isPermanentWriteError(e)) {
+        console.error(`Supabase ${label} permanent failure (will not retry/queue):`, e);
+        return;
+      }
       if (i === retries) {
         console.error(`Supabase ${label} failed after retries:`, e);
         // Queue for replay on reconnect instead of silently losing data
@@ -251,7 +349,9 @@ export async function replayFailedWrites(): Promise<void> {
     }
     try { await pw.fn(); } catch (e) {
       console.error(`[Supabase] Replay failed for ${pw.label}:`, e);
-      if (failedWrites.length < MAX_PENDING_WRITES) {
+      // SYNC-02: permanent failures (e.g. constraint violations) must not re-enter the queue,
+      // otherwise every "online" event replays them forever.
+      if (!isPermanentWriteError(e) && failedWrites.length < MAX_PENDING_WRITES) {
         failedWrites.push({ ...pw, addedAt: Date.now(), version: _writeVersion });
         persistPendingMeta();
       }
@@ -286,8 +386,10 @@ const TABLE_COLUMNS: Record<string, Set<string> | null> = {
   team_members: new Set(['id','team_id','member_id','role','permissions','joined_at']),
 };
 
-/** Columns that reference other tables via FK — empty strings must become null */
-const FK_COLUMNS = new Set(['owner_id','leader_id','supporter_ids','assignee_id','parent_id','goal_id','project_id','member_id','linked_item_id','source_id','target_id','related_id','item_id','created_by','updated_by']);
+/** Columns that reference other tables via FK — empty strings must become null.
+ *  NOTE: related_id is NOT here — in the DB it is plain text NOT NULL (no FK),
+ *  and nulling '' would violate the constraint (SYNC-08). */
+const FK_COLUMNS = new Set(['owner_id','leader_id','supporter_ids','assignee_id','parent_id','goal_id','project_id','member_id','linked_item_id','source_id','target_id','item_id','created_by','updated_by']);
 
 /** Remove keys not present in DB table schema to avoid PostgREST 400 errors.
  *  Converts empty strings to null only for FK columns (Postgres treats '' as non-null). */
@@ -306,7 +408,7 @@ export async function supabaseUpsert(table: string, data: Record<string, any> | 
   const sb = getSupabaseClient();
   if (!sb) return;
   const arr = Array.isArray(data) ? data : [data];
-  const snakeData = arr.map(d => filterColumns(table, toSnake(d)));
+  const snakeData = arr.map(d => filterColumns(table, toSnake(normalizeForDb(table, d))));
   await withRetry(async () => {
     for (let i = 0; i < snakeData.length; i += 100) {
       const res = await sb.from(table).upsert(snakeData.slice(i, i + 100), { onConflict: 'id' });
@@ -319,7 +421,7 @@ export async function supabaseUpdate(table: string, id: string, data: Record<str
   const sb = getSupabaseClient();
   if (!sb) return;
   await withRetry(async () => {
-    let q = sb.from(table).update(filterColumns(table, toSnake(data)), { count: 'exact' }).eq('id', id);
+    let q = sb.from(table).update(filterColumns(table, toSnake(normalizeForDb(table, data))), { count: 'exact' }).eq('id', id);
     // Optimistic locking (DAT-01): only apply if record hasn't changed since last read
     if (oldUpdatedAt) q = q.eq('updated_at', oldUpdatedAt);
     const res = await q;
@@ -336,9 +438,23 @@ export async function supabaseInsert(table: string, data: Record<string, any>) {
   const sb = getSupabaseClient();
   if (!sb) return;
   await withRetry(async () => {
-    const res = await sb.from(table).upsert(filterColumns(table, toSnake(data)), { onConflict: 'id' });
+    const res = await sb.from(table).upsert(filterColumns(table, toSnake(normalizeForDb(table, data))), { onConflict: 'id' });
     if (res.error) throw res.error;
   }, 2, `insert:${table}`, { table, operation: 'insert', data });
+}
+
+/** SYNC-03: fire-and-forget write for system error notifications. Failures are logged only —
+ *  never surfaced via _onWriteError, because dispatching a new error notification for a failed
+ *  error-notification write is the exact self-exciting loop we must break. */
+export async function supabaseInsertSilent(table: string, data: Record<string, any>) {
+  const sb = getSupabaseClient();
+  if (!sb) return;
+  try {
+    const res = await sb.from(table).upsert(filterColumns(table, toSnake(normalizeForDb(table, data))), { onConflict: 'id' });
+    if (res.error) throw res.error;
+  } catch (e) {
+    console.warn(`[Supabase] silent ${table} write failed (not retried, no user notification):`, e);
+  }
 }
 
 export async function supabaseDelete(table: string, id: string) {
@@ -351,16 +467,29 @@ export async function supabaseDelete(table: string, id: string) {
 }
 
 /** Audit log: fire-and-forget write to activities table (SEC-06).
- *  Skips if no Supabase client or no current user. Never throws. */
+ *  Skips if no Supabase client or no current user. Never throws.
+ *  SYNC-07: DB check constraint only allows target_type in ('task','goal','project');
+ *  callers pass Chinese labels ("任务") or state keys ("notifications") — normalize here. */
+const ACTIVITY_TARGET_TYPE_MAP: Record<string, string> = {
+  '任务': 'task', '目标': 'goal', '项目': 'project',
+  task: 'task', goal: 'goal', project: 'project',
+  // state-key style values (reducer MERGE_STATE conflict logging passes raw keys)
+  notifications: 'task', notification: 'task', activities: 'task', activity: 'task',
+  comments: 'task', comment: 'task', tags: 'task', tag: 'task', member: 'task',
+  members: 'task', savedViews: 'task', bookmarks: 'task', itemLinks: 'task',
+  scheduleEvents: 'task', templates: 'task', categories: 'task', sprints: 'goal',
+  knowledge: 'goal', notes: 'goal', note: 'goal', reviews: 'goal',
+};
 export function logActivity(params: { memberId?: string; action: string; targetType: string; targetId: string; targetTitle: string; details?: string }) {
   try {
     const sb = getSupabaseClient();
     if (!sb || !params.memberId) return;
+    const targetType = ACTIVITY_TARGET_TYPE_MAP[params.targetType] || 'task';
     // Fire-and-forget: don't await, don't block caller
     sb.from('activities').insert({
       member_id: params.memberId,
       action: params.action,
-      target_type: params.targetType,
+      target_type: targetType,
       target_id: params.targetId,
       target_title: params.targetTitle.slice(0, 200),
       details: (params.details || '').slice(0, 500),

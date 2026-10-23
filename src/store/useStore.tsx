@@ -115,9 +115,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Wire up write-error notification (STA-01)
+  // Wire up write-error notification (STA-01) + SYNC-03 throttle:
+  // identical messages are deduplicated within 60s so one persistent failure mode
+  // cannot flood the notification center (historical infinite-loop root cause).
+  const lastErrNoticeRef = useRef<{ msg: string; at: number }>({ msg: '', at: 0 });
   useEffect(() => {
     setOnWriteError((msg: string) => {
+      const now = Date.now();
+      if (lastErrNoticeRef.current.msg === msg && now - lastErrNoticeRef.current.at < 60000) return;
+      lastErrNoticeRef.current = { msg, at: now };
       dispatch({ type: 'ADD_NOTIFICATION', payload: { id: `err-${Date.now()}`, type: 'error', title: '同步失败', message: msg, relatedId: '', relatedType: 'note', memberId: '', read: false, createdAt: new Date().toISOString() } });
     });
     return () => { setOnWriteError(() => {}); };
